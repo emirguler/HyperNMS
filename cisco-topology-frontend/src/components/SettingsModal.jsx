@@ -18,7 +18,7 @@ export default function SettingsModal({ onClose }) {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `hypernms-backup-${new Date().toISOString().slice(0, 10)}.json`;
+        a.download = `netpulse-backup-${new Date().toISOString().slice(0, 10)}.json`;
         a.click();
         URL.revokeObjectURL(url);
         showToast('Backup downloaded', 'success');

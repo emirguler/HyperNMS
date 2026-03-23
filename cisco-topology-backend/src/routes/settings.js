@@ -20,7 +20,7 @@ router.get('/backup', authenticate, requireAdmin, (req, res) => {
     };
 
     res.setHeader('Content-Type', 'application/json');
-    res.setHeader('Content-Disposition', `attachment; filename=hypernms-backup-${new Date().toISOString().slice(0, 10)}.json`);
+    res.setHeader('Content-Disposition', `attachment; filename=netpulse-backup-${new Date().toISOString().slice(0, 10)}.json`);
     res.json(backup);
 });
 
