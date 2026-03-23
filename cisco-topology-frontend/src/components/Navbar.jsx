@@ -39,10 +39,6 @@ export default function Navbar({ onAddDevice }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <NotificationBell />
         <button className="nav-btn" onClick={toggleTheme} title={t('changeTheme')} style={{ fontSize: '1.2rem' }}>{theme === 'dark' ? '☀️' : '🌙'}</button>
-        <button className="nav-btn" onClick={() => setLang(lang === 'en' ? 'tr' : 'en')} title={lang === 'en' ? 'Türkçe' : 'English'}
-          style={{ fontSize: '0.85rem', fontWeight: 700, letterSpacing: '1px' }}>
-          {lang === 'en' ? '🇹🇷 TR' : '🇬🇧 EN'}
-        </button>
         <button className={`nav-btn ${path === '/users' ? 'active' : ''}`} onClick={() => navigate('/users')}>👥 {t('users')}</button>
         <button className="btn btn-danger btn-sm" onClick={() => { logout(); navigate('/login'); }}>{t('logout')}</button>
       </div>
