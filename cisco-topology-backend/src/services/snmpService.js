@@ -167,20 +167,7 @@ async function getDeviceDetails(device) {
 
         if (responseData.detectedVendor === 'Cisco') {
             try {
-                // 0. Bridge port → ifIndex mapping
-                // dot1qPvid ve diğer BRIDGE-MIB OID'leri bridge port index kullanır, ifIndex değil
-                // OID: 1.3.6.1.2.1.17.1.4.1.2 (dot1dBasePortIfIndex)
-                const bridgeToIf = {};  // bridgePort → ifIndex
-                const ifToBridge = {};  // ifIndex → bridgePort
-                const bridgeData = await getSubtree('1.3.6.1.2.1.17.1.4.1.2');
-                bridgeData.forEach(vb => {
-                    const bridgePort = vb.oid.split('.').pop();
-                    const ifIdx = parseSnmpInt(vb.value).toString();
-                    bridgeToIf[bridgePort] = ifIdx;
-                    ifToBridge[ifIdx] = bridgePort;
-                });
-
-                // 1. Trunk portları tespit et (ifIndex bazlı)
+                // 1. Trunk portları tespit et
                 const trunkPorts = new Set();
                 const trunkModeData = await getSubtree('1.3.6.1.4.1.9.9.46.1.6.1.1.14');
                 trunkModeData.forEach(vb => {
@@ -189,41 +176,7 @@ async function getDeviceDetails(device) {
                     if (mode === 1 || mode === 5) trunkPorts.add(ifIdx);
                 });
 
-                // 2. Access VLAN (vmVlan — ifIndex bazlı)
-                const accessVlanData = await getSubtree('1.3.6.1.4.1.9.9.68.1.2.2.1.2');
-                accessVlanData.forEach(vb => {
-                    const ifIdx = vb.oid.split('.').pop();
-                    const val = parseSnmpInt(vb.value);
-                    if (val > 0 && !trunkPorts.has(ifIdx)) {
-                        vlanMap[ifIdx] = val.toString();
-                    }
-                });
-
-                // 3. Dinamik VLAN tespiti (vmVlanType — ifIndex bazlı)
-                const dynamicPorts = new Set();
-                const vlanTypeData = await getSubtree('1.3.6.1.4.1.9.9.68.1.2.2.1.1');
-                vlanTypeData.forEach(vb => {
-                    const ifIdx = vb.oid.split('.').pop();
-                    const vtype = parseSnmpInt(vb.value);
-                    if (vtype === 2 || vtype === 3) dynamicPorts.add(ifIdx);
-                });
-
-                // 4. dot1qPvid — bridge port index bazlı → ifIndex'e çevir
-                const pvidData = await getSubtree('1.3.6.1.2.1.17.7.1.4.5.1.1');
-                pvidData.forEach(vb => {
-                    const bridgePort = vb.oid.split('.').pop();
-                    const ifIdx = bridgeToIf[bridgePort] || bridgePort;
-                    const val = parseSnmpInt(vb.value);
-                    if (val > 0) {
-                        if (dynamicPorts.has(ifIdx)) {
-                            vlanMap[ifIdx] = val.toString() + ' (D)';
-                        } else if (!vlanMap[ifIdx]) {
-                            vlanMap[ifIdx] = val.toString();
-                        }
-                    }
-                });
-
-                // 5. Trunk native VLAN (ifIndex bazlı)
+                // 2. Trunk native VLAN
                 const trunkVlanData = await getSubtree('1.3.6.1.4.1.9.9.46.1.6.1.1.5');
                 trunkVlanData.forEach(vb => {
                     const ifIdx = vb.oid.split('.').pop();
@@ -233,15 +186,53 @@ async function getDeviceDetails(device) {
                     }
                 });
 
-                // 6. VLAN isimleri (vtpVlanName)
+                // 3. VLAN isimleri al (vtpVlanName)
                 const vlanNameData = await getSubtree('1.3.6.1.4.1.9.9.46.1.3.1.1.4');
+                const vlanIds = [];
                 vlanNameData.forEach(vb => {
                     const vlanId = vb.oid.split('.').pop();
                     const name = vb.value.toString();
-                    if (name && vlanId) vlanNameMap[vlanId] = name;
+                    if (name && vlanId) {
+                        vlanNameMap[vlanId] = name;
+                        vlanIds.push(vlanId);
+                    }
                 });
 
-                console.log(`[VLAN] ${device.ip}: bridge ports=${Object.keys(bridgeToIf).length}, vlans found=${Object.keys(vlanMap).length}, trunk=${trunkPorts.size}, dynamic=${dynamicPorts.size}`);
+                // 4. Operasyonel VLAN tespiti — community@vlan ile her VLAN'ın bridge tablosunu sorgula
+                // Bu yöntem 802.1X/ISE tarafından dinamik atanan VLAN'ları da doğru gösterir
+                const accessVlanIds = vlanIds.filter(v => {
+                    const n = parseInt(v);
+                    return n > 0 && n < 1002; // Sadece normal VLAN'lar (1002-1005 arası reserved)
+                });
+
+                for (const vid of accessVlanIds) {
+                    try {
+                        const vlanSession = snmp.createSession(device.ip, device.snmpCommunity + '@' + vid, {
+                            port: device.snmpPort || 161, version: snmp.Version2c, timeout: 3000, retries: 0
+                        });
+
+                        const bridgePorts = await new Promise((resolve) => {
+                            const results = [];
+                            vlanSession.subtree('1.3.6.1.2.1.17.1.4.1.2', 20, (varbinds) => {
+                                for (const vb of varbinds) results.push(vb);
+                            }, () => resolve(results));
+                        });
+
+                        bridgePorts.forEach(vb => {
+                            const ifIdx = parseSnmpInt(vb.value).toString();
+                            // Trunk portları atla (zaten native VLAN atandı)
+                            if (!trunkPorts.has(ifIdx) && !vlanMap[ifIdx]) {
+                                vlanMap[ifIdx] = vid;
+                            }
+                        });
+
+                        vlanSession.close();
+                    } catch (e) {
+                        // VLAN sorgusu başarısız olabilir, devam et
+                    }
+                }
+
+                console.log(`[VLAN] ${device.ip}: vlans scanned=${accessVlanIds.length}, ports found=${Object.keys(vlanMap).length}, trunk=${trunkPorts.size}`);
             } catch (err) {
                 console.log("[VLAN] Hata:", err.message);
             }
