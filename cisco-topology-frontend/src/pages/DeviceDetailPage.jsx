@@ -82,8 +82,6 @@ export default function DeviceDetailPage() {
               <th>VLAN Name</th>
               <th>Status</th>
               <th>Capacity</th>
-              <th>Traffic In</th>
-              <th>Traffic Out</th>
             </tr>
           </thead>
           <tbody>
@@ -104,11 +102,9 @@ export default function DeviceDetailPage() {
                   </span>
                 </td>
                 <td style={{ fontFamily: 'monospace', fontSize: '0.9rem', color: 'var(--text-muted)' }}>{formatSpeed(i.speed)}</td>
-                <td style={{ fontFamily: 'monospace', fontSize: '0.95rem', color: 'var(--primary)' }}>{formatTraffic(i.trafficIn)}</td>
-                <td style={{ fontFamily: 'monospace', fontSize: '0.95rem', color: '#8b5cf6' }}>{formatTraffic(i.trafficOut)}</td>
               </tr>
             )) : (
-              <tr><td colSpan="7" style={{ textAlign: 'center', padding: 30, color: 'var(--text-muted)' }}>
+              <tr><td colSpan="5" style={{ textAlign: 'center', padding: 30, color: 'var(--text-muted)' }}>
                 {details.status === 'UP' ? t('noPortsFound') : t('deviceDown')}
               </td></tr>
             )}
