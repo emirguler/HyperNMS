@@ -229,10 +229,17 @@ async function getDeviceDetails(device) {
 
                         bridgePorts.forEach(vb => {
                             const ifIdx = parseSnmpInt(vb.value).toString();
-                            if (!trunkPorts.has(ifIdx) && !vlanMap[ifIdx]) {
+                            if (!trunkPorts.has(ifIdx)) {
                                 const staticVlan = staticVlanMap[ifIdx];
                                 const isDynamic = staticVlan && staticVlan !== parseInt(vid);
-                                vlanMap[ifIdx] = isDynamic ? vid + ' (D)' : vid;
+                                const label = isDynamic ? vid + ' (D)' : vid;
+
+                                if (!vlanMap[ifIdx]) {
+                                    vlanMap[ifIdx] = label;
+                                } else if (!vlanMap[ifIdx].includes(vid)) {
+                                    // Aynı portta birden fazla VLAN (multi-auth: telefon + PC)
+                                    vlanMap[ifIdx] += ', ' + label;
+                                }
                             }
                         });
 
@@ -257,10 +264,15 @@ async function getDeviceDetails(device) {
             if (!interfacesMap[index]) {
                 const vlanStr = vlanMap[index] || '-';
                 const vlanId = vlanStr.replace(/\s*\([TDB]\)/, '');
+                // Birden fazla VLAN olabilir (multi-auth): "179 (D), 201 (D)"
+                const vlanNameStr = vlanStr.split(',').map(v => {
+                    const id = v.trim().replace(/\s*\([TDB]\)/, '');
+                    return vlanNameMap[id] || '-';
+                }).join(', ');
                 interfacesMap[index] = {
                     index, name: '', status: statusMap[index] || 'down',
                     vlan: vlanStr,
-                    vlanName: vlanNameMap[vlanId] || '-',
+                    vlanName: vlanNameStr,
                     speedMbps: 0,
                     rawIn: BigInt(0), rawOut: BigInt(0)
                 };
@@ -308,7 +320,8 @@ async function getDeviceDetails(device) {
                 };
 
                 return {
-                    index: i.index, name: i.name, status: i.status, vlan: i.vlan, vlanName: i.vlanName,
+                    index: i.index, name: i.name, status: i.status,
+                    vlan: i.vlan, vlanName: i.vlanName,
                     speed: i.speedMbps * 1000000, trafficIn: smoothedIn, trafficOut: smoothedOut
                 };
             });
