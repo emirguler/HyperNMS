@@ -156,7 +156,6 @@ function ShowRunCard({ deviceId }) {
     }
   };
 
-  if (!isAdmin) return null;
 
   return (
     <div className="chart-container" style={{ marginTop: 24, padding: 0, overflow: 'hidden' }}>

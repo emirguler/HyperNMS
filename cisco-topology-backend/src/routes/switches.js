@@ -89,13 +89,18 @@ router.get('/switches/:id/ping-history', authenticate, (req, res) => {
 });
 
 // SSH komutu çalıştır (show run vb.)
-router.post('/switches/:id/exec', authenticate, requireAdmin, async (req, res) => {
+router.post('/switches/:id/exec', authenticate, async (req, res) => {
     const device = store.getSwitch(req.params.id);
     if (!device) return res.status(404).json({ error: 'Cihaz bulunamadı' });
     if (!device.sshUsername || !device.sshPassword) return res.status(400).json({ error: 'SSH bilgileri eksik' });
 
     const command = req.body.command;
     if (!command || typeof command !== 'string') return res.status(400).json({ error: 'Komut gerekli' });
+
+    // User rolü sadece show komutları çalıştırabilir
+    if (req.user.role !== 'Administrator' && !command.trim().toLowerCase().startsWith('show')) {
+        return res.status(403).json({ error: 'User rolü sadece show komutları çalıştırabilir' });
+    }
 
     // Güvenlik: tehlikeli komutları engelle
     const blocked = ['reload', 'erase', 'delete', 'format', 'write erase', 'wr erase'];

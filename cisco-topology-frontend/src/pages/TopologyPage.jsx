@@ -207,7 +207,7 @@ function TopologyInner({ onEdit }) {
           onConnect={isAdmin ? onConnect : undefined}
           onEdgesDelete={isAdmin ? onEdgesDelete : undefined}
           onEdgeContextMenu={isAdmin ? ((e, edge) => { e.preventDefault(); setEdgeMenu({ id: edge.id, top: e.clientY, left: e.clientX }); setMenu(null); }) : undefined}
-          onNodeContextMenu={isAdmin ? ((e, n) => { e.preventDefault(); setMenu({ id: n.id, label: n.data.label, top: e.clientY, left: e.clientX, data: n.data }); setEdgeMenu(null); }) : undefined}
+          onNodeContextMenu={(e, n) => { e.preventDefault(); setMenu({ id: n.id, label: n.data.label, top: e.clientY, left: e.clientX, data: n.data }); setEdgeMenu(null); }}
           onNodeDragStop={isAdmin ? onNodeDragStop : undefined}
           nodesDraggable={isAdmin}
           nodesConnectable={isAdmin}
@@ -227,11 +227,11 @@ function TopologyInner({ onEdit }) {
           />
         </ReactFlow>
 
-        {isAdmin && menu && (
+        {menu && (
           <div className="context-menu" style={{ top: menu.top, left: menu.left }}>
             <div className="context-menu-item" onClick={() => { navigate(`/devices/${menu.id}`); setMenu(null); }}>📊 Details</div>
-            <div className="context-menu-item" onClick={() => { onEdit(rawDevices.find(d => d.id === menu.id)); setMenu(null); }}>✏️ Edit</div>
-            <div className="context-menu-item" onClick={() => { openSshSession(menu.id, menu.label); setMenu(null); }}>💻 Terminal</div>
+            {isAdmin && <div className="context-menu-item" onClick={() => { onEdit(rawDevices.find(d => d.id === menu.id)); setMenu(null); }}>✏️ Edit</div>}
+            {isAdmin && <div className="context-menu-item" onClick={() => { openSshSession(menu.id, menu.label); setMenu(null); }}>💻 Terminal</div>}
             <div className="context-menu-item" onClick={() => {
               const pos = localNodes.find(n => n.id === menu.id)?.position;
               if (pos) setCenter(pos.x + 65, pos.y + 40, { zoom: 2, duration: 500 });
