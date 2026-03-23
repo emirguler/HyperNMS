@@ -5,10 +5,18 @@ const { decryptPassword } = require('../utils/crypto');
 const { authenticateWs } = require('../middleware/auth');
 
 function setupWebSocket(server) {
-    const wss = new WebSocket.Server({ server, path: '/ws/terminal' });
+    const wss = new WebSocket.Server({ noServer: true, perMessageDeflate: false });
+
+    server.on('upgrade', (req, socket, head) => {
+        if (req.url.startsWith('/ws/terminal')) {
+            wss.handleUpgrade(req, socket, head, (ws) => {
+                wss.emit('connection', ws, req);
+            });
+        }
+        // /ws/notifications is handled by notificationService
+    });
 
     wss.on('connection', (ws, req) => {
-        // WebSocket JWT doğrulaması
         const user = authenticateWs(req);
         if (!user) {
             ws.send(JSON.stringify({ type: 'error', message: 'Authentication required. Please re-login.' }));
@@ -19,7 +27,6 @@ function setupWebSocket(server) {
         const urlParams = new URLSearchParams(req.url.split('?')[1]);
         const switchId = urlParams.get('switchId');
         const device = store.getSwitch(switchId);
-
 
         if (!device || !device.sshUsername) {
             ws.send(JSON.stringify({ type: 'error', message: 'SSH Credentials not found.' }));

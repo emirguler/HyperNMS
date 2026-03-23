@@ -1,15 +1,21 @@
 const WebSocket = require('ws');
 
-// In-memory bildirim deposu (son 100 bildirim)
 const notifications = [];
 const MAX_NOTIFICATIONS = 100;
 let notificationWss = null;
 
 function setupNotificationWs(server) {
-    notificationWss = new WebSocket.Server({ server, path: '/ws/notifications' });
+    notificationWss = new WebSocket.Server({ noServer: true, perMessageDeflate: false });
 
-    notificationWss.on('connection', (ws, req) => {
-        // Son bildirimleri gönder
+    server.on('upgrade', (req, socket, head) => {
+        if (req.url.startsWith('/ws/notifications')) {
+            notificationWss.handleUpgrade(req, socket, head, (ws) => {
+                notificationWss.emit('connection', ws, req);
+            });
+        }
+    });
+
+    notificationWss.on('connection', (ws) => {
         ws.send(JSON.stringify({ type: 'history', data: notifications.slice(-20) }));
     });
 
@@ -29,7 +35,6 @@ function addNotification(notification) {
         notifications.splice(0, notifications.length - MAX_NOTIFICATIONS);
     }
 
-    // Tüm bağlı istemcilere bildir
     if (notificationWss) {
         const msg = JSON.stringify({ type: 'notification', data: entry });
         notificationWss.clients.forEach(client => {
@@ -46,13 +51,4 @@ function getNotifications(limit = 50) {
     return notifications.slice(-limit).reverse();
 }
 
-function markAsRead(id) {
-    const n = notifications.find(n => n.id === id);
-    if (n) n.read = true;
-}
-
-function markAllAsRead() {
-    notifications.forEach(n => n.read = false);
-}
-
-module.exports = { setupNotificationWs, addNotification, getNotifications, markAsRead, markAllAsRead };
+module.exports = { setupNotificationWs, addNotification, getNotifications };
