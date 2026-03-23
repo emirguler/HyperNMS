@@ -24,6 +24,7 @@ function parseCSV(text) {
     else if (h.includes('ssh') && h.includes('pass')) map.sshPassword = i;
     else if (h.includes('snmp') || h.includes('community')) map.snmpCommunity = i;
     else if (h.includes('tag')) map.tags = i;
+    else if (h.includes('topology') || h.includes('page') || h.includes('sayfa')) map.topologyPage = i;
   });
 
   if (map.name === undefined && map.ip === undefined) {
@@ -43,6 +44,7 @@ function parseCSV(text) {
     if (map.sshPassword !== undefined) device.sshPassword = cols[map.sshPassword] || '';
     if (map.snmpCommunity !== undefined) device.snmpCommunity = cols[map.snmpCommunity] || '';
     if (map.tags !== undefined) device.tags = cols[map.tags] || '';
+    if (map.topologyPage !== undefined) device.topologyPage = cols[map.topologyPage] || 'main';
     return device;
   }).filter(d => d.name && d.ip);
 }
@@ -111,7 +113,7 @@ export default function BulkImportModal({ onClose }) {
         {/* Instructions */}
         <div style={{ background: 'rgba(56,189,248,0.08)', border: '1px solid rgba(56,189,248,0.2)', borderRadius: 8, padding: 12, marginBottom: 16, fontSize: '0.8rem', color: 'var(--text-muted)' }}>
           Upload a CSV/Excel file or paste data. Required columns: <strong>Name</strong> and <strong>IP</strong>.
-          Optional: Type, Model, SSH Username, SSH Password, SNMP Community, Tags
+          Optional: Type, Model, SSH Username, SSH Password, SNMP Community, Tags, Topology Page
         </div>
 
         {/* File upload */}
@@ -126,7 +128,7 @@ export default function BulkImportModal({ onClose }) {
           className="modern-input"
           value={rawText}
           onChange={e => handlePaste(e.target.value)}
-          placeholder={'Name,IP,Type,SNMP Community\nSwitch-01,192.168.1.1,switch,public\nRouter-01,10.0.0.1,router,public'}
+          placeholder={'Name,IP,Type,SNMP Community,Topology Page\nSwitch-01,192.168.1.1,switch,public,main\nRouter-01,10.0.0.1,router,public,tab-123'}
           style={{ width: '100%', height: 120, fontFamily: 'monospace', fontSize: '0.75rem', resize: 'vertical', marginBottom: 16 }}
         />
 
@@ -144,6 +146,7 @@ export default function BulkImportModal({ onClose }) {
                     <th style={{ padding: '6px 10px' }}>IP</th>
                     <th style={{ padding: '6px 10px' }}>Type</th>
                     <th style={{ padding: '6px 10px' }}>SNMP</th>
+                    <th style={{ padding: '6px 10px' }}>Topology</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -153,6 +156,7 @@ export default function BulkImportModal({ onClose }) {
                       <td style={{ padding: '4px 10px', fontFamily: 'monospace' }}>{d.ip}</td>
                       <td style={{ padding: '4px 10px' }}>{d.type || 'switch'}</td>
                       <td style={{ padding: '4px 10px' }}>{d.snmpCommunity || '-'}</td>
+                      <td style={{ padding: '4px 10px' }}>{d.topologyPage || 'main'}</td>
                     </tr>
                   ))}
                 </tbody>
