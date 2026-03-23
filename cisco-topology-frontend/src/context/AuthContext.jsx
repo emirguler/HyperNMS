@@ -8,6 +8,7 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [token, setToken] = useState(localStorage.getItem('token') || '');
   const [userRole, setUserRole] = useState(localStorage.getItem('userRole') || '');
+  const [mustChangePassword, setMustChangePassword] = useState(false);
 
   const login = useCallback(async (username, password) => {
     const res = await fetch(`${API_BASE}/login`, {
@@ -19,10 +20,11 @@ export function AuthProvider({ children }) {
     if (res.ok) {
       setToken(data.token);
       setUserRole(data.role);
+      setMustChangePassword(data.mustChangePassword || false);
       localStorage.setItem('token', data.token);
       localStorage.setItem('userRole', data.role);
       showToast(t('loginSuccess'), 'success');
-      return { success: true };
+      return { success: true, mustChangePassword: data.mustChangePassword };
     }
     return { success: false, error: data.error || t('loginFailed') };
   }, []);
@@ -30,8 +32,13 @@ export function AuthProvider({ children }) {
   const logout = useCallback(() => {
     setToken('');
     setUserRole('');
+    setMustChangePassword(false);
     localStorage.removeItem('token');
     localStorage.removeItem('userRole');
+  }, []);
+
+  const clearMustChangePassword = useCallback(() => {
+    setMustChangePassword(false);
   }, []);
 
   const authFetch = useCallback(async (url, options = {}) => {
@@ -51,7 +58,11 @@ export function AuthProvider({ children }) {
   }, [token, logout]);
 
   return (
-    <AuthContext.Provider value={{ token, userRole, login, logout, authFetch, isAdmin: userRole === 'Administrator' }}>
+    <AuthContext.Provider value={{
+      token, userRole, login, logout, authFetch,
+      isAdmin: userRole === 'Administrator',
+      mustChangePassword, clearMustChangePassword
+    }}>
       {children}
     </AuthContext.Provider>
   );

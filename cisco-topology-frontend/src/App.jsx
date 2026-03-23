@@ -8,6 +8,7 @@ import TerminalPanel from './components/TerminalPanel';
 import ToastContainer from './Toast';
 import SwitchFormModal from './SwitchFormModal';
 import LoginPage from './pages/LoginPage';
+import ForcePasswordChange from './components/ForcePasswordChange';
 import DashboardPage from './pages/DashboardPage';
 import DeviceListPage from './pages/DeviceListPage';
 import DeviceDetailPage from './pages/DeviceDetailPage';
@@ -26,7 +27,7 @@ function ProtectedRoute({ children }) {
 }
 
 function AppLayout() {
-  const { token } = useAuth();
+  const { token, mustChangePassword, clearMustChangePassword } = useAuth();
   const { fetchData } = useApp();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState('add');
@@ -66,6 +67,8 @@ function AppLayout() {
         </Routes>
         <TerminalPanel />
       </main>
+
+      {mustChangePassword && <ForcePasswordChange onComplete={clearMustChangePassword} />}
 
       {isModalOpen && (
         <SwitchFormModal

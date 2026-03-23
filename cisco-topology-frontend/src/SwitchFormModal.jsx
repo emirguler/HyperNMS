@@ -17,6 +17,7 @@ function SwitchFormModal({ mode, initialValues, onCancel, onSave }) {
     snmpPort: 161,
     snmpProtocol: 'udp',
     snmpCommunity: '',
+    tags: '',
   });
 
   useEffect(() => {
@@ -31,6 +32,7 @@ function SwitchFormModal({ mode, initialValues, onCancel, onSave }) {
         sshPassword: '',
         snmpCommunity: initialValues.snmpCommunity || '',
         healthIntervalSec: initialValues.healthIntervalSec || 60,
+        tags: (initialValues.tags || []).join(', '),
       }));
     }
   }, [initialValues, isEdit]);
@@ -46,6 +48,8 @@ function SwitchFormModal({ mode, initialValues, onCancel, onSave }) {
     if (isEdit && !payload.sshPassword) {
       delete payload.sshPassword;
     }
+    // Tags string → array
+    payload.tags = payload.tags ? payload.tags.split(',').map(t => t.trim()).filter(Boolean) : [];
     onSave(payload);
   };
 
@@ -108,6 +112,11 @@ function SwitchFormModal({ mode, initialValues, onCancel, onSave }) {
                   <label className="input-label" style={{display:'block', marginBottom:8, color:'var(--text-muted)'}}>{t('checkInterval')}</label>
                   <input className="modern-input" type="number" name="healthIntervalSec" value={values.healthIntervalSec} onChange={handleChange} />
                </div>
+            </div>
+
+            <div style={{ gridColumn: 'span 2' }}>
+              <label className="input-label" style={{display:'block', marginBottom:8, color:'var(--text-muted)'}}>Tags</label>
+              <input className="modern-input" name="tags" value={values.tags} onChange={handleChange} placeholder="core, datacenter, floor-2 (comma separated)" autoComplete="off" />
             </div>
           </div>
 

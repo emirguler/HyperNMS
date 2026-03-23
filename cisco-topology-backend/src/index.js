@@ -2,12 +2,16 @@ const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
 const http = require('http');
+const path = require('path');
 const bcrypt = require('bcryptjs');
 const config = require('./config');
 const { readJSON, writeJSON } = require('./utils/db');
 const { encryptPassword } = require('./utils/crypto');
 const { startPingService, onStatusChange } = require('./services/pingService');
 const { setupWebSocket } = require('./services/sshService');
+const { setupHttps } = require('./middleware/httpsRedirect');
+const { setupNotificationWs, addNotification, getNotifications } = require('./services/notificationService');
+const { authenticate } = require('./middleware/auth');
 
 const authRoutes = require('./routes/auth');
 const switchRoutes = require('./routes/switches');
@@ -29,6 +33,9 @@ app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('X-XSS-Protection', '1; mode=block');
+    if (config.NODE_ENV === 'production') {
+        res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    }
     next();
 });
 
@@ -38,6 +45,11 @@ app.use(switchRoutes);
 app.use(edgeRoutes);
 app.use(userRoutes);
 app.use(auditRoutes);
+
+// Notifications REST endpoint
+app.get('/notifications', authenticate, (req, res) => {
+    res.json(getNotifications(parseInt(req.query.limit) || 50));
+});
 
 // Health check
 app.get('/health', (req, res) => {
@@ -49,9 +61,19 @@ app.get('/health', (req, res) => {
     });
 });
 
+// Production: serve frontend static files
+if (config.NODE_ENV === 'production') {
+    const publicPath = path.resolve(__dirname, '../public');
+    if (fs.existsSync(publicPath)) {
+        app.use(express.static(publicPath));
+        app.get('*', (req, res) => {
+            res.sendFile(path.join(publicPath, 'index.html'));
+        });
+    }
+}
+
 // --- DB Initialization ---
 async function initDB() {
-    // Data klasörünü oluştur
     if (!fs.existsSync(config.DATA_DIR)) {
         fs.mkdirSync(config.DATA_DIR, { recursive: true });
     }
@@ -63,7 +85,7 @@ async function initDB() {
     if (!fs.existsSync(config.DB_USERS)) {
         const hashedPw = await bcrypt.hash('admin123', config.BCRYPT_ROUNDS);
         fs.writeFileSync(config.DB_USERS, JSON.stringify([
-            { id: 1, username: 'admin', password: hashedPw, role: 'Administrator' }
+            { id: 1, username: 'admin', password: hashedPw, role: 'Administrator', mustChangePassword: true }
         ]));
         console.log('[INIT] Varsayılan admin oluşturuldu (parola: admin123)');
     }
@@ -73,7 +95,6 @@ async function initDB() {
     let migrated = false;
     for (const user of users) {
         if (user.password && !user.password.startsWith('$2')) {
-            console.log(`[MIGRATION] Kullanıcı "${user.username}" parolası hash'leniyor...`);
             user.password = await bcrypt.hash(user.password, config.BCRYPT_ROUNDS);
             migrated = true;
         }
@@ -85,7 +106,6 @@ async function initDB() {
     let sshMigrated = false;
     for (const sw of switches) {
         if (sw.sshPassword && !sw.sshPassword.includes(':')) {
-            console.log(`[MIGRATION] Cihaz "${sw.name}" SSH parolası şifreleniyor...`);
             sw.sshPassword = encryptPassword(sw.sshPassword);
             sshMigrated = true;
         }
@@ -93,20 +113,35 @@ async function initDB() {
     if (sshMigrated) writeJSON(config.DB_SWITCHES, switches);
 }
 
-// --- Durum değişikliği bildirimleri (konsol) ---
+// --- Durum değişikliği → bildirim ---
 onStatusChange((change) => {
     const emoji = change.newStatus === 'UP' ? '🟢' : '🔴';
     console.log(`${emoji} [STATUS] ${change.deviceName} (${change.deviceIp}): ${change.previousStatus} → ${change.newStatus}`);
+
+    addNotification({
+        type: change.newStatus === 'DOWN' ? 'alert' : 'info',
+        severity: change.newStatus === 'DOWN' ? 'critical' : 'resolved',
+        title: change.newStatus === 'DOWN'
+            ? `${change.deviceName} is DOWN`
+            : `${change.deviceName} is back UP`,
+        message: `${change.deviceName} (${change.deviceIp}) changed from ${change.previousStatus} to ${change.newStatus}`,
+        deviceId: change.deviceId,
+        deviceName: change.deviceName,
+        deviceIp: change.deviceIp
+    });
 });
 
 // --- Server Başlat ---
-const server = http.createServer(app);
+const httpServer = http.createServer(app);
+const { server, protocol } = setupHttps(httpServer, app, config.PORT);
+
 setupWebSocket(server);
+setupNotificationWs(server);
 
 initDB().then(() => {
     startPingService();
     server.listen(config.PORT, () => {
-        console.log(`[SERVER] Port ${config.PORT} üzerinde çalışıyor (${config.NODE_ENV})`);
+        console.log(`[SERVER] ${protocol.toUpperCase()} Port ${config.PORT} üzerinde çalışıyor (${config.NODE_ENV})`);
         console.log(`[SERVER] CORS origin: ${config.CORS_ORIGIN}`);
     });
 }).catch(err => {

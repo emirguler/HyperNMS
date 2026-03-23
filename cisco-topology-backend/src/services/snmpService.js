@@ -56,11 +56,35 @@ function formatUptime(ticks) {
     return result.join(', ') || 'Just Started';
 }
 
-function createSnmpSession(ip, community, port, version) {
-    const snmpVersion = version === 'v3' ? snmp.Version3 : snmp.Version2c;
+function createSnmpSession(ip, community, port, version, v3Options) {
+    if (version === 'v3' && v3Options) {
+        // SNMPv3 — authPriv desteği
+        const secLevel = v3Options.securityLevel || 'authPriv';
+        const authProto = v3Options.authProtocol === 'SHA' ? snmp.AuthProtocols.sha : snmp.AuthProtocols.md5;
+        const privProto = v3Options.privProtocol === 'AES' ? snmp.PrivProtocols.aes : snmp.PrivProtocols.des;
+
+        const user = {
+            name: v3Options.securityName || community,
+            level: secLevel === 'authPriv' ? snmp.SecurityLevel.authPriv
+                 : secLevel === 'authNoPriv' ? snmp.SecurityLevel.authNoPriv
+                 : snmp.SecurityLevel.noAuthNoPriv,
+            authProtocol: authProto,
+            authKey: v3Options.authKey || '',
+            privProtocol: privProto,
+            privKey: v3Options.privKey || ''
+        };
+
+        return snmp.createV3Session(ip, user, {
+            port: port || 161,
+            timeout: 5000,
+            retries: 1
+        });
+    }
+
+    // SNMPv2c (varsayılan)
     return snmp.createSession(ip, community, {
         port: port || 161,
-        version: snmpVersion,
+        version: snmp.Version2c,
         timeout: 5000,
         retries: 1
     });

@@ -7,7 +7,8 @@
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
     "start:legacy": "node index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "generate-certs": "mkdir -p certs && openssl req -x509 -newkey rsa:4096 -keyout certs/key.pem -out certs/cert.pem -days 365 -nodes -subj '/CN=localhost'",
+    "test": "node --test src/**/*.test.js"
   },
   "keywords": [],
   "author": "",

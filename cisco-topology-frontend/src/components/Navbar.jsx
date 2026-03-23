@@ -1,6 +1,7 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
+import NotificationBell from './NotificationBell';
 import { t, getLang, setLang } from '../i18n';
 
 export default function Navbar({ onAddDevice }) {
@@ -36,6 +37,7 @@ export default function Navbar({ onAddDevice }) {
         </nav>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <NotificationBell />
         <button className="nav-btn" onClick={toggleTheme} title={t('changeTheme')} style={{ fontSize: '1.2rem' }}>{theme === 'dark' ? '☀️' : '🌙'}</button>
         <button className="nav-btn" onClick={() => setLang(lang === 'en' ? 'tr' : 'en')} title={lang === 'en' ? 'Türkçe' : 'English'}
           style={{ fontSize: '0.85rem', fontWeight: 700, letterSpacing: '1px' }}>
