@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
+import BulkImportModal from '../components/BulkImportModal';
 import { showToast } from '../Toast';
 import { t } from '../i18n';
 import { API_BASE } from '../config';
@@ -14,6 +15,7 @@ export default function DeviceListPage({ onEdit }) {
   const [sortConfig, setSortConfig] = useState({ key: 'name', dir: 'asc' });
   const [statusFilter, setStatusFilter] = useState('all');
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [showBulkImport, setShowBulkImport] = useState(false);
 
   const filteredDevices = useMemo(() => {
     let list = [...rawDevices];
@@ -76,6 +78,7 @@ export default function DeviceListPage({ onEdit }) {
               onClick={() => setStatusFilter(f.value)}>{f.label}</button>
           ))}
         </div>
+        {isAdmin && <button className="btn btn-ghost btn-sm" onClick={() => setShowBulkImport(true)} title="Bulk Import">📤 Import</button>}
         {isAdmin && <button className="btn btn-ghost btn-sm" onClick={handleExportCSV} title="Export CSV">📥 CSV</button>}
         <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{filteredDevices.length} / {rawDevices.length} {t('deviceCount')}</span>
       </div>
@@ -134,6 +137,8 @@ export default function DeviceListPage({ onEdit }) {
           </div>
         </div>
       )}
+
+      {showBulkImport && <BulkImportModal onClose={() => setShowBulkImport(false)} />}
     </div>
   );
 }

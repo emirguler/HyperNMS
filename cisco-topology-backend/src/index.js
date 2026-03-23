@@ -18,6 +18,7 @@ const switchRoutes = require('./routes/switches');
 const edgeRoutes = require('./routes/edges');
 const userRoutes = require('./routes/users');
 const auditRoutes = require('./routes/audit');
+const settingsRoutes = require('./routes/settings');
 
 const app = express();
 
@@ -41,6 +42,7 @@ app.use(switchRoutes);
 app.use(edgeRoutes);
 app.use(userRoutes);
 app.use(auditRoutes);
+app.use(settingsRoutes);
 
 app.get('/notifications', authenticate, (req, res) => {
     res.json(getNotifications(parseInt(req.query.limit) || 50));
