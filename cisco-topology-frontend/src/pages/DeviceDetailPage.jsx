@@ -49,7 +49,7 @@ export default function DeviceDetailPage() {
       </div>
 
       <div className="chart-container" style={{ marginBottom: 24, padding: '24px 32px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 24, textAlign: 'center' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 24, textAlign: 'center', marginBottom: details.snmpCommunity || details.sshUsername ? 20 : 0 }}>
           {[
             { label: 'Real Hostname', value: displayHostname, color: 'var(--primary)' },
             { label: 'IP Address', value: details.ip, mono: true },
@@ -62,6 +62,28 @@ export default function DeviceDetailPage() {
             </div>
           ))}
         </div>
+        {(details.snmpCommunity || details.sshUsername) && (
+          <div style={{ display: 'flex', gap: 32, borderTop: '1px solid var(--border-color)', paddingTop: 16 }}>
+            {details.snmpCommunity && (
+              <div>
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>SNMP Community</span>
+                <div style={{ fontFamily: 'monospace', fontSize: '0.9rem', marginTop: 4 }}>{details.snmpCommunity}</div>
+              </div>
+            )}
+            {details.sshUsername && (
+              <div>
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>SSH Username</span>
+                <div style={{ fontFamily: 'monospace', fontSize: '0.9rem', marginTop: 4 }}>{details.sshUsername}</div>
+              </div>
+            )}
+            {details.model && (
+              <div>
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>Model</span>
+                <div style={{ fontSize: '0.9rem', marginTop: 4 }}>{details.model}</div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 24, marginBottom: 24 }}>
