@@ -78,14 +78,14 @@ export default function DeviceDetailPage() {
         <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border-color)' }}>
           <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--primary)' }}>Physical Interfaces</h3>
         </div>
-        <table className="modern-table">
+        <table className="modern-table" style={{ tableLayout: 'fixed', width: '100%' }}>
           <thead>
             <tr>
-              <th style={{ paddingLeft: 24 }}>Port</th>
-              <th>VLAN</th>
-              <th>VLAN Name</th>
-              <th>Status</th>
-              <th>Capacity</th>
+              <th style={{ paddingLeft: 24, width: '20%' }}>Port</th>
+              <th style={{ width: '12%' }}>VLAN</th>
+              <th style={{ width: '28%' }}>VLAN Name</th>
+              <th style={{ width: '15%' }}>Status</th>
+              <th style={{ width: '10%' }}>Capacity</th>
             </tr>
           </thead>
           <tbody>

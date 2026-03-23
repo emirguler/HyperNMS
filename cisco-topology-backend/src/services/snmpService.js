@@ -237,17 +237,18 @@ async function getDeviceDetails(device) {
 
                         bridgePorts.forEach(vb => {
                             const ifIdx = parseSnmpInt(vb.value).toString();
-                            if (!trunkPorts.has(ifIdx)) {
-                                const staticVlan = staticVlanMap[ifIdx];
-                                const isDynamic = staticVlan && staticVlan !== parseInt(vid);
-                                const label = isDynamic ? vid + ' (D)' : vid;
+                            // Trunk portları atla — onlar zaten native VLAN ile işaretli
+                            if (trunkPorts.has(ifIdx)) return;
 
-                                if (!vlanMap[ifIdx]) {
-                                    vlanMap[ifIdx] = label;
-                                } else if (!vlanMap[ifIdx].includes(vid)) {
-                                    // Aynı portta birden fazla VLAN (multi-auth: telefon + PC)
-                                    vlanMap[ifIdx] += ', ' + label;
-                                }
+                            const staticVlan = staticVlanMap[ifIdx];
+                            const isDynamic = staticVlan && staticVlan !== parseInt(vid);
+                            const label = isDynamic ? vid + ' (D)' : vid;
+
+                            if (!vlanMap[ifIdx]) {
+                                vlanMap[ifIdx] = label;
+                            } else if (!vlanMap[ifIdx].includes(vid)) {
+                                // Aynı portta birden fazla VLAN (multi-auth: telefon + PC)
+                                vlanMap[ifIdx] += ', ' + label;
                             }
                         });
 
