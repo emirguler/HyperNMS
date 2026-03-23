@@ -124,8 +124,15 @@ function TopologyInner({ onEdit }) {
   }, [token]);
 
   const onConnect = useCallback((params) => {
-    setEdges(eds => addEdge({ ...params, animated: true, style: { stroke: 'var(--text-muted)', strokeWidth: 2 } }, eds));
-    const newEdge = { ...params, id: `e-${params.source}-${params.target}-${Date.now()}`, animated: true, style: { stroke: 'var(--text-muted)', strokeWidth: 2 } };
+    const newEdge = {
+      ...params,
+      id: `e-${params.source}-${params.target}-${Date.now()}`,
+      sourceHandle: params.sourceHandle,
+      targetHandle: params.targetHandle,
+      animated: true,
+      style: { stroke: 'var(--text-muted)', strokeWidth: 2 }
+    };
+    setEdges(eds => addEdge(newEdge, eds));
     fetch(`${API_BASE}/edges`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(newEdge) });
   }, [token, setEdges]);
 

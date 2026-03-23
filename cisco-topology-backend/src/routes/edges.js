@@ -20,6 +20,8 @@ router.post('/edges', authenticate, requireAdmin, async (req, res) => {
             id: newEdge.id,
             source: newEdge.source,
             target: newEdge.target,
+            sourceHandle: newEdge.sourceHandle || null,
+            targetHandle: newEdge.targetHandle || null,
             animated: newEdge.animated || false,
             style: newEdge.style || {}
         });
