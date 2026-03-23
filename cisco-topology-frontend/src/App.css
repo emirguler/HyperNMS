@@ -208,7 +208,7 @@ width: 100%; padding: 14px;
 
 /* --- TOPOLOGY NODE --- */
 .topology-node {
-  width: 150px; height: 110px;
+  width: 130px; height: auto; min-height: 80px; padding: 8px 6px 6px;
   background: var(--node-bg);
   backdrop-filter: blur(10px);
   border: 2px solid transparent;
@@ -230,8 +230,9 @@ width: 100%; padding: 14px;
 .topology-node.up { border-color: var(--success); box-shadow: 0 0 15px rgba(52, 211, 153, 0.15); }
 .topology-node.down { border-color: var(--danger); box-shadow: 0 0 15px rgba(248, 113, 113, 0.15); }
 
-.node-icon { margin-bottom: 8px; filter: drop-shadow(0 0 5px rgba(255,255,255,0.2)); pointer-events: none; }
-.node-label { font-weight: 600; font-size: 0.85rem; max-width: 90%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; pointer-events: none; }
+.node-icon { margin-bottom: 4px; filter: drop-shadow(0 0 5px rgba(255,255,255,0.2)); pointer-events: none; }
+.node-label { font-weight: 600; font-size: 0.75rem; max-width: 90%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; pointer-events: none; }
+.node-ip { font-size: 0.6rem; }
 .node-ip { font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; pointer-events: none; }
 
 /* --- GEO MAP --- */
@@ -483,46 +484,6 @@ select.modern-input option {
 [data-theme="light"] .btn-danger { background: rgba(220, 38, 38, 0.1); }
 [data-theme="light"] .dash-stat-value { color: var(--text-main); }
 
-/* --- TOPOLOGY TOOLBAR --- */
-.topology-toolbar {
-  position: absolute; top: 12px; left: 12px; right: 12px; z-index: 100;
-  display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(12px);
-  border: 1px solid var(--border-color); border-radius: 12px;
-  padding: 6px 12px; flex-wrap: wrap;
-}
-.topo-btn {
-  background: rgba(255,255,255,0.05); border: 1px solid var(--border-color);
-  color: var(--text-muted); padding: 4px 10px; border-radius: 6px;
-  font-size: 0.72rem; cursor: pointer; transition: all 0.2s;
-  white-space: nowrap; display: flex; align-items: center; gap: 4px;
-}
-.topo-btn:hover { background: rgba(56,189,248,0.15); color: var(--primary); border-color: var(--primary); }
-.topo-btn.active { background: var(--primary); color: #0f172a; border-color: var(--primary); font-weight: 600; }
-.topo-btn-group { display: flex; gap: 0; }
-.topo-btn-group .topo-btn { border-radius: 0; margin: 0 -0.5px; }
-.topo-btn-group .topo-btn:first-child { border-radius: 6px 0 0 6px; }
-.topo-btn-group .topo-btn:last-child { border-radius: 0 6px 6px 0; }
-
-.topology-filter-panel {
-  position: absolute; top: 100%; left: 0; margin-top: 6px;
-  background: var(--bg-panel); border: 1px solid var(--border-color);
-  border-radius: 10px; padding: 12px; min-width: 260;
-  box-shadow: 0 15px 40px rgba(0,0,0,0.5); z-index: 110;
-}
-
-/* --- NODE PULSE (DOWN cihazlar) --- */
-.node-pulse-ring {
-  position: absolute; top: -4px; left: -4px; right: -4px; bottom: -4px;
-  border-radius: 16px; border: 2px solid var(--danger);
-  animation: nodePulse 2s ease-in-out infinite;
-  pointer-events: none;
-}
-@keyframes nodePulse {
-  0%, 100% { opacity: 0.3; transform: scale(1); }
-  50% { opacity: 0.8; transform: scale(1.04); }
-}
-
 /* --- NODE TOOLTIP --- */
 .node-tooltip {
   position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
@@ -536,9 +497,6 @@ select.modern-input option {
 /* --- MINIMAP OVERRIDE --- */
 .react-flow__minimap { border-radius: 8px !important; }
 
-[data-theme="light"] .topology-toolbar { background: rgba(255,255,255,0.9); }
-[data-theme="light"] .topo-btn { background: rgba(0,0,0,0.04); }
-[data-theme="light"] .topology-filter-panel { background: #fff; }
 [data-theme="light"] .node-tooltip { background: #fff; }
 
 /* --- RESPONSIVE --- */
