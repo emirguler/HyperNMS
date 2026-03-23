@@ -186,7 +186,16 @@ async function getDeviceDetails(device) {
                     }
                 });
 
-                // 3. VLAN isimleri al (vtpVlanName)
+                // 3. Statik config VLAN'ları al (vmVlan) — dinamik karşılaştırma için
+                const staticVlanMap = {};
+                const accessVlanData = await getSubtree('1.3.6.1.4.1.9.9.68.1.2.2.1.2');
+                accessVlanData.forEach(vb => {
+                    const ifIdx = vb.oid.split('.').pop();
+                    const val = parseSnmpInt(vb.value);
+                    if (val > 0) staticVlanMap[ifIdx] = val;
+                });
+
+                // 4. VLAN isimleri al (vtpVlanName)
                 const vlanNameData = await getSubtree('1.3.6.1.4.1.9.9.46.1.3.1.1.4');
                 const vlanIds = [];
                 vlanNameData.forEach(vb => {
@@ -220,9 +229,10 @@ async function getDeviceDetails(device) {
 
                         bridgePorts.forEach(vb => {
                             const ifIdx = parseSnmpInt(vb.value).toString();
-                            // Trunk portları atla (zaten native VLAN atandı)
                             if (!trunkPorts.has(ifIdx) && !vlanMap[ifIdx]) {
-                                vlanMap[ifIdx] = vid;
+                                const staticVlan = staticVlanMap[ifIdx];
+                                const isDynamic = staticVlan && staticVlan !== parseInt(vid);
+                                vlanMap[ifIdx] = isDynamic ? vid + ' (D)' : vid;
                             }
                         });
 
@@ -246,7 +256,7 @@ async function getDeviceDetails(device) {
 
             if (!interfacesMap[index]) {
                 const vlanStr = vlanMap[index] || '-';
-                const vlanId = vlanStr.replace(/\s*\(T\)/, '');
+                const vlanId = vlanStr.replace(/\s*\([TDB]\)/, '');
                 interfacesMap[index] = {
                     index, name: '', status: statusMap[index] || 'down',
                     vlan: vlanStr,
