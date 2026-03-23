@@ -211,7 +211,7 @@ function TopologyInner({ onEdit }) {
           onNodeDragStop={isAdmin ? onNodeDragStop : undefined}
           nodesDraggable={isAdmin}
           nodesConnectable={isAdmin}
-          elementsSelectable={isAdmin}
+          elementsSelectable
           connectionMode="loose"
           selectionOnDrag={isAdmin}
           multiSelectionKeyCode="Shift"
