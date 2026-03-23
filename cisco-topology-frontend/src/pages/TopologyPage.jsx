@@ -61,6 +61,7 @@ function TopologyInner({ onEdit }) {
   const activeTabId = tabId || 'main';
   const [menu, setMenu] = useState(null);
   const [edgeMenu, setEdgeMenu] = useState(null);
+  const [tabMenu, setTabMenu] = useState(null);
   const [localNodes, setLocalNodes] = useState([]);
   const [renamingTab, setRenamingTab] = useState(null);
   const [renameValue, setRenameValue] = useState('');
@@ -147,10 +148,16 @@ function TopologyInner({ onEdit }) {
     navigate(`/topology/${id}`);
   };
 
-  const handleStartRename = (tab, e) => {
+  const handleTabContextMenu = (tab, e) => {
+    e.preventDefault();
     e.stopPropagation();
-    setRenamingTab(tab.id);
-    setRenameValue(tab.name);
+    setTabMenu({ id: tab.id, name: tab.name, top: e.clientY, left: e.clientX });
+  };
+
+  const handleStartRename = (tabId, name) => {
+    setRenamingTab(tabId);
+    setRenameValue(name);
+    setTabMenu(null);
   };
 
   const handleFinishRename = () => {
@@ -162,7 +169,7 @@ function TopologyInner({ onEdit }) {
 
   return (
     <div style={{ width: '100%', height: sshSessions.length > 0 ? '60%' : '100%', position: 'relative', display: 'flex', flexDirection: 'column' }}
-      onClick={() => { setMenu(null); setEdgeMenu(null); }}>
+      onClick={() => { setMenu(null); setEdgeMenu(null); setTabMenu(null); }}>
 
       {/* Tab Bar */}
       <div className="topology-tabs">
@@ -171,6 +178,7 @@ function TopologyInner({ onEdit }) {
             key={tab.id}
             className={`topology-tab ${activeTabId === tab.id ? 'active' : ''}`}
             onClick={() => navigate(tab.id === 'main' ? '/topology' : `/topology/${tab.id}`)}
+            onContextMenu={(e) => handleTabContextMenu(tab, e)}
           >
             {renamingTab === tab.id ? (
               <input
@@ -183,7 +191,7 @@ function TopologyInner({ onEdit }) {
                 autoFocus
               />
             ) : (
-              <span onDoubleClick={(e) => handleStartRename(tab, e)}>{tab.name}</span>
+              <span>{tab.name}</span>
             )}
             {tab.id !== 'main' && (
               <span className="topology-tab-close" onClick={(e) => {
@@ -196,6 +204,20 @@ function TopologyInner({ onEdit }) {
         ))}
         <button className="topology-tab-add" onClick={handleAddTab} title="Add sub page">+</button>
       </div>
+
+      {/* Tab sağ tık menüsü */}
+      {tabMenu && (
+        <div className="context-menu" style={{ top: tabMenu.top, left: tabMenu.left, zIndex: 9999 }}>
+          <div className="context-menu-item" onClick={() => handleStartRename(tabMenu.id, tabMenu.name)}>✏️ Rename</div>
+          {tabMenu.id !== 'main' && (
+            <div className="context-menu-item" style={{ color: 'var(--danger)' }} onClick={() => {
+              removeTab(tabMenu.id);
+              if (activeTabId === tabMenu.id) navigate('/topology');
+              setTabMenu(null);
+            }}>🗑️ Delete</div>
+          )}
+        </div>
+      )}
 
       {/* React Flow Canvas */}
       <div style={{ flex: 1, position: 'relative' }} ref={reactFlowWrapper}>
