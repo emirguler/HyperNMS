@@ -55,12 +55,12 @@ function TerminalPane({ switchId, switchName }) {
       }
     };
 
-    ws.onclose = () => {
-      term.write('\r\n*** WebSocket closed ***\r\n');
+    ws.onclose = (event) => {
+      term.write(`\r\n*** WebSocket closed (code: ${event.code}, reason: ${event.reason || 'none'}) ***\r\n`);
     };
 
-    ws.onerror = () => {
-      term.write('\r\n*** WebSocket error ***\r\n');
+    ws.onerror = (event) => {
+      term.write(`\r\n*** WebSocket error ***\r\n`);
     };
 
     term.onData((data) => {

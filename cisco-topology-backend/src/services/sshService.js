@@ -26,22 +26,28 @@ function setupWebSocket(server) {
             return;
         }
 
+        const safeSend = (data) => {
+            try { if (ws.readyState === WebSocket.OPEN) ws.send(data); } catch (e) { /* ignore */ }
+        };
+
         const conn = new ssh2();
         conn.on('ready', () => {
-            ws.send(JSON.stringify({ type: 'info', message: 'SSH Connection Established.\r\n' }));
+            console.log(`[SSH] Connected to ${device.name} (${device.ip})`);
+            safeSend(JSON.stringify({ type: 'info', message: 'SSH Connection Established.\r\n' }));
             conn.shell((err, stream) => {
-                if (err) return ws.send(JSON.stringify({ type: 'error', message: err.message }));
-                stream.on('data', (data) => ws.send(JSON.stringify({ type: 'data', data: data.toString() })));
-                stream.on('close', () => { conn.end(); ws.close(); });
+                if (err) { safeSend(JSON.stringify({ type: 'error', message: err.message })); return; }
+                stream.on('data', (data) => safeSend(JSON.stringify({ type: 'data', data: data.toString() })));
+                stream.on('close', () => { conn.end(); try { ws.close(); } catch (e) {} });
                 ws.on('message', (msg) => {
                     try {
                         const parsed = JSON.parse(msg);
                         if (parsed.type === 'data') stream.write(parsed.data);
-                    } catch (e) { /* ignore parse errors */ }
+                    } catch (e) { /* ignore */ }
                 });
             });
         }).on('error', (err) => {
-            ws.send(JSON.stringify({ type: 'error', message: 'Connection Failed: ' + err.message }));
+            console.log(`[SSH] Error ${device.name}: ${err.message}`);
+            safeSend(JSON.stringify({ type: 'error', message: 'Connection Failed: ' + err.message }));
         }).connect({
             host: device.ip,
             port: 22,
