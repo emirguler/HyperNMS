@@ -99,7 +99,7 @@ function validateUser(data, isEdit = false) {
 function sanitizeSwitch(data) {
     const allowed = ['name', 'ip', 'model', 'type', 'sshUsername', 'sshPassword',
                      'snmpCommunity', 'snmpPort', 'snmpVersion', 'healthIntervalSec',
-                     'position', 'tags', 'location'];
+                     'position', 'tags', 'location', 'topologyPage'];
     const clean = {};
     for (const key of allowed) {
         if (data[key] !== undefined) {

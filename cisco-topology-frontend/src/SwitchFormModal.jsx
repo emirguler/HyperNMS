@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import './App.css';
 import { t } from './i18n';
 
-function SwitchFormModal({ mode, initialValues, onCancel, onSave }) {
+function SwitchFormModal({ mode, initialValues, onCancel, onSave, topologyTabs }) {
   const isEdit = mode === 'edit';
 
   const [values, setValues] = useState({
@@ -18,6 +18,7 @@ function SwitchFormModal({ mode, initialValues, onCancel, onSave }) {
     snmpProtocol: 'udp',
     snmpCommunity: '',
     tags: '',
+    topologyPage: 'main',
   });
 
   useEffect(() => {
@@ -33,6 +34,7 @@ function SwitchFormModal({ mode, initialValues, onCancel, onSave }) {
         snmpCommunity: initialValues.snmpCommunity || '',
         healthIntervalSec: initialValues.healthIntervalSec || 60,
         tags: (initialValues.tags || []).join(', '),
+        topologyPage: initialValues.topologyPage || 'main',
       }));
     }
   }, [initialValues, isEdit]);
@@ -114,9 +116,18 @@ function SwitchFormModal({ mode, initialValues, onCancel, onSave }) {
                </div>
             </div>
 
-            <div style={{ gridColumn: 'span 2' }}>
+            <div>
               <label className="input-label" style={{display:'block', marginBottom:8, color:'var(--text-muted)'}}>Tags</label>
-              <input className="modern-input" name="tags" value={values.tags} onChange={handleChange} placeholder="core, datacenter, floor-2 (comma separated)" autoComplete="off" />
+              <input className="modern-input" name="tags" value={values.tags} onChange={handleChange} placeholder="core, datacenter" autoComplete="off" />
+            </div>
+
+            <div>
+              <label className="input-label" style={{display:'block', marginBottom:8, color:'var(--text-muted)'}}>Topology Page</label>
+              <select className="modern-input" name="topologyPage" value={values.topologyPage} onChange={handleChange}>
+                {(topologyTabs || [{ id: 'main', name: 'Main Topology' }]).map(tab => (
+                  <option key={tab.id} value={tab.id}>{tab.name}</option>
+                ))}
+              </select>
             </div>
           </div>
 

@@ -12,41 +12,9 @@ import { useAuth } from '../context/AuthContext';
 import { API_BASE } from '../config';
 import { t } from '../i18n';
 import { showToast } from '../Toast';
+import { useTopologyTabs } from '../hooks/useTopologyTabs';
 
 const nodeTypes = { switchNode: SwitchNode };
-
-// Alt sayfa yönetimi — localStorage'da saklanır
-function useTopologyTabs() {
-  const [tabs, setTabs] = useState(() => {
-    try {
-      const saved = localStorage.getItem('topologyTabs');
-      if (saved) return JSON.parse(saved);
-    } catch {}
-    return [{ id: 'main', name: 'Main Topology' }];
-  });
-
-  const saveTabs = (newTabs) => {
-    setTabs(newTabs);
-    localStorage.setItem('topologyTabs', JSON.stringify(newTabs));
-  };
-
-  const addTab = (name) => {
-    const id = 'tab-' + Date.now();
-    saveTabs([...tabs, { id, name }]);
-    return id;
-  };
-
-  const removeTab = (id) => {
-    if (id === 'main') return;
-    saveTabs(tabs.filter(t => t.id !== id));
-  };
-
-  const renameTab = (id, name) => {
-    saveTabs(tabs.map(t => t.id === id ? { ...t, name } : t));
-  };
-
-  return { tabs, addTab, removeTab, renameTab };
-}
 
 function TopologyInner({ onEdit }) {
   const { rawDevices, edges, setEdges, sshSessions, openSshSession } = useApp();
@@ -66,10 +34,12 @@ function TopologyInner({ onEdit }) {
   const [renamingTab, setRenamingTab] = useState(null);
   const [renameValue, setRenameValue] = useState('');
 
-  // Node'ları sync — main tab tüm cihazları gösterir, diğer tab'lar filtrelenmiş
+  // Node'ları sync — main tab tüm cihazları gösterir, diğer tab'lar kendi cihazlarını
   useEffect(() => {
     setLocalNodes(prev => {
-      const devices = activeTabId === 'main' ? rawDevices : rawDevices;
+      const devices = activeTabId === 'main'
+        ? rawDevices
+        : rawDevices.filter(s => s.topologyPage === activeTabId);
       let updated = [];
       devices.forEach(s => {
         const existing = prev.find(n => n.id === s.id);

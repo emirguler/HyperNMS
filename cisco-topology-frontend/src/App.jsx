@@ -19,6 +19,7 @@ import GeoMapPage from './pages/GeoMapPage';
 import { showToast } from './Toast';
 import { t, getLang, setLang, onLangChange } from './i18n';
 import { API_BASE } from './config';
+import { getTopologyTabs } from './hooks/useTopologyTabs';
 
 function ProtectedRoute({ children }) {
   const { token } = useAuth();
@@ -75,6 +76,7 @@ function AppLayout() {
         <SwitchFormModal
           mode={modalMode}
           initialValues={editingNode}
+          topologyTabs={getTopologyTabs()}
           onCancel={() => setIsModalOpen(false)}
           onSave={async (f) => {
             const res = await fetch(`${API_BASE}/switches${modalMode === 'edit' ? '/' + editingNode.id : ''}`, {
