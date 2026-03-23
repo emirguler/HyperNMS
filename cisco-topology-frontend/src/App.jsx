@@ -60,6 +60,7 @@ function AppLayout() {
           <Route path="/devices" element={<DeviceListPage onEdit={handleEditDevice} />} />
           <Route path="/devices/:id" element={<DeviceDetailPage />} />
           <Route path="/topology" element={<TopologyPage onEdit={handleEditDevice} />} />
+          <Route path="/topology/:tabId" element={<TopologyPage onEdit={handleEditDevice} />} />
           <Route path="/users" element={<UsersPage />} />
           <Route path="/audit" element={<AuditPage />} />
           <Route path="/geomap" element={<GeoMapPage />} />

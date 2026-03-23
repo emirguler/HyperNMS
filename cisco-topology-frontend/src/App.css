@@ -293,7 +293,8 @@ width: 100%; padding: 14px;
   box-shadow: 0 25px 50px rgba(0,0,0,0.5); backdrop-filter: blur(24px);
 }
 .dropdown { position: relative; }
-.dropdown-content { display: none; position: absolute; top: 120%; left: 0; background: var(--bg-panel); border: 1px solid var(--border-color); min-width: 180px; z-index: 10; border-radius: 12px; padding: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); backdrop-filter: blur(16px); }
+.dropdown-content { display: none; position: absolute; top: 100%; left: 0; background: var(--bg-panel); border: 1px solid var(--border-color); min-width: 180px; z-index: 10; border-radius: 12px; padding: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); backdrop-filter: blur(16px); padding-top: 12px; }
+.dropdown::after { content: ''; position: absolute; top: 100%; left: 0; width: 100%; height: 10px; }
 .dropdown:hover .dropdown-content { display: block; animation: fadeIn 0.2s ease; }
 .dropdown-item { padding: 12px; cursor: pointer; color: var(--text-main); display: block; border-radius: 8px; transition: background 0.2s; }
 .dropdown-item:hover { background: var(--primary); color: #0f172a; }
@@ -483,6 +484,41 @@ select.modern-input option {
 [data-theme="light"] .context-menu { box-shadow: 0 10px 25px rgba(0,0,0,0.12); }
 [data-theme="light"] .btn-danger { background: rgba(220, 38, 38, 0.1); }
 [data-theme="light"] .dash-stat-value { color: var(--text-main); }
+
+/* --- TOPOLOGY TABS --- */
+.topology-tabs {
+  display: flex; align-items: center; background: var(--bg-panel);
+  border-bottom: 1px solid var(--border-color); height: 36px;
+  overflow-x: auto; flex-shrink: 0; padding: 0 4px; gap: 2px;
+}
+.topology-tab {
+  display: flex; align-items: center; gap: 6px;
+  padding: 0 14px; height: 100%; cursor: pointer;
+  font-size: 0.75rem; color: var(--text-muted);
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s; white-space: nowrap; position: relative;
+}
+.topology-tab:hover { color: var(--text-main); background: rgba(255,255,255,0.03); }
+.topology-tab.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
+.topology-tab-close {
+  font-size: 1rem; line-height: 1; opacity: 0; cursor: pointer;
+  transition: opacity 0.15s; margin-left: 2px;
+}
+.topology-tab:hover .topology-tab-close { opacity: 0.6; }
+.topology-tab-close:hover { opacity: 1; color: var(--danger); }
+.topology-tab-rename {
+  background: transparent; border: 1px solid var(--primary);
+  color: var(--text-main); font-size: 0.75rem; padding: 1px 4px;
+  border-radius: 4px; width: 100px; outline: none;
+}
+.topology-tab-add {
+  background: none; border: 1px dashed var(--border-color);
+  color: var(--text-muted); width: 28px; height: 24px;
+  border-radius: 6px; cursor: pointer; font-size: 1rem;
+  display: flex; align-items: center; justify-content: center;
+  margin-left: 4px; transition: all 0.2s;
+}
+.topology-tab-add:hover { border-color: var(--primary); color: var(--primary); background: rgba(56,189,248,0.08); }
 
 /* --- NODE TOOLTIP --- */
 .node-tooltip {

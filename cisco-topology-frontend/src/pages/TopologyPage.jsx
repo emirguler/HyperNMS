@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useParams } from 'react-router-dom';
 import ReactFlow, {
   Background, Controls, MiniMap, applyNodeChanges,
   addEdge, applyEdgeChanges, useReactFlow, ReactFlowProvider
@@ -9,30 +9,68 @@ import { toPng } from 'html-to-image';
 import SwitchNode from '../components/SwitchNode';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
-import { getLayoutedElements } from '../utils/layoutEngine';
 import { API_BASE } from '../config';
 import { t } from '../i18n';
 import { showToast } from '../Toast';
 
 const nodeTypes = { switchNode: SwitchNode };
 
+// Alt sayfa yönetimi — localStorage'da saklanır
+function useTopologyTabs() {
+  const [tabs, setTabs] = useState(() => {
+    try {
+      const saved = localStorage.getItem('topologyTabs');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return [{ id: 'main', name: 'Main Topology' }];
+  });
+
+  const saveTabs = (newTabs) => {
+    setTabs(newTabs);
+    localStorage.setItem('topologyTabs', JSON.stringify(newTabs));
+  };
+
+  const addTab = (name) => {
+    const id = 'tab-' + Date.now();
+    saveTabs([...tabs, { id, name }]);
+    return id;
+  };
+
+  const removeTab = (id) => {
+    if (id === 'main') return;
+    saveTabs(tabs.filter(t => t.id !== id));
+  };
+
+  const renameTab = (id, name) => {
+    saveTabs(tabs.map(t => t.id === id ? { ...t, name } : t));
+  };
+
+  return { tabs, addTab, removeTab, renameTab };
+}
+
 function TopologyInner({ onEdit }) {
   const { rawDevices, edges, setEdges, sshSessions, openSshSession } = useApp();
   const { token } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { tabId } = useParams();
   const reactFlowWrapper = useRef(null);
   const { fitView, setCenter } = useReactFlow();
+  const { tabs, addTab, removeTab, renameTab } = useTopologyTabs();
 
+  const activeTabId = tabId || 'main';
   const [menu, setMenu] = useState(null);
   const [edgeMenu, setEdgeMenu] = useState(null);
   const [localNodes, setLocalNodes] = useState([]);
+  const [renamingTab, setRenamingTab] = useState(null);
+  const [renameValue, setRenameValue] = useState('');
 
-  // Node'ları sync et
+  // Node'ları sync — main tab tüm cihazları gösterir, diğer tab'lar filtrelenmiş
   useEffect(() => {
     setLocalNodes(prev => {
+      const devices = activeTabId === 'main' ? rawDevices : rawDevices;
       let updated = [];
-      rawDevices.forEach(s => {
+      devices.forEach(s => {
         const existing = prev.find(n => n.id === s.id);
         const nodeData = {
           label: s.name, ip: s.ip, status: s.status,
@@ -52,7 +90,7 @@ function TopologyInner({ onEdit }) {
       });
       return updated;
     });
-  }, [rawDevices]);
+  }, [rawDevices, activeTabId]);
 
   // URL'den zoom-to-device
   useEffect(() => {
@@ -65,7 +103,6 @@ function TopologyInner({ onEdit }) {
     }
   }, [searchParams, rawDevices, setCenter]);
 
-  // Eski stil edge'ler (orijinal görsel)
   const styledEdges = useMemo(() => {
     return edges.map(e => {
       const src = rawDevices.find(s => s.id === e.source);
@@ -104,63 +141,112 @@ function TopologyInner({ onEdit }) {
     return '#64748b';
   };
 
+  const handleAddTab = () => {
+    const name = `Sub Page ${tabs.length}`;
+    const id = addTab(name);
+    navigate(`/topology/${id}`);
+  };
+
+  const handleStartRename = (tab, e) => {
+    e.stopPropagation();
+    setRenamingTab(tab.id);
+    setRenameValue(tab.name);
+  };
+
+  const handleFinishRename = () => {
+    if (renamingTab && renameValue.trim()) {
+      renameTab(renamingTab, renameValue.trim());
+    }
+    setRenamingTab(null);
+  };
+
   return (
-    <div style={{ width: '100%', height: sshSessions.length > 0 ? '60%' : '100%', position: 'relative' }}
-      onClick={() => { setMenu(null); setEdgeMenu(null); }}
-      ref={reactFlowWrapper}>
+    <div style={{ width: '100%', height: sshSessions.length > 0 ? '60%' : '100%', position: 'relative', display: 'flex', flexDirection: 'column' }}
+      onClick={() => { setMenu(null); setEdgeMenu(null); }}>
 
-      <ReactFlow
-        nodes={localNodes}
-        edges={styledEdges}
-        nodeTypes={nodeTypes}
-        onNodesChange={n => setLocalNodes(applyNodeChanges(n, localNodes))}
-        onEdgesChange={e => setEdges(applyEdgeChanges(e, edges))}
-        onConnect={onConnect}
-        onEdgesDelete={onEdgesDelete}
-        onEdgeContextMenu={(e, edge) => { e.preventDefault(); setEdgeMenu({ id: edge.id, top: e.clientY, left: e.clientX }); setMenu(null); }}
-        onNodeContextMenu={(e, n) => { e.preventDefault(); setMenu({ id: n.id, label: n.data.label, top: e.clientY, left: e.clientX, data: n.data }); setEdgeMenu(null); }}
-        onNodeDragStop={onNodeDragStop}
-        selectionOnDrag
-        multiSelectionKeyCode="Shift"
-        fitView
-      >
-        <Background color="var(--primary)" gap={25} size={1} style={{ opacity: 0.1 }} />
-        <Controls style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-color)', borderRadius: 8 }} />
-        <MiniMap
-          nodeColor={minimapNodeColor}
-          nodeStrokeWidth={2}
-          style={{
-            background: 'var(--bg-dark)', border: '1px solid var(--border-color)',
-            borderRadius: 8, height: 100, width: 150
-          }}
-          maskColor="rgba(0,0,0,0.6)"
-        />
-      </ReactFlow>
+      {/* Tab Bar */}
+      <div className="topology-tabs">
+        {tabs.map(tab => (
+          <div
+            key={tab.id}
+            className={`topology-tab ${activeTabId === tab.id ? 'active' : ''}`}
+            onClick={() => navigate(tab.id === 'main' ? '/topology' : `/topology/${tab.id}`)}
+          >
+            {renamingTab === tab.id ? (
+              <input
+                className="topology-tab-rename"
+                value={renameValue}
+                onChange={e => setRenameValue(e.target.value)}
+                onBlur={handleFinishRename}
+                onKeyDown={e => { if (e.key === 'Enter') handleFinishRename(); if (e.key === 'Escape') setRenamingTab(null); }}
+                onClick={e => e.stopPropagation()}
+                autoFocus
+              />
+            ) : (
+              <span onDoubleClick={(e) => handleStartRename(tab, e)}>{tab.name}</span>
+            )}
+            {tab.id !== 'main' && (
+              <span className="topology-tab-close" onClick={(e) => {
+                e.stopPropagation();
+                removeTab(tab.id);
+                if (activeTabId === tab.id) navigate('/topology');
+              }}>&times;</span>
+            )}
+          </div>
+        ))}
+        <button className="topology-tab-add" onClick={handleAddTab} title="Add sub page">+</button>
+      </div>
 
-      {/* Node context menu */}
-      {menu && (
-        <div className="context-menu" style={{ top: menu.top, left: menu.left }}>
-          <div className="context-menu-item" onClick={() => { navigate(`/devices/${menu.id}`); setMenu(null); }}>📊 Details</div>
-          <div className="context-menu-item" onClick={() => { onEdit(rawDevices.find(d => d.id === menu.id)); setMenu(null); }}>✏️ Edit</div>
-          <div className="context-menu-item" onClick={() => { openSshSession(menu.id, menu.label); setMenu(null); }}>💻 Terminal</div>
-          <div className="context-menu-item" onClick={() => {
-            const pos = localNodes.find(n => n.id === menu.id)?.position;
-            if (pos) setCenter(pos.x + 65, pos.y + 40, { zoom: 2, duration: 500 });
-            setMenu(null);
-          }}>🔍 Zoom Here</div>
-        </div>
-      )}
+      {/* React Flow Canvas */}
+      <div style={{ flex: 1, position: 'relative' }} ref={reactFlowWrapper}>
+        <ReactFlow
+          nodes={localNodes}
+          edges={styledEdges}
+          nodeTypes={nodeTypes}
+          onNodesChange={n => setLocalNodes(applyNodeChanges(n, localNodes))}
+          onEdgesChange={e => setEdges(applyEdgeChanges(e, edges))}
+          onConnect={onConnect}
+          onEdgesDelete={onEdgesDelete}
+          onEdgeContextMenu={(e, edge) => { e.preventDefault(); setEdgeMenu({ id: edge.id, top: e.clientY, left: e.clientX }); setMenu(null); }}
+          onNodeContextMenu={(e, n) => { e.preventDefault(); setMenu({ id: n.id, label: n.data.label, top: e.clientY, left: e.clientX, data: n.data }); setEdgeMenu(null); }}
+          onNodeDragStop={onNodeDragStop}
+          selectionOnDrag
+          multiSelectionKeyCode="Shift"
+          fitView
+        >
+          <Background color="var(--primary)" gap={25} size={1} style={{ opacity: 0.1 }} />
+          <Controls style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-color)', borderRadius: 8 }} />
+          <MiniMap
+            nodeColor={minimapNodeColor}
+            nodeStrokeWidth={2}
+            style={{ background: 'var(--bg-dark)', border: '1px solid var(--border-color)', borderRadius: 8, height: 100, width: 150 }}
+            maskColor="rgba(0,0,0,0.6)"
+          />
+        </ReactFlow>
 
-      {/* Edge context menu */}
-      {edgeMenu && (
-        <div className="context-menu" style={{ top: edgeMenu.top, left: edgeMenu.left }}>
-          <div className="context-menu-item" style={{ color: 'var(--danger)' }} onClick={() => {
-            fetch(`${API_BASE}/edges/${edgeMenu.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
-            setEdges(eds => eds.filter(e => e.id !== edgeMenu.id));
-            setEdgeMenu(null);
-          }}>🗑️ {t('deleteConnection')}</div>
-        </div>
-      )}
+        {menu && (
+          <div className="context-menu" style={{ top: menu.top, left: menu.left }}>
+            <div className="context-menu-item" onClick={() => { navigate(`/devices/${menu.id}`); setMenu(null); }}>📊 Details</div>
+            <div className="context-menu-item" onClick={() => { onEdit(rawDevices.find(d => d.id === menu.id)); setMenu(null); }}>✏️ Edit</div>
+            <div className="context-menu-item" onClick={() => { openSshSession(menu.id, menu.label); setMenu(null); }}>💻 Terminal</div>
+            <div className="context-menu-item" onClick={() => {
+              const pos = localNodes.find(n => n.id === menu.id)?.position;
+              if (pos) setCenter(pos.x + 65, pos.y + 40, { zoom: 2, duration: 500 });
+              setMenu(null);
+            }}>🔍 Zoom Here</div>
+          </div>
+        )}
+
+        {edgeMenu && (
+          <div className="context-menu" style={{ top: edgeMenu.top, left: edgeMenu.left }}>
+            <div className="context-menu-item" style={{ color: 'var(--danger)' }} onClick={() => {
+              fetch(`${API_BASE}/edges/${edgeMenu.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+              setEdges(eds => eds.filter(e => e.id !== edgeMenu.id));
+              setEdgeMenu(null);
+            }}>🗑️ {t('deleteConnection')}</div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

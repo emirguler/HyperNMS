@@ -24,14 +24,14 @@ export default function Navbar({ onAddDevice }) {
           <button className={`nav-btn ${path === '/dashboard' ? 'active' : ''}`} onClick={() => navigate('/dashboard')}>Dashboard</button>
           <button className={`nav-btn ${path === '/devices' ? 'active' : ''}`} onClick={() => navigate('/devices')}>{t('devices')}</button>
           <div className="dropdown">
-            <button className={`nav-btn ${['/topology', '/geomap'].includes(path) ? 'active' : ''}`}>{t('maps')} ▼</button>
+            <button className={`nav-btn ${path.startsWith('/topology') || path === '/geomap' ? 'active' : ''}`}>{t('maps')} ▼</button>
             <div className="dropdown-content">
               <a className="dropdown-item" onClick={() => navigate('/topology')}>🕸️ {t('topology')}</a>
               <a className="dropdown-item" onClick={() => navigate('/geomap')}>🌍 {t('geographic')}</a>
             </div>
           </div>
           <button className={`nav-btn ${path === '/audit' ? 'active' : ''}`} onClick={() => navigate('/audit')}>Audit Log</button>
-          {['/devices', '/topology'].includes(path) && onAddDevice && (
+          {(path === '/devices' || path.startsWith('/topology')) && onAddDevice && (
             <button className="btn btn-primary btn-sm" style={{ marginLeft: 15 }} onClick={onAddDevice}>{t('addDevice')}</button>
           )}
         </nav>
