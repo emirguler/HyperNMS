@@ -71,7 +71,10 @@ export default function DeviceDetailPage() {
         <Gauge value={details.ram || 0} label="RAM Usage" color={(details.ram || 0) > 80 ? 'var(--danger)' : '#8b5cf6'} />
       </div>
 
-      <div className="chart-container" style={{ padding: 0, overflow: 'hidden' }}>
+      {/* Show Run Kartı */}
+      <ShowRunCard deviceId={id} />
+
+      <div className="chart-container" style={{ padding: 0, overflow: 'hidden', marginTop: 24 }}>
         <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border-color)' }}>
           <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--primary)' }}>Physical Interfaces</h3>
         </div>
@@ -113,8 +116,6 @@ export default function DeviceDetailPage() {
         </table>
       </div>
 
-      {/* Show Run Kartı */}
-      <ShowRunCard deviceId={id} />
     </div>
   );
 }
