@@ -22,12 +22,7 @@ export default function Navbar({ onAddDevice }) {
         {/* Left — Brand + Nav */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }} onClick={() => navigate('/dashboard')}>
-            <div style={{
-              width: 32, height: 32, borderRadius: 8,
-              background: 'linear-gradient(135deg, var(--primary), #6366f1)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: '1rem', color: '#fff', fontWeight: 700
-            }}>N</div>
+            <span style={{ fontSize: '1.6rem', filter: 'drop-shadow(0 0 4px var(--primary))' }}>⚡</span>
             <span style={{ fontSize: '1rem', fontWeight: 700, letterSpacing: '-0.3px', color: 'var(--text-main)' }}>NetPulse</span>
           </div>
 

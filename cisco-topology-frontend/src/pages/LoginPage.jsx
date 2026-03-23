@@ -33,13 +33,7 @@ export default function LoginPage() {
       <div className="login-orb" />
       <div className="login-card">
         <div style={{ marginBottom: 32 }}>
-          <div style={{
-            width: 48, height: 48, borderRadius: 12,
-            background: 'linear-gradient(135deg, var(--primary), #6366f1)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '1.4rem', color: '#fff', fontWeight: 700,
-            margin: '0 auto 16px'
-          }}>N</div>
+          <div style={{ fontSize: '3.5rem', marginBottom: 8, filter: 'drop-shadow(0 0 8px var(--primary))' }}>⚡</div>
           <h1 style={{ margin: '0 0 6px', fontSize: '1.6rem', fontWeight: 700, letterSpacing: '-0.5px' }}>
             NetPulse
           </h1>
