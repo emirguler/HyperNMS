@@ -1,0 +1,28 @@
+{
+  "name": "cisco-topology-backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "start:legacy": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "net-snmp": "^3.26.0",
+    "ping": "^1.0.0",
+    "reactflow": "^11.11.4",
+    "ssh2": "^1.17.0",
+    "ws": "^8.19.0"
+  }
+}

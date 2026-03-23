@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  hypernms:
+    build: .
+    ports:
+      - "4000:4000"
+    environment:
+      - NODE_ENV=production
+      - PORT=4000
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:4000}
+    volumes:
+      - hypernms-data:/app/backend/data
+    restart: unless-stopped
+
+volumes:
+  hypernms-data:
