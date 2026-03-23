@@ -85,9 +85,9 @@ function SwitchNode({ data }) {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      <Handle type="source" position={Position.Top} id="top" style={{ background: 'var(--primary)', width: 8, height: 8 }} isConnectable isConnectableStart isConnectableEnd />
-      <Handle type="source" position={Position.Left} id="left" style={{ background: 'var(--primary)', width: 8, height: 8 }} isConnectable isConnectableStart isConnectableEnd />
-      <Handle type="source" position={Position.Right} id="right" style={{ background: 'var(--primary)', width: 8, height: 8 }} isConnectable isConnectableStart isConnectableEnd />
+      <Handle type="target" position={Position.Top} id="target-top" style={{ background: 'var(--primary)', width: 10, height: 10 }} />
+      <Handle type="source" position={Position.Left} id="source-left-vis" style={{ background: 'var(--primary)', width: 10, height: 10 }} />
+      <Handle type="target" position={Position.Right} id="target-right-vis" style={{ background: 'var(--primary)', width: 10, height: 10 }} />
 
       {/* Latency badge */}
       {data.latency != null && data.latency > 0 && (
@@ -150,7 +150,7 @@ function SwitchNode({ data }) {
         </div>
       )}
 
-      <Handle type="source" position={Position.Bottom} id="bottom" style={{ background: 'var(--primary)', width: 8, height: 8 }} isConnectable isConnectableStart isConnectableEnd />
+      <Handle type="source" position={Position.Bottom} id="source-bottom" style={{ background: 'var(--primary)', width: 10, height: 10 }} />
     </div>
   );
 }
