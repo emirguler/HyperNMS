@@ -19,7 +19,7 @@ export default function DashboardPage() {
   }, [rawDevices]);
 
   const pieData = [{ name: 'UP', value: stats.upCount }, { name: 'DOWN', value: stats.downCount }];
-  const COLORS = ['var(--success)', 'var(--danger)'];
+  const COLORS = ['#22c55e', '#ef4444'];
 
   return (
     <div className="list-container">
@@ -28,7 +28,7 @@ export default function DashboardPage() {
           { label: t('totalDevices'), value: rawDevices.length, color: undefined },
           { label: t('activeUp'), value: stats.upCount, color: 'var(--success)' },
           { label: t('inactiveDown'), value: stats.downCount, color: 'var(--danger)' },
-          { label: t('avgLatency'), value: stats.avgLatency, color: '#a855f7', suffix: ' ms' }
+          { label: t('avgLatency'), value: stats.avgLatency, color: 'var(--primary)', suffix: ' ms' }
         ].map((card, i) => (
           <div key={i} className="chart-container dash-stat-card">
             <h3 className="dash-stat-label">{card.label}</h3>

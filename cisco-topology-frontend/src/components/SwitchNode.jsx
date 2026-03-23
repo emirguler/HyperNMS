@@ -70,9 +70,9 @@ const ICON_MAP = {
 
 function latencyColor(latency) {
   if (!latency || latency < 0) return 'var(--text-muted)';
-  if (latency <= 20) return '#34d399';
-  if (latency <= 80) return '#f59e0b';
-  return '#ef4444';
+  if (latency <= 20) return 'var(--success)';
+  if (latency <= 80) return 'var(--warning)';
+  return 'var(--danger)';
 }
 
 function SwitchNode({ data }) {

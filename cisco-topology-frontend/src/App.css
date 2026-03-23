@@ -136,14 +136,17 @@ body {
    NAVBAR
    ============================================ */
 .nav-header {
-  height: 56px;
+  height: 48px;
   background: var(--bg-panel);
   border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 24px;
+  padding: 0 20px;
   z-index: 100;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  flex-shrink: 0;
 }
 
 .nav-menu { display: flex; gap: 2px; }
@@ -786,8 +789,9 @@ select.modern-input option {
 }
 
 @media (max-width: 768px) {
-  .nav-header { height: auto; padding: 10px 12px; flex-wrap: wrap; gap: 6px; }
-  .nav-menu { flex-wrap: wrap; gap: 2px; }
+  .nav-header { padding: 0 12px; }
+  .nav-menu { gap: 1px; }
+  .nav-btn { padding: 6px 8px; font-size: 0.75rem; }
   .list-container { padding: 12px; }
   .modern-table th, .modern-table td { padding: 10px 8px; font-size: 0.8rem; }
 }
