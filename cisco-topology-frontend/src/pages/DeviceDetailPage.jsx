@@ -76,6 +76,14 @@ export default function DeviceDetailPage() {
                 <div style={{ fontFamily: 'monospace', fontSize: '0.9rem', marginTop: 4 }}>{details.sshUsername}</div>
               </div>
             )}
+            {details.sshPasswordSet !== undefined && (
+              <div>
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>SSH Password</span>
+                <div style={{ fontSize: '0.9rem', marginTop: 4, color: details.sshPasswordSet ? 'var(--success)' : 'var(--danger)' }}>
+                  {details.sshPasswordSet ? '••••••••  ✓' : 'Not set  ✕'}
+                </div>
+              </div>
+            )}
             {details.model && (
               <div>
                 <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>Model</span>

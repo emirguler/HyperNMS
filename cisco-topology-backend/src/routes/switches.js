@@ -78,10 +78,11 @@ router.get('/switches/:id/details', authenticate, async (req, res) => {
     const device = store.getSwitch(req.params.id);
     if (!device) return res.status(404).send();
     const details = await getDeviceDetails(device);
-    // Admin can see SNMP community and SSH username
+    // Admin can see SNMP community, SSH username, and password status
     if (req.user.role === 'Administrator') {
         details.snmpCommunity = device.snmpCommunity || '';
         details.sshUsername = device.sshUsername || '';
+        details.sshPasswordSet = !!(device.sshPassword && device.sshPassword.length > 0);
         details.model = device.model || '';
     }
     res.json(details);
