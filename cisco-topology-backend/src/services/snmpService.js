@@ -187,41 +187,58 @@ async function getDeviceDetails(device) {
 
                 // 2. Access VLAN'lar (vmVlan — Cisco statik access VLAN)
                 // OID: 1.3.6.1.4.1.9.9.68.1.2.2.1.2
+                const staticVlanPorts = new Set();
                 const accessVlanData = await getSubtree('1.3.6.1.4.1.9.9.68.1.2.2.1.2');
                 accessVlanData.forEach(vb => {
                     const index = vb.oid.split('.').pop();
                     const val = parseSnmpInt(vb.value);
                     if (val > 0) {
                         vlanMap[index] = val.toString();
+                        staticVlanPorts.add(index);
                     }
                 });
 
-                // 3. Trunk portlar için native VLAN (sadece gerçek trunk portlara uygula)
+                // 3. Dinamik VLAN tespiti — vmVlanType: 1=static, 2=dynamic, 3=multiVlan
+                // OID: 1.3.6.1.4.1.9.9.68.1.2.2.1.1
+                const dynamicPorts = new Set();
+                const vlanTypeData = await getSubtree('1.3.6.1.4.1.9.9.68.1.2.2.1.1');
+                vlanTypeData.forEach(vb => {
+                    const index = vb.oid.split('.').pop();
+                    const vtype = parseSnmpInt(vb.value);
+                    if (vtype === 2 || vtype === 3) dynamicPorts.add(index);
+                });
+
+                // 4. Operasyonel PVID — 802.1X/RADIUS tarafından atanan VLAN burada görünür
+                // OID: 1.3.6.1.2.1.17.7.1.4.5.1.1 (dot1qPvid)
+                const pvidData = await getSubtree('1.3.6.1.2.1.17.7.1.4.5.1.1');
+                pvidData.forEach(vb => {
+                    const index = vb.oid.split('.').pop();
+                    const val = parseSnmpInt(vb.value);
+                    if (val > 0) {
+                        if (dynamicPorts.has(index)) {
+                            // Dinamik atanmış (RADIUS/802.1X)
+                            vlanMap[index] = val.toString() + ' (D)';
+                        } else if (!vlanMap[index]) {
+                            // Statik vmVlan'dan gelmediyse, pvid'yi kullan
+                            vlanMap[index] = val.toString();
+                        } else if (vlanMap[index] && !staticVlanPorts.has(index)) {
+                            // vmVlan verdi ama statik listesinde değilse, pvid farklıysa pvid'yi al
+                            const currentId = parseInt(vlanMap[index]);
+                            if (currentId !== val) {
+                                vlanMap[index] = val.toString() + ' (D)';
+                            }
+                        }
+                    }
+                });
+
+                // 5. Trunk portlar için native VLAN
                 // OID: 1.3.6.1.4.1.9.9.46.1.6.1.1.5
                 const trunkVlanData = await getSubtree('1.3.6.1.4.1.9.9.46.1.6.1.1.5');
                 trunkVlanData.forEach(vb => {
                     const index = vb.oid.split('.').pop();
                     const val = parseSnmpInt(vb.value);
-                    if (val > 0) {
-                        // Access VLAN zaten varsa ve trunk port değilse → access VLAN'ı koru
-                        if (vlanMap[index] && !trunkPorts.has(index)) return;
-                        // Trunk port veya henüz VLAN atanmamış
-                        if (trunkPorts.has(index)) {
-                            vlanMap[index] = val.toString() + ' (T)';
-                        } else if (!vlanMap[index]) {
-                            // Trunk olduğu belli olmayan ama native VLAN dönen port
-                            vlanMap[index] = val.toString() + ' (T)';
-                        }
-                    }
-                });
-
-                // 4. Hala VLAN bilgisi olmayan portlar için dot1qPvid (standart MIB)
-                const pvidData = await getSubtree('1.3.6.1.2.1.17.7.1.4.5.1.1');
-                pvidData.forEach(vb => {
-                    const index = vb.oid.split('.').pop();
-                    const val = parseSnmpInt(vb.value);
-                    if (!vlanMap[index] && val > 0) {
-                        vlanMap[index] = val.toString();
+                    if (val > 0 && trunkPorts.has(index)) {
+                        vlanMap[index] = val.toString() + ' (T)';
                     }
                 });
                 // 5. VLAN İsimlerini al (vtpVlanName)
