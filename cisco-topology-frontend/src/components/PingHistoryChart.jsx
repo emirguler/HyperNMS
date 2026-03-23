@@ -1,49 +1,12 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { getLang } from '../i18n';
-
-// Veriyi downsample et — çok yoğun olunca peak'ler kaybolmasın
-function downsample(data, maxPoints = 200) {
-  if (data.length <= maxPoints) return data;
-
-  const bucketSize = Math.ceil(data.length / maxPoints);
-  const result = [];
-
-  for (let i = 0; i < data.length; i += bucketSize) {
-    const bucket = data.slice(i, i + bucketSize);
-    // Her bucket'tan max değeri ve son değeri al (peak koruması)
-    const maxItem = bucket.reduce((max, item) => item.ms > max.ms ? item : max, bucket[0]);
-    const lastItem = bucket[bucket.length - 1];
-
-    // Peak farklıysa ikisini de ekle
-    if (maxItem !== lastItem && maxItem.ms > lastItem.ms * 1.3) {
-      result.push(maxItem);
-    }
-    result.push(lastItem);
-  }
-
-  return result;
-}
-
-const CustomTooltip = ({ active, payload, label }) => {
-  if (!active || !payload || !payload.length) return null;
-  return (
-    <div style={{
-      background: 'var(--bg-panel)', border: '1px solid var(--primary)',
-      borderRadius: 8, padding: '8px 12px', boxShadow: '0 10px 20px rgba(0,0,0,0.5)'
-    }}>
-      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 2 }}>{label}</div>
-      <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--primary)' }}>
-        {payload[0].value} ms
-      </div>
-    </div>
-  );
-};
 
 export default function PingHistoryChart({ deviceId }) {
-  const [rawData, setRawData] = useState([]);
+  const [data, setData] = useState([]);
   const [range, setRange] = useState('1H');
+  const [hover, setHover] = useState(null); // { x, y, ms, time }
+  const canvasRef = useRef(null);
+  const containerRef = useRef(null);
   const { authFetch } = useAuth();
   const ranges = { '1H': 3600000, '1D': 86400000, '1W': 604800000, '1M': 2592000000 };
 
@@ -52,13 +15,8 @@ export default function PingHistoryChart({ deviceId }) {
       const res = await authFetch(`/switches/${deviceId}/ping-history?duration=${ranges[range]}`);
       if (res && res.ok) {
         const d = await res.json();
-        const locale = getLang() === 'tr' ? 'tr-TR' : 'en-US';
-        const timeOpts = range === '1H' || range === '1D'
-          ? { hour: '2-digit', minute: '2-digit' }
-          : { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' };
-
-        setRawData(d.map(h => ({
-          time: new Date(h.timestamp).toLocaleString(locale, timeOpts),
+        setData(d.map(h => ({
+          ts: h.timestamp,
           ms: h.value === -1 ? 0 : h.value
         })));
       }
@@ -71,7 +29,146 @@ export default function PingHistoryChart({ deviceId }) {
     return () => clearInterval(i);
   }, [fetchHistory]);
 
-  const data = useMemo(() => downsample(rawData, 500), [rawData]);
+  // Canvas ile çizim — her noktaya birebir erişim
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const container = containerRef.current;
+    if (!canvas || !container || data.length === 0) return;
+
+    const rect = container.getBoundingClientRect();
+    const W = rect.width;
+    const H = rect.height;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+
+    const PAD_L = 50, PAD_R = 15, PAD_T = 10, PAD_B = 30;
+    const chartW = W - PAD_L - PAD_R;
+    const chartH = H - PAD_T - PAD_B;
+
+    const maxMs = Math.max(1, ...data.map(d => d.ms));
+    const minTs = data[0].ts;
+    const maxTs = data[data.length - 1].ts;
+    const tsRange = maxTs - minTs || 1;
+
+    const toX = (ts) => PAD_L + ((ts - minTs) / tsRange) * chartW;
+    const toY = (ms) => PAD_T + chartH - (ms / maxMs) * chartH;
+
+    // Arka plan temizle
+    ctx.clearRect(0, 0, W, H);
+
+    // Grid
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+      const y = PAD_T + (chartH / 4) * i;
+      ctx.beginPath(); ctx.moveTo(PAD_L, y); ctx.lineTo(W - PAD_R, y); ctx.stroke();
+    }
+
+    // Y axis labels
+    ctx.fillStyle = 'rgba(148,163,184,0.8)';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'right';
+    for (let i = 0; i <= 4; i++) {
+      const val = Math.round(maxMs * (4 - i) / 4);
+      const y = PAD_T + (chartH / 4) * i;
+      ctx.fillText(val + ' ms', PAD_L - 6, y + 3);
+    }
+
+    // X axis labels
+    ctx.textAlign = 'center';
+    const labelCount = Math.min(6, data.length);
+    for (let i = 0; i < labelCount; i++) {
+      const idx = Math.floor((data.length - 1) * i / (labelCount - 1));
+      const d = data[idx];
+      const x = toX(d.ts);
+      const timeStr = new Date(d.ts).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+      ctx.fillText(timeStr, x, H - 6);
+    }
+
+    // Gradient fill
+    const gradient = ctx.createLinearGradient(0, PAD_T, 0, PAD_T + chartH);
+    gradient.addColorStop(0, 'rgba(56,189,248,0.25)');
+    gradient.addColorStop(1, 'rgba(56,189,248,0)');
+
+    ctx.beginPath();
+    ctx.moveTo(toX(data[0].ts), PAD_T + chartH);
+    data.forEach(d => ctx.lineTo(toX(d.ts), toY(d.ms)));
+    ctx.lineTo(toX(data[data.length - 1].ts), PAD_T + chartH);
+    ctx.closePath();
+    ctx.fillStyle = gradient;
+    ctx.fill();
+
+    // Line
+    ctx.beginPath();
+    data.forEach((d, i) => {
+      const x = toX(d.ts);
+      const y = toY(d.ms);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.strokeStyle = 'rgba(56,189,248,0.9)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Hover noktası
+    if (hover) {
+      ctx.beginPath();
+      ctx.arc(hover.x, hover.y, 4, 0, Math.PI * 2);
+      ctx.fillStyle = '#38bdf8';
+      ctx.fill();
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Dikey çizgi
+      ctx.beginPath();
+      ctx.moveTo(hover.x, PAD_T);
+      ctx.lineTo(hover.x, PAD_T + chartH);
+      ctx.strokeStyle = 'rgba(56,189,248,0.3)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+  }, [data, hover]);
+
+  // Mouse move — en yakın veri noktasını bul
+  const handleMouseMove = useCallback((e) => {
+    if (data.length === 0) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+
+    const W = rect.width;
+    const H = rect.height;
+    const PAD_L = 50, PAD_R = 15, PAD_T = 10, PAD_B = 30;
+    const chartW = W - PAD_L - PAD_R;
+    const chartH = H - PAD_T - PAD_B;
+    const minTs = data[0].ts;
+    const maxTs = data[data.length - 1].ts;
+    const tsRange = maxTs - minTs || 1;
+    const maxMs = Math.max(1, ...data.map(d => d.ms));
+
+    // Mouse X → timestamp → en yakın noktayı bul (binary search)
+    const mouseTs = minTs + ((mouseX - PAD_L) / chartW) * tsRange;
+    let closest = data[0], closestDist = Infinity;
+    for (const d of data) {
+      const dist = Math.abs(d.ts - mouseTs);
+      if (dist < closestDist) { closestDist = dist; closest = d; }
+    }
+
+    const x = PAD_L + ((closest.ts - minTs) / tsRange) * chartW;
+    const y = PAD_T + chartH - (closest.ms / maxMs) * chartH;
+    const time = new Date(closest.ts).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+    setHover({ x, y, ms: closest.ms, time });
+  }, [data]);
+
+  const handleMouseLeave = useCallback(() => setHover(null), []);
 
   return (
     <div className="chart-container" style={{ height: 350 }}>
@@ -84,21 +181,27 @@ export default function PingHistoryChart({ deviceId }) {
           ))}
         </div>
       </div>
-      <ResponsiveContainer width="100%" height="80%">
-        <AreaChart data={data}>
-          <defs>
-            <linearGradient id="colorPing" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.3} />
-              <stop offset="95%" stopColor="var(--primary)" stopOpacity={0} />
-            </linearGradient>
-          </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-          <XAxis dataKey="time" stroke="var(--text-muted)" fontSize={10} tickLine={false} axisLine={false} interval="preserveStartEnd" />
-          <YAxis stroke="var(--text-muted)" fontSize={11} unit=" ms" tickLine={false} axisLine={false} />
-          <Tooltip content={<CustomTooltip />} isAnimationActive={false} />
-          <Area type="linear" dataKey="ms" stroke="var(--primary)" fill="url(#colorPing)" strokeWidth={1.5} dot={false} activeDot={{ r: 3, strokeWidth: 1.5, fill: 'var(--primary)' }} isAnimationActive={false} />
-        </AreaChart>
-      </ResponsiveContainer>
+      <div ref={containerRef} style={{ width: '100%', height: 'calc(100% - 60px)', position: 'relative' }}>
+        <canvas
+          ref={canvasRef}
+          style={{ width: '100%', height: '100%', cursor: 'crosshair' }}
+          onMouseMove={handleMouseMove}
+          onMouseLeave={handleMouseLeave}
+        />
+        {hover && (
+          <div style={{
+            position: 'absolute',
+            left: Math.min(hover.x + 12, (containerRef.current?.clientWidth || 300) - 100),
+            top: Math.max(hover.y - 45, 0),
+            background: 'var(--bg-panel)', border: '1px solid var(--primary)',
+            borderRadius: 8, padding: '6px 10px', boxShadow: '0 8px 20px rgba(0,0,0,0.5)',
+            pointerEvents: 'none', zIndex: 10
+          }}>
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{hover.time}</div>
+            <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--primary)' }}>{hover.ms} ms</div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
