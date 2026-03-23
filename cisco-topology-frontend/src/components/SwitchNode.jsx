@@ -85,9 +85,9 @@ function SwitchNode({ data }) {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      <Handle type="source" position={Position.Top} id="top" style={{ background: 'var(--primary)', width: 10, height: 10 }} />
-      <Handle type="source" position={Position.Left} id="left" style={{ background: 'var(--primary)', width: 10, height: 10 }} />
-      <Handle type="source" position={Position.Right} id="right" style={{ background: 'var(--primary)', width: 10, height: 10 }} />
+      <Handle type="source" position={Position.Top} id="top" style={{ background: 'var(--primary)', width: 6, height: 6 }} />
+      <Handle type="source" position={Position.Left} id="left" style={{ background: 'var(--primary)', width: 6, height: 6 }} />
+      <Handle type="source" position={Position.Right} id="right" style={{ background: 'var(--primary)', width: 6, height: 6 }} />
 
       {/* Latency badge */}
       {data.latency != null && data.latency > 0 && (
@@ -150,7 +150,7 @@ function SwitchNode({ data }) {
         </div>
       )}
 
-      <Handle type="source" position={Position.Bottom} id="bottom" style={{ background: 'var(--primary)', width: 10, height: 10 }} />
+      <Handle type="source" position={Position.Bottom} id="bottom" style={{ background: 'var(--primary)', width: 6, height: 6 }} />
     </div>
   );
 }

@@ -40,8 +40,8 @@ export function AppProvider({ children }) {
         });
         return data.edges.map(e => ({
           ...e,
-          sourceHandle: e.sourceHandle || localHandleMap[e.id]?.sourceHandle || null,
-          targetHandle: e.targetHandle || localHandleMap[e.id]?.targetHandle || null,
+          sourceHandle: e.sourceHandle || localHandleMap[e.id]?.sourceHandle || 'bottom',
+          targetHandle: e.targetHandle || localHandleMap[e.id]?.targetHandle || 'top',
         }));
       });
 
