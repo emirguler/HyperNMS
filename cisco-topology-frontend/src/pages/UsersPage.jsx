@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Navigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import UserFormModal from '../UserFormModal';
@@ -8,7 +9,9 @@ import { API_BASE } from '../config';
 
 export default function UsersPage() {
   const { users, fetchData } = useApp();
-  const { token } = useAuth();
+  const { token, isAdmin } = useAuth();
+
+  if (!isAdmin) return <Navigate to="/dashboard" replace />;
   const [editingUser, setEditingUser] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);

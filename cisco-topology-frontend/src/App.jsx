@@ -28,7 +28,7 @@ function ProtectedRoute({ children }) {
 }
 
 function AppLayout() {
-  const { token, mustChangePassword, clearMustChangePassword } = useAuth();
+  const { token, isAdmin, mustChangePassword, clearMustChangePassword } = useAuth();
   const { fetchData } = useApp();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState('add');
@@ -54,14 +54,14 @@ function AppLayout() {
 
   return (
     <div className="app-container">
-      <Navbar onAddDevice={handleAddDevice} />
+      <Navbar onAddDevice={isAdmin ? handleAddDevice : undefined} />
       <main style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
         <Routes>
           <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/devices" element={<DeviceListPage onEdit={handleEditDevice} />} />
+          <Route path="/devices" element={<DeviceListPage onEdit={isAdmin ? handleEditDevice : undefined} />} />
           <Route path="/devices/:id" element={<DeviceDetailPage />} />
-          <Route path="/topology" element={<TopologyPage onEdit={handleEditDevice} />} />
-          <Route path="/topology/:tabId" element={<TopologyPage onEdit={handleEditDevice} />} />
+          <Route path="/topology" element={<TopologyPage onEdit={isAdmin ? handleEditDevice : undefined} />} />
+          <Route path="/topology/:tabId" element={<TopologyPage onEdit={isAdmin ? handleEditDevice : undefined} />} />
           <Route path="/users" element={<UsersPage />} />
           <Route path="/audit" element={<AuditPage />} />
           <Route path="/geomap" element={<GeoMapPage />} />
@@ -72,7 +72,7 @@ function AppLayout() {
 
       {mustChangePassword && <ForcePasswordChange onComplete={clearMustChangePassword} />}
 
-      {isModalOpen && (
+      {isAdmin && isModalOpen && (
         <SwitchFormModal
           mode={modalMode}
           initialValues={editingNode}

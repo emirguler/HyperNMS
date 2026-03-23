@@ -5,7 +5,7 @@ import NotificationBell from './NotificationBell';
 import { t, getLang, setLang } from '../i18n';
 
 export default function Navbar({ onAddDevice }) {
-  const { logout } = useAuth();
+  const { logout, isAdmin } = useAuth();
   const { theme, toggleTheme } = useApp();
   const navigate = useNavigate();
   const location = useLocation();
@@ -30,8 +30,8 @@ export default function Navbar({ onAddDevice }) {
               <a className="dropdown-item" onClick={() => navigate('/geomap')}>🌍 {t('geographic')}</a>
             </div>
           </div>
-          <button className={`nav-btn ${path === '/audit' ? 'active' : ''}`} onClick={() => navigate('/audit')}>Audit Log</button>
-          {(path === '/devices' || path.startsWith('/topology')) && onAddDevice && (
+          {isAdmin && <button className={`nav-btn ${path === '/audit' ? 'active' : ''}`} onClick={() => navigate('/audit')}>Audit Log</button>}
+          {isAdmin && (path === '/devices' || path.startsWith('/topology')) && onAddDevice && (
             <button className="btn btn-primary btn-sm" style={{ marginLeft: 15 }} onClick={onAddDevice}>{t('addDevice')}</button>
           )}
         </nav>
@@ -39,7 +39,7 @@ export default function Navbar({ onAddDevice }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <NotificationBell />
         <button className="nav-btn" onClick={toggleTheme} title={t('changeTheme')} style={{ fontSize: '1.2rem' }}>{theme === 'dark' ? '☀️' : '🌙'}</button>
-        <button className={`nav-btn ${path === '/users' ? 'active' : ''}`} onClick={() => navigate('/users')}>👥 {t('users')}</button>
+        {isAdmin && <button className={`nav-btn ${path === '/users' ? 'active' : ''}`} onClick={() => navigate('/users')}>👥 {t('users')}</button>}
         <button className="btn btn-danger btn-sm" onClick={() => { logout(); navigate('/login'); }}>{t('logout')}</button>
       </div>
     </header>

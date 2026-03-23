@@ -18,7 +18,7 @@ const nodeTypes = { switchNode: SwitchNode };
 
 function TopologyInner({ onEdit }) {
   const { rawDevices, edges, setEdges, sshSessions, openSshSession } = useApp();
-  const { token } = useAuth();
+  const { token, isAdmin } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { tabId } = useParams();
@@ -155,7 +155,7 @@ function TopologyInner({ onEdit }) {
             key={tab.id}
             className={`topology-tab ${activeTabId === tab.id ? 'active' : ''}`}
             onClick={() => navigate(tab.id === 'main' ? '/topology' : `/topology/${tab.id}`)}
-            onContextMenu={(e) => handleTabContextMenu(tab, e)}
+            onContextMenu={isAdmin ? ((e) => handleTabContextMenu(tab, e)) : undefined}
           >
             {renamingTab === tab.id ? (
               <input
@@ -170,7 +170,7 @@ function TopologyInner({ onEdit }) {
             ) : (
               <span>{tab.name}</span>
             )}
-            {tab.id !== 'main' && (
+            {isAdmin && tab.id !== 'main' && (
               <span className="topology-tab-close" onClick={(e) => {
                 e.stopPropagation();
                 removeTab(tab.id);
@@ -179,11 +179,11 @@ function TopologyInner({ onEdit }) {
             )}
           </div>
         ))}
-        <button className="topology-tab-add" onClick={handleAddTab} title="Add sub page">+</button>
+        {isAdmin && <button className="topology-tab-add" onClick={handleAddTab} title="Add sub page">+</button>}
       </div>
 
       {/* Tab sağ tık menüsü */}
-      {tabMenu && (
+      {isAdmin && tabMenu && (
         <div className="context-menu" style={{ top: tabMenu.top, left: tabMenu.left, zIndex: 9999 }}>
           <div className="context-menu-item" onClick={() => handleStartRename(tabMenu.id, tabMenu.name)}>✏️ Rename</div>
           {tabMenu.id !== 'main' && (
@@ -203,14 +203,17 @@ function TopologyInner({ onEdit }) {
           edges={styledEdges}
           nodeTypes={nodeTypes}
           onNodesChange={n => setLocalNodes(applyNodeChanges(n, localNodes))}
-          onEdgesChange={e => setEdges(applyEdgeChanges(e, edges))}
-          onConnect={onConnect}
-          onEdgesDelete={onEdgesDelete}
-          onEdgeContextMenu={(e, edge) => { e.preventDefault(); setEdgeMenu({ id: edge.id, top: e.clientY, left: e.clientX }); setMenu(null); }}
-          onNodeContextMenu={(e, n) => { e.preventDefault(); setMenu({ id: n.id, label: n.data.label, top: e.clientY, left: e.clientX, data: n.data }); setEdgeMenu(null); }}
-          onNodeDragStop={onNodeDragStop}
+          onEdgesChange={isAdmin ? (e => setEdges(applyEdgeChanges(e, edges))) : undefined}
+          onConnect={isAdmin ? onConnect : undefined}
+          onEdgesDelete={isAdmin ? onEdgesDelete : undefined}
+          onEdgeContextMenu={isAdmin ? ((e, edge) => { e.preventDefault(); setEdgeMenu({ id: edge.id, top: e.clientY, left: e.clientX }); setMenu(null); }) : undefined}
+          onNodeContextMenu={isAdmin ? ((e, n) => { e.preventDefault(); setMenu({ id: n.id, label: n.data.label, top: e.clientY, left: e.clientX, data: n.data }); setEdgeMenu(null); }) : undefined}
+          onNodeDragStop={isAdmin ? onNodeDragStop : undefined}
+          nodesDraggable={isAdmin}
+          nodesConnectable={isAdmin}
+          elementsSelectable={isAdmin}
           connectionMode="loose"
-          selectionOnDrag
+          selectionOnDrag={isAdmin}
           multiSelectionKeyCode="Shift"
           fitView
         >
@@ -224,7 +227,7 @@ function TopologyInner({ onEdit }) {
           />
         </ReactFlow>
 
-        {menu && (
+        {isAdmin && menu && (
           <div className="context-menu" style={{ top: menu.top, left: menu.left }}>
             <div className="context-menu-item" onClick={() => { navigate(`/devices/${menu.id}`); setMenu(null); }}>📊 Details</div>
             <div className="context-menu-item" onClick={() => { onEdit(rawDevices.find(d => d.id === menu.id)); setMenu(null); }}>✏️ Edit</div>
@@ -237,7 +240,7 @@ function TopologyInner({ onEdit }) {
           </div>
         )}
 
-        {edgeMenu && (
+        {isAdmin && edgeMenu && (
           <div className="context-menu" style={{ top: edgeMenu.top, left: edgeMenu.left }}>
             <div className="context-menu-item" style={{ color: 'var(--danger)' }} onClick={() => {
               fetch(`${API_BASE}/edges/${edgeMenu.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });

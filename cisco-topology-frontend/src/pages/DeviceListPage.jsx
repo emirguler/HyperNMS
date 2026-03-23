@@ -8,7 +8,7 @@ import { API_BASE } from '../config';
 
 export default function DeviceListPage({ onEdit }) {
   const { rawDevices, fetchData } = useApp();
-  const { token } = useAuth();
+  const { token, isAdmin } = useAuth();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: 'name', dir: 'asc' });
@@ -76,7 +76,7 @@ export default function DeviceListPage({ onEdit }) {
               onClick={() => setStatusFilter(f.value)}>{f.label}</button>
           ))}
         </div>
-        <button className="btn btn-ghost btn-sm" onClick={handleExportCSV} title="Export CSV">📥 CSV</button>
+        {isAdmin && <button className="btn btn-ghost btn-sm" onClick={handleExportCSV} title="Export CSV">📥 CSV</button>}
         <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{filteredDevices.length} / {rawDevices.length} {t('deviceCount')}</span>
       </div>
 
@@ -90,7 +90,7 @@ export default function DeviceListPage({ onEdit }) {
               <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('type')}>Type{sortIcon('type')}</th>
               <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('latency')}>Latency{sortIcon('latency')}</th>
               <th>Tags</th>
-              <th style={{ textAlign: 'right', paddingRight: 32 }}>Actions</th>
+              {isAdmin && <th style={{ textAlign: 'right', paddingRight: 32 }}>Actions</th>}
             </tr>
           </thead>
           <tbody>
@@ -106,13 +106,15 @@ export default function DeviceListPage({ onEdit }) {
                     <span key={tag} style={{ background: 'rgba(99,102,241,0.15)', color: 'var(--primary)', padding: '2px 8px', borderRadius: 12, fontSize: '0.7rem', marginRight: 4 }}>{tag}</span>
                   ))}
                 </td>
-                <td style={{ textAlign: 'right' }}>
-                  <button className="btn btn-primary btn-sm" style={{ marginRight: 8 }} onClick={(e) => { e.stopPropagation(); onEdit(d); }}>{t('edit')}</button>
-                  <button className="btn btn-danger btn-sm" onClick={(e) => { e.stopPropagation(); setDeleteTarget(d); }}>{t('delete')}</button>
-                </td>
+                {isAdmin && (
+                  <td style={{ textAlign: 'right' }}>
+                    <button className="btn btn-primary btn-sm" style={{ marginRight: 8 }} onClick={(e) => { e.stopPropagation(); onEdit(d); }}>{t('edit')}</button>
+                    <button className="btn btn-danger btn-sm" onClick={(e) => { e.stopPropagation(); setDeleteTarget(d); }}>{t('delete')}</button>
+                  </td>
+                )}
               </tr>
             )) : (
-              <tr><td colSpan="7" style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
+              <tr><td colSpan={isAdmin ? 7 : 6} style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
                 {searchQuery || statusFilter !== 'all' ? t('noFilterResult') : t('noDevicesYet')}
               </td></tr>
             )}

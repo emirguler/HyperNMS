@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react';
+import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export default function AuditPage() {
-  const { authFetch } = useAuth();
+  const { authFetch, isAdmin } = useAuth();
+
+  if (!isAdmin) return <Navigate to="/dashboard" replace />;
   const [logs, setLogs] = useState([]);
   const [filter, setFilter] = useState('');
 
