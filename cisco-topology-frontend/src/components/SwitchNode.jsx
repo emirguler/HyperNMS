@@ -85,12 +85,9 @@ function SwitchNode({ data }) {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      <Handle type="source" position={Position.Top} id="top-src" style={{ background: 'var(--primary)', width: 8, height: 8 }} />
-      <Handle type="target" position={Position.Top} id="top-tgt" style={{ background: 'var(--primary)', width: 8, height: 8 }} />
-      <Handle type="source" position={Position.Left} id="left-src" style={{ background: 'var(--primary)', width: 8, height: 8 }} />
-      <Handle type="target" position={Position.Left} id="left-tgt" style={{ background: 'var(--primary)', width: 8, height: 8 }} />
-      <Handle type="source" position={Position.Right} id="right-src" style={{ background: 'var(--primary)', width: 8, height: 8 }} />
-      <Handle type="target" position={Position.Right} id="right-tgt" style={{ background: 'var(--primary)', width: 8, height: 8 }} />
+      <Handle type="source" position={Position.Top} id="top" style={{ background: 'var(--primary)', width: 8, height: 8 }} isConnectable isConnectableStart isConnectableEnd />
+      <Handle type="source" position={Position.Left} id="left" style={{ background: 'var(--primary)', width: 8, height: 8 }} isConnectable isConnectableStart isConnectableEnd />
+      <Handle type="source" position={Position.Right} id="right" style={{ background: 'var(--primary)', width: 8, height: 8 }} isConnectable isConnectableStart isConnectableEnd />
 
       {/* Latency badge */}
       {data.latency != null && data.latency > 0 && (
@@ -153,8 +150,7 @@ function SwitchNode({ data }) {
         </div>
       )}
 
-      <Handle type="source" position={Position.Bottom} id="bottom-src" style={{ background: 'var(--primary)', width: 8, height: 8 }} />
-      <Handle type="target" position={Position.Bottom} id="bottom-tgt" style={{ background: 'var(--primary)', width: 8, height: 8 }} />
+      <Handle type="source" position={Position.Bottom} id="bottom" style={{ background: 'var(--primary)', width: 8, height: 8 }} isConnectable isConnectableStart isConnectableEnd />
     </div>
   );
 }
