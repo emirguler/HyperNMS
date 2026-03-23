@@ -30,7 +30,20 @@ export function AppProvider({ children }) {
       if (!res || !res.ok) return;
       const data = await res.json();
       setRawDevices(data.switches);
-      setEdges(data.edges);
+      // Edge'leri merge et — yerel sourceHandle/targetHandle bilgisini koru
+      setEdges(prev => {
+        const localHandleMap = {};
+        prev.forEach(e => {
+          if (e.sourceHandle || e.targetHandle) {
+            localHandleMap[e.id] = { sourceHandle: e.sourceHandle, targetHandle: e.targetHandle };
+          }
+        });
+        return data.edges.map(e => ({
+          ...e,
+          sourceHandle: e.sourceHandle || localHandleMap[e.id]?.sourceHandle || null,
+          targetHandle: e.targetHandle || localHandleMap[e.id]?.targetHandle || null,
+        }));
+      });
 
       const resU = await authFetch('/users');
       if (resU && resU.ok) setUsers(await resU.json());
