@@ -7,11 +7,11 @@ export default function NotificationBell() {
   const [open, setOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const wsRef = useRef(null);
-  const { token } = useAuth();
+  const { isAuthenticated } = useAuth();
 
   useEffect(() => {
     // Fetch initial notifications
-    fetch(`${API_BASE}/notifications`, { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`${API_BASE}/notifications`, { credentials: 'include' })
       .then(r => r.ok ? r.json() : [])
       .then(data => {
         setNotifications(data);
@@ -37,7 +37,7 @@ export default function NotificationBell() {
     };
 
     return () => { try { ws.close(); } catch (e) {} };
-  }, [token]);
+  }, [isAuthenticated]);
 
   const severityColor = (severity) => {
     if (severity === 'critical') return 'var(--danger)';

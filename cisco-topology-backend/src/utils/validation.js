@@ -22,44 +22,44 @@ function validateSwitch(data) {
     const errors = [];
 
     if (!data.name || typeof data.name !== 'string' || data.name.trim().length === 0) {
-        errors.push('Cihaz adı gereklidir');
+        errors.push('Device name is required');
     }
     if (data.name && data.name.length > 100) {
-        errors.push('Cihaz adı 100 karakterden uzun olamaz');
+        errors.push('Device name cannot exceed 100 characters');
     }
 
     if (!data.ip || !isValidHost(data.ip)) {
-        errors.push('Geçerli bir IP adresi veya hostname gereklidir');
+        errors.push('Valid IP address or hostname required');
     }
 
     const validTypes = ['switch', 'router', 'firewall', 'server', 'pc', 'cloud'];
     if (data.type && !validTypes.includes(data.type)) {
-        errors.push('Geçersiz cihaz tipi');
+        errors.push('Invalid device type');
     }
 
     if (data.snmpPort) {
         const port = parseInt(data.snmpPort);
         if (isNaN(port) || port < 1 || port > 65535) {
-            errors.push('SNMP portu 1-65535 arasında olmalıdır');
+            errors.push('SNMP port must be between 1-65535');
         }
     }
 
     if (data.snmpCommunity && data.snmpCommunity.length > 100) {
-        errors.push('SNMP community 100 karakterden uzun olamaz');
+        errors.push('SNMP community cannot exceed 100 characters');
     }
 
     if (data.sshUsername && data.sshUsername.length > 64) {
-        errors.push('SSH kullanıcı adı 64 karakterden uzun olamaz');
+        errors.push('SSH username cannot exceed 64 characters');
     }
 
     if (data.model && data.model.length > 200) {
-        errors.push('Model 200 karakterden uzun olamaz');
+        errors.push('Model cannot exceed 200 characters');
     }
 
     if (data.healthIntervalSec) {
         const interval = parseInt(data.healthIntervalSec);
         if (isNaN(interval) || interval < 5 || interval > 3600) {
-            errors.push('Kontrol sıklığı 5-3600 saniye arasında olmalıdır');
+            errors.push('Check interval must be between 5-3600 seconds');
         }
     }
 
@@ -71,25 +71,31 @@ function validateUser(data, isEdit = false) {
     const errors = [];
 
     if (!isEdit && (!data.username || typeof data.username !== 'string' || data.username.trim().length === 0)) {
-        errors.push('Kullanıcı adı gereklidir');
+        errors.push('Username is required');
     }
     if (data.username && data.username.length > 64) {
-        errors.push('Kullanıcı adı 64 karakterden uzun olamaz');
+        errors.push('Username cannot exceed 64 characters');
     }
     if (data.username && !/^[a-zA-Z0-9._-]+$/.test(data.username)) {
-        errors.push('Kullanıcı adı sadece harf, rakam, nokta, alt çizgi ve tire içerebilir');
+        errors.push('Username may only contain letters, numbers, dots, underscores, and hyphens');
     }
 
-    if (!isEdit && (!data.password || data.password.length < 6)) {
-        errors.push('Parola en az 6 karakter olmalıdır');
+    // H5: Strong password policy
+    const checkPw = !isEdit ? data.password : (data.password && data.password.length > 0 ? data.password : null);
+    if (!isEdit && !data.password) {
+        errors.push('Password is required');
     }
-    if (isEdit && data.password && data.password.length > 0 && data.password.length < 6) {
-        errors.push('Parola en az 6 karakter olmalıdır');
+    if (checkPw) {
+        if (checkPw.length < 8) errors.push('Password must be at least 8 characters');
+        if (!/[A-Z]/.test(checkPw)) errors.push('Password must contain an uppercase letter');
+        if (!/[a-z]/.test(checkPw)) errors.push('Password must contain a lowercase letter');
+        if (!/[0-9]/.test(checkPw)) errors.push('Password must contain a digit');
+        if (!/[^A-Za-z0-9]/.test(checkPw)) errors.push('Password must contain a special character');
     }
 
     const validRoles = ['Administrator', 'User'];
     if (data.role && !validRoles.includes(data.role)) {
-        errors.push('Geçersiz rol');
+        errors.push('Invalid role');
     }
 
     return errors;

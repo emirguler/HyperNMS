@@ -1,7 +1,6 @@
 import { useState, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
-import { API_BASE } from '../config';
 import { showToast } from '../Toast';
 
 // Basit CSV/TSV parser
@@ -50,7 +49,7 @@ function parseCSV(text) {
 }
 
 export default function BulkImportModal({ onClose }) {
-  const { token } = useAuth();
+  const { authFetch } = useAuth();
   const { fetchData } = useApp();
   const [devices, setDevices] = useState([]);
   const [result, setResult] = useState(null);
@@ -84,9 +83,8 @@ export default function BulkImportModal({ onClose }) {
     if (devices.length === 0) return;
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/switches/bulk`, {
+      const res = await authFetch('/switches/bulk', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ devices })
       });
       const data = await res.json();

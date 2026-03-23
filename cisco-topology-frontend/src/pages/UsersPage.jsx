@@ -5,11 +5,10 @@ import { useAuth } from '../context/AuthContext';
 import UserFormModal from '../UserFormModal';
 import { showToast } from '../Toast';
 import { t } from '../i18n';
-import { API_BASE } from '../config';
 
 export default function UsersPage() {
   const { users, fetchData } = useApp();
-  const { token, isAdmin } = useAuth();
+  const { isAdmin, authFetch } = useAuth();
 
   if (!isAdmin) return <Navigate to="/dashboard" replace />;
   const [editingUser, setEditingUser] = useState(null);
@@ -18,7 +17,7 @@ export default function UsersPage() {
 
   const confirmDelete = async () => {
     if (!deleteTarget) return;
-    const res = await fetch(`${API_BASE}/users/${deleteTarget.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+    const res = await authFetch(`/users/${deleteTarget.id}`, { method: 'DELETE' });
     if (res.ok) showToast(`"${deleteTarget.username}" ${t('deleted')}`, 'success');
     else { const d = await res.json().catch(() => ({})); showToast(d.error || t('deleteFailed'), 'error'); }
     setDeleteTarget(null);
@@ -65,7 +64,7 @@ export default function UsersPage() {
       )}
 
       {isModalOpen && <UserFormModal mode={editingUser ? 'edit' : 'add'} initialValues={editingUser} onCancel={() => setIsModalOpen(false)} onSave={async (f) => {
-        const res = await fetch(`${API_BASE}/users${editingUser ? '/' + editingUser.id : ''}`, { method: editingUser ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(f) });
+        const res = await authFetch(`/users${editingUser ? '/' + editingUser.id : ''}`, { method: editingUser ? 'PUT' : 'POST', body: JSON.stringify(f) });
         if (res.ok) showToast(editingUser ? t('userUpdated') : t('userCreated'), 'success');
         else { const d = await res.json().catch(() => ({})); showToast(d.error || t('operationFailed'), 'error'); }
         setIsModalOpen(false);

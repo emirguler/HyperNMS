@@ -1,4 +1,5 @@
 const WebSocket = require('ws');
+const { authenticateWs } = require('../middleware/auth');
 
 const notifications = [];
 const MAX_NOTIFICATIONS = 100;
@@ -15,7 +16,17 @@ function setupNotificationWs(server) {
         }
     });
 
-    notificationWss.on('connection', (ws) => {
+    notificationWss.on('connection', (ws, req) => {
+        // H4: Authenticate WebSocket connection
+        const user = authenticateWs(req);
+        if (!user) {
+            ws.close(4001, 'Authentication required');
+            return;
+        }
+
+        ws.userId = user.id;
+        ws.userRole = user.role;
+
         ws.send(JSON.stringify({ type: 'history', data: notifications.slice(-20) }));
     });
 

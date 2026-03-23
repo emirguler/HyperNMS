@@ -6,6 +6,7 @@ import App from './App.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
 import { AuthProvider } from './context/AuthContext.jsx'
 import { AppProvider } from './context/AppContext.jsx'
+import { useAuth } from './context/AuthContext.jsx'
 
 function Root() {
   return (
@@ -21,13 +22,9 @@ function Root() {
   )
 }
 
-// AppProvider token'a bağlı olduğu için AuthProvider içinde olmalı
-// Ama login sayfasında AppProvider'a ihtiyaç yok
-import { useAuth } from './context/AuthContext.jsx'
-
 function AppProviderWrapper() {
-  const { token } = useAuth()
-  if (!token) return <App />
+  const { isAuthenticated } = useAuth()
+  if (!isAuthenticated) return <App />
   return (
     <AppProvider>
       <App />

@@ -18,7 +18,7 @@ const nodeTypes = { switchNode: SwitchNode };
 
 function TopologyInner({ onEdit }) {
   const { rawDevices, edges, setEdges, sshSessions, openSshSession } = useApp();
-  const { token, isAdmin } = useAuth();
+  const { isAdmin, authFetch, csrfToken } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { tabId } = useParams();
@@ -87,11 +87,11 @@ function TopologyInner({ onEdit }) {
   }, [edges, rawDevices]);
 
   const onNodeDragStop = useCallback((_, node) => {
-    fetch(`${API_BASE}/switches/${node.id}`, {
-      method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    authFetch(`/switches/${node.id}`, {
+      method: 'PUT',
       body: JSON.stringify({ position: node.position })
     }).catch(() => {});
-  }, [token]);
+  }, [authFetch]);
 
   const onConnect = useCallback((params) => {
     const newEdge = {
@@ -103,15 +103,15 @@ function TopologyInner({ onEdit }) {
       style: { stroke: 'var(--text-muted)', strokeWidth: 2 }
     };
     setEdges(eds => addEdge(newEdge, eds));
-    fetch(`${API_BASE}/edges`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(newEdge) });
-  }, [token, setEdges]);
+    authFetch('/edges', { method: 'POST', body: JSON.stringify(newEdge) });
+  }, [authFetch, setEdges]);
 
   const onEdgesDelete = useCallback((edgesToDelete) => {
     edgesToDelete.forEach(edge => {
-      fetch(`${API_BASE}/edges/${edge.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+      authFetch(`/edges/${edge.id}`, { method: 'DELETE' });
     });
     setEdges(eds => eds.filter(e => !edgesToDelete.some(del => del.id === e.id)));
-  }, [token, setEdges]);
+  }, [authFetch, setEdges]);
 
   const minimapNodeColor = (node) => {
     if (node.data?.status === 'DOWN') return '#ef4444';
@@ -243,7 +243,7 @@ function TopologyInner({ onEdit }) {
         {isAdmin && edgeMenu && (
           <div className="context-menu" style={{ top: edgeMenu.top, left: edgeMenu.left }}>
             <div className="context-menu-item" style={{ color: 'var(--danger)' }} onClick={() => {
-              fetch(`${API_BASE}/edges/${edgeMenu.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+              authFetch(`/edges/${edgeMenu.id}`, { method: 'DELETE' });
               setEdges(eds => eds.filter(e => e.id !== edgeMenu.id));
               setEdgeMenu(null);
             }}>🗑️ {t('deleteConnection')}</div>

@@ -130,7 +130,11 @@ class MemoryStore {
     updateUser(id, updates) {
         const idx = this.data.users.findIndex(u => String(u.id) === String(id));
         if (idx === -1) return null;
-        Object.assign(this.data.users[idx], updates);
+        // Whitelist allowed user fields to prevent prototype pollution
+        const allowed = ['password', 'role', 'mustChangePassword'];
+        for (const key of allowed) {
+            if (updates[key] !== undefined) this.data.users[idx][key] = updates[key];
+        }
         this._markDirty('users');
         return this.data.users[idx];
     }

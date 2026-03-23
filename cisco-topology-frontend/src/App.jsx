@@ -22,13 +22,13 @@ import { API_BASE } from './config';
 import { getTopologyTabs } from './hooks/useTopologyTabs';
 
 function ProtectedRoute({ children }) {
-  const { token } = useAuth();
-  if (!token) return <Navigate to="/login" replace />;
+  const { isAuthenticated } = useAuth();
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
   return children;
 }
 
 function AppLayout() {
-  const { token, isAdmin, mustChangePassword, clearMustChangePassword } = useAuth();
+  const { isAuthenticated, isAdmin, mustChangePassword, clearMustChangePassword, authFetch, csrfToken } = useAuth();
   const { fetchData } = useApp();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState('add');
@@ -79,9 +79,8 @@ function AppLayout() {
           topologyTabs={getTopologyTabs()}
           onCancel={() => setIsModalOpen(false)}
           onSave={async (f) => {
-            const res = await fetch(`${API_BASE}/switches${modalMode === 'edit' ? '/' + editingNode.id : ''}`, {
+            const res = await authFetch(`/switches${modalMode === 'edit' ? '/' + editingNode.id : ''}`, {
               method: modalMode === 'edit' ? 'PUT' : 'POST',
-              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
               body: JSON.stringify(f)
             });
             if (res.ok) showToast(modalMode === 'edit' ? t('deviceUpdated') : t('deviceAdded'), 'success');

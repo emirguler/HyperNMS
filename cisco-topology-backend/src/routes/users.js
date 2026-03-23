@@ -19,7 +19,7 @@ router.post('/users', authenticate, requireAdmin, async (req, res) => {
     if (errors.length > 0) return res.status(400).json({ error: errors.join(', ') });
 
     if (store.getUserByUsername(data.username)) {
-        return res.status(400).json({ error: 'Bu kullanıcı adı zaten mevcut' });
+        return res.status(400).json({ error: 'Username already exists' });
     }
 
     const hashedPw = await bcrypt.hash(data.password, BCRYPT_ROUNDS);
@@ -37,7 +37,7 @@ router.put('/users/:id', authenticate, requireAdmin, async (req, res) => {
     if (errors.length > 0) return res.status(400).json({ error: errors.join(', ') });
 
     const user = store.getUser(req.params.id);
-    if (!user) return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
+    if (!user) return res.status(404).json({ error: 'User not found' });
 
     const updates = {};
     if (data.role) updates.role = data.role;
@@ -54,11 +54,11 @@ router.put('/users/:id', authenticate, requireAdmin, async (req, res) => {
 
 router.delete('/users/:id', authenticate, requireAdmin, async (req, res) => {
     const target = store.getUser(req.params.id);
-    if (!target) return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
+    if (!target) return res.status(404).json({ error: 'User not found' });
 
     if (target.role === 'Administrator') {
         const adminCount = store.getUsers().filter(u => u.role === 'Administrator').length;
-        if (adminCount <= 1) return res.status(400).json({ error: 'Son administrator hesabı silinemez' });
+        if (adminCount <= 1) return res.status(400).json({ error: 'Cannot delete the last administrator account' });
     }
 
     store.deleteUser(req.params.id);

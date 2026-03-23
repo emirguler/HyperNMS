@@ -4,12 +4,12 @@ const path = require('path');
 
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
 if (!ENCRYPTION_KEY) {
-    console.error('[HATA] ENCRYPTION_KEY .env dosyasında tanımlı değil!');
+    console.error('[ERROR] ENCRYPTION_KEY not defined in .env!');
     process.exit(1);
 }
 
 const SECRET_KEY = process.env.JWT_SECRET || (() => {
-    console.warn('[UYARI] JWT_SECRET .env dosyasında tanımlı değil! Rastgele oluşturuluyor...');
+    console.warn('[WARN] JWT_SECRET not defined in .env! Generating random key...');
     return crypto.randomBytes(64).toString('hex');
 })();
 

@@ -1,10 +1,9 @@
 import { useState } from 'react';
-import { API_BASE } from '../config';
 import { useAuth } from '../context/AuthContext';
 import { showToast } from '../Toast';
 
 export default function ForcePasswordChange({ onComplete }) {
-  const { token } = useAuth();
+  const { authFetch } = useAuth();
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
@@ -23,9 +22,8 @@ export default function ForcePasswordChange({ onComplete }) {
     }
 
     try {
-      const res = await fetch(`${API_BASE}/change-password`, {
+      const res = await authFetch('/change-password', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ newPassword })
       });
       if (res.ok) {

@@ -27,7 +27,7 @@ router.post('/switches', authenticate, requireAdmin, async (req, res) => {
     if (errors.length > 0) return res.status(400).json({ error: errors.join(', ') });
 
     if (store.getSwitches().find(s => s.ip === payload.ip)) {
-        return res.status(400).json({ error: 'Bu IP adresi zaten kayıtlı' });
+        return res.status(400).json({ error: 'This IP address is already registered' });
     }
 
     if (payload.sshPassword) payload.sshPassword = encryptPassword(payload.sshPassword);
@@ -44,7 +44,7 @@ router.put('/switches/:id', authenticate, requireAdmin, async (req, res) => {
     const isPositionOnly = Object.keys(payload).length === 1 && payload.position;
 
     if (!isPositionOnly && payload.ip) {
-        const errors = validateSwitch({ ...payload, name: payload.name || 'tmp' }).filter(e => !e.includes('Cihaz adı'));
+        const errors = validateSwitch({ ...payload, name: payload.name || 'tmp' }).filter(e => !e.includes('Device name'));
         if (errors.length > 0) return res.status(400).json({ error: errors.join(', ') });
     }
 
@@ -55,7 +55,7 @@ router.put('/switches/:id', authenticate, requireAdmin, async (req, res) => {
     }
 
     const updated = store.updateSwitch(req.params.id, payload);
-    if (!updated) return res.status(404).json({ error: 'Cihaz bulunamadı' });
+    if (!updated) return res.status(404).json({ error: 'Device not found' });
 
     if (!isPositionOnly) await logAction(req.user, 'DEVICE_UPDATE', updated.name, { ip: updated.ip });
     res.json({ ...updated, sshPassword: undefined });
@@ -63,7 +63,7 @@ router.put('/switches/:id', authenticate, requireAdmin, async (req, res) => {
 
 router.delete('/switches/:id', authenticate, requireAdmin, async (req, res) => {
     const target = store.getSwitch(req.params.id);
-    if (!target) return res.status(404).json({ error: 'Cihaz bulunamadı' });
+    if (!target) return res.status(404).json({ error: 'Device not found' });
 
     store.deleteSwitch(req.params.id);
     // İlgili edge'leri de sil
@@ -91,21 +91,28 @@ router.get('/switches/:id/ping-history', authenticate, (req, res) => {
 // SSH komutu çalıştır (show run vb.)
 router.post('/switches/:id/exec', authenticate, async (req, res) => {
     const device = store.getSwitch(req.params.id);
-    if (!device) return res.status(404).json({ error: 'Cihaz bulunamadı' });
-    if (!device.sshUsername || !device.sshPassword) return res.status(400).json({ error: 'SSH bilgileri eksik' });
+    if (!device) return res.status(404).json({ error: 'Device not found' });
+    if (!device.sshUsername || !device.sshPassword) return res.status(400).json({ error: 'SSH credentials missing' });
 
     const command = req.body.command;
-    if (!command || typeof command !== 'string') return res.status(400).json({ error: 'Komut gerekli' });
-
-    // User rolü sadece show komutları çalıştırabilir
-    if (req.user.role !== 'Administrator' && !command.trim().toLowerCase().startsWith('show')) {
-        return res.status(403).json({ error: 'User rolü sadece show komutları çalıştırabilir' });
+    if (!command || typeof command !== 'string' || command.length > 500) {
+        return res.status(400).json({ error: 'Valid command required (max 500 chars)' });
     }
 
-    // Güvenlik: tehlikeli komutları engelle
-    const blocked = ['reload', 'erase', 'delete', 'format', 'write erase', 'wr erase'];
-    if (blocked.some(b => command.toLowerCase().includes(b))) {
-        return res.status(403).json({ error: 'Bu komut güvenlik nedeniyle engellenmiştir' });
+    // Security: strict whitelist — only read-only commands allowed
+    const cmd = command.trim().toLowerCase();
+    const ALLOWED_PREFIXES = [
+        'show ', 'display ', 'ping ', 'traceroute ',
+        'dir', 'more '
+    ];
+    if (!ALLOWED_PREFIXES.some(p => cmd.startsWith(p) || cmd === p.trim())) {
+        return res.status(403).json({ error: 'Only read-only commands (show, display, ping, traceroute) are allowed' });
+    }
+
+    // Block pipe/redirect that could exfiltrate data
+    const BLOCKED_PIPES = ['redirect', 'tee', 'append', '>', 'tftp:', 'ftp:', 'scp:', 'http:'];
+    if (BLOCKED_PIPES.some(b => cmd.includes(b))) {
+        return res.status(403).json({ error: 'Output redirection is not allowed' });
     }
 
     const cacheKey = `exec:${device.id}:${command}`;
@@ -155,9 +162,9 @@ router.post('/switches/:id/exec', authenticate, async (req, res) => {
                 username: device.sshUsername,
                 password: decryptPassword(device.sshPassword),
                 algorithms: {
-                    kex: ["diffie-hellman-group1-sha1", "diffie-hellman-group14-sha1", "ecdh-sha2-nistp256", "ecdh-sha2-nistp384", "ecdh-sha2-nistp521", "diffie-hellman-group-exchange-sha256"],
-                    cipher: ["aes128-ctr", "aes192-ctr", "aes256-ctr", "aes128-cbc", "3des-cbc"],
-                    serverHostKey: ["ssh-rsa", "ssh-dss"]
+                    kex: ["ecdh-sha2-nistp256", "ecdh-sha2-nistp384", "ecdh-sha2-nistp521", "diffie-hellman-group-exchange-sha256", "diffie-hellman-group14-sha1"],
+                    cipher: ["aes128-ctr", "aes192-ctr", "aes256-ctr", "aes128-cbc"],
+                    serverHostKey: ["ssh-rsa", "ecdsa-sha2-nistp256", "ecdsa-sha2-nistp384"]
                 }
             });
         });
@@ -175,7 +182,7 @@ router.post('/switches/:id/exec', authenticate, async (req, res) => {
         await logAction(req.user, 'SSH_EXEC', device.name, { command });
         res.json({ output: cleanOutput });
     } catch (err) {
-        res.status(500).json({ error: 'SSH hatası: ' + err.message });
+        res.status(500).json({ error: 'SSH error:' + err.message });
     }
 });
 

@@ -4,15 +4,13 @@ import { API_BASE } from '../config';
 import { showToast } from '../Toast';
 
 export default function SettingsModal({ onClose }) {
-  const { token } = useAuth();
+  const { authFetch } = useAuth();
   const [downloading, setDownloading] = useState(false);
 
   const handleBackup = async () => {
     setDownloading(true);
     try {
-      const res = await fetch(`${API_BASE}/backup`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await fetch(`${API_BASE}/backup`, { credentials: 'include' });
       if (res.ok) {
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);

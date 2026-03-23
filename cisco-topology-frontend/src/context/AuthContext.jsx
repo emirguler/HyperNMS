@@ -1,67 +1,135 @@
-import { createContext, useContext, useState, useCallback } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { API_BASE } from '../config';
 import { showToast } from '../Toast';
-import { t } from '../i18n';
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [token, setToken] = useState(localStorage.getItem('token') || '');
   const [userRole, setUserRole] = useState(localStorage.getItem('userRole') || '');
+  const [username, setUsername] = useState(localStorage.getItem('username') || '');
+  const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem('userRole'));
   const [mustChangePassword, setMustChangePassword] = useState(false);
+  const [csrfToken, setCsrfToken] = useState('');
 
-  const login = useCallback(async (username, password) => {
+  // Fetch CSRF token on mount
+  const fetchCsrfToken = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/csrf-token`, { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        setCsrfToken(data.csrfToken);
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  // Check session on mount (cookie-based)
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetch(`${API_BASE}/me`, { credentials: 'include' })
+        .then(res => {
+          if (res.ok) return res.json();
+          throw new Error('Session expired');
+        })
+        .then(data => {
+          setUserRole(data.role);
+          setUsername(data.username);
+          setMustChangePassword(data.mustChangePassword || false);
+          fetchCsrfToken();
+        })
+        .catch(() => {
+          // Cookie expired or invalid
+          setIsAuthenticated(false);
+          setUserRole('');
+          setUsername('');
+          localStorage.removeItem('userRole');
+          localStorage.removeItem('username');
+        });
+    }
+  }, []);
+
+  const login = useCallback(async (usr, password) => {
     const res = await fetch(`${API_BASE}/login`, {
       method: 'POST',
+      credentials: 'include', // Send/receive httpOnly cookies
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password })
+      body: JSON.stringify({ username: usr, password })
     });
     const data = await res.json();
     if (res.ok) {
-      setToken(data.token);
+      setIsAuthenticated(true);
       setUserRole(data.role);
+      setUsername(data.username);
       setMustChangePassword(data.mustChangePassword || false);
-      localStorage.setItem('token', data.token);
       localStorage.setItem('userRole', data.role);
-      showToast(t('loginSuccess'), 'success');
+      localStorage.setItem('username', data.username);
+      showToast('Login successful', 'success');
+      // Fetch CSRF token after login
+      await fetchCsrfToken();
       return { success: true, mustChangePassword: data.mustChangePassword };
     }
-    return { success: false, error: data.error || t('loginFailed') };
-  }, []);
+    return { success: false, error: data.error || 'Login failed' };
+  }, [fetchCsrfToken]);
 
-  const logout = useCallback(() => {
-    setToken('');
+  const logout = useCallback(async () => {
+    try {
+      await fetch(`${API_BASE}/logout`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {}
+      });
+    } catch { /* ignore */ }
+    setIsAuthenticated(false);
     setUserRole('');
+    setUsername('');
     setMustChangePassword(false);
-    localStorage.removeItem('token');
+    setCsrfToken('');
     localStorage.removeItem('userRole');
-  }, []);
+    localStorage.removeItem('username');
+  }, [csrfToken]);
 
   const clearMustChangePassword = useCallback(() => {
     setMustChangePassword(false);
   }, []);
 
   const authFetch = useCallback(async (url, options = {}) => {
+    const headers = {
+      ...options.headers,
+      ...(options.body ? { 'Content-Type': 'application/json' } : {})
+    };
+
+    // Add CSRF token for state-changing requests
+    if (['POST', 'PUT', 'DELETE', 'PATCH'].includes((options.method || 'GET').toUpperCase()) && csrfToken) {
+      headers['X-CSRF-Token'] = csrfToken;
+    }
+
     const res = await fetch(`${API_BASE}${url}`, {
       ...options,
-      headers: {
-        ...options.headers,
-        Authorization: `Bearer ${token}`,
-        ...(options.body ? { 'Content-Type': 'application/json' } : {})
-      }
+      credentials: 'include', // Send httpOnly cookie
+      headers
     });
+
     if (res.status === 401 || res.status === 403) {
-      logout();
-      return null;
+      // Check if it's a CSRF error — refresh token and retry once
+      if (res.status === 403) {
+        const data = await res.clone().json().catch(() => ({}));
+        if (data.error === 'CSRF token mismatch') {
+          await fetchCsrfToken();
+          // Don't auto-retry, let the caller handle it
+        }
+      }
+      if (res.status === 401) {
+        logout();
+        return null;
+      }
     }
     return res;
-  }, [token, logout]);
+  }, [csrfToken, logout, fetchCsrfToken]);
 
   return (
     <AuthContext.Provider value={{
-      token, userRole, login, logout, authFetch,
+      isAuthenticated, userRole, username, login, logout, authFetch,
       isAdmin: userRole === 'Administrator',
-      mustChangePassword, clearMustChangePassword
+      mustChangePassword, clearMustChangePassword, csrfToken
     }}>
       {children}
     </AuthContext.Provider>

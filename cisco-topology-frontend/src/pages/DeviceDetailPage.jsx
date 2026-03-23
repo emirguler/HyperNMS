@@ -4,7 +4,6 @@ import { useAuth } from '../context/AuthContext';
 import Gauge from '../components/Gauge';
 import PingHistoryChart from '../components/PingHistoryChart';
 import { t } from '../i18n';
-import { API_BASE } from '../config';
 
 export default function DeviceDetailPage() {
   const { id } = useParams();
@@ -126,7 +125,7 @@ export default function DeviceDetailPage() {
 }
 
 function ShowRunCard({ deviceId }) {
-  const { token, isAdmin } = useAuth();
+  const { isAdmin, authFetch } = useAuth();
   const [output, setOutput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -136,9 +135,8 @@ function ShowRunCard({ deviceId }) {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`${API_BASE}/switches/${deviceId}/exec`, {
+      const res = await authFetch(`/switches/${deviceId}/exec`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ command: 'show running-config' })
       });
       if (res.ok) {

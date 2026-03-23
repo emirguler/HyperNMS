@@ -1,7 +1,7 @@
 // Basit in-memory rate limiter (redis gerektirmez)
 const attempts = new Map();
 
-function rateLimiter({ windowMs = 60000, max = 10, message = 'Çok fazla istek, lütfen bekleyin' } = {}) {
+function rateLimiter({ windowMs = 60000, max = 10, message = 'Too many requests, please wait' } = {}) {
     return (req, res, next) => {
         const key = req.ip || req.connection.remoteAddress;
         const now = Date.now();

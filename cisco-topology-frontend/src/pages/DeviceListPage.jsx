@@ -9,7 +9,7 @@ import { API_BASE } from '../config';
 
 export default function DeviceListPage({ onEdit }) {
   const { rawDevices, fetchData } = useApp();
-  const { token, isAdmin } = useAuth();
+  const { isAdmin, authFetch } = useAuth();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: 'name', dir: 'asc' });
@@ -41,7 +41,7 @@ export default function DeviceListPage({ onEdit }) {
 
   const confirmDelete = async () => {
     if (!deleteTarget) return;
-    const res = await fetch(`${API_BASE}/switches/${deleteTarget.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+    const res = await authFetch(`/switches/${deleteTarget.id}`, { method: 'DELETE' });
     if (res.ok) showToast(`"${deleteTarget.name}" ${t('deleted')}`, 'success');
     else { const d = await res.json().catch(() => ({})); showToast(d.error || t('deleteFailed'), 'error'); }
     setDeleteTarget(null);
@@ -50,7 +50,7 @@ export default function DeviceListPage({ onEdit }) {
 
   const handleExportCSV = async () => {
     try {
-      const res = await fetch(`${API_BASE}/switches/export/csv`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(`${API_BASE}/switches/export/csv`, { credentials: 'include' });
       if (res.ok) {
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
