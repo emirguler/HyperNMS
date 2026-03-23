@@ -226,7 +226,9 @@ const translations = {
   },
 };
 
-let currentLang = (typeof localStorage !== 'undefined' && localStorage.getItem('lang')) || 'en';
+let currentLang = 'en';
+// Eski dil tercihini temizle
+if (typeof localStorage !== 'undefined') localStorage.removeItem('lang');
 let listeners = [];
 
 export function t(key) {
