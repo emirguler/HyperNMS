@@ -20,6 +20,7 @@ function setupWebSocket(server) {
         const switchId = urlParams.get('switchId');
         const device = store.getSwitch(switchId);
 
+
         if (!device || !device.sshUsername) {
             ws.send(JSON.stringify({ type: 'error', message: 'SSH Credentials not found.' }));
             return;
