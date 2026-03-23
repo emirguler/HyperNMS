@@ -239,7 +239,6 @@ function TopologyInner({ onEdit }) {
           onEdgeContextMenu={(e, edge) => { e.preventDefault(); setEdgeMenu({ id: edge.id, top: e.clientY, left: e.clientX }); setMenu(null); }}
           onNodeContextMenu={(e, n) => { e.preventDefault(); setMenu({ id: n.id, label: n.data.label, top: e.clientY, left: e.clientX, data: n.data }); setEdgeMenu(null); }}
           onNodeDragStop={onNodeDragStop}
-          connectionMode="loose"
           selectionOnDrag
           multiSelectionKeyCode="Shift"
           fitView
