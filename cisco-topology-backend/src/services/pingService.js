@@ -4,7 +4,6 @@ const config = require('../config');
 
 let pingInterval = null;
 
-// Event emitter benzeri yapı — bildirim sistemi için
 const statusChangeListeners = [];
 
 function onStatusChange(callback) {
@@ -19,55 +18,67 @@ function startPingService() {
     if (pingInterval) return;
 
     pingInterval = setInterval(async () => {
+        // Ping sonuçlarını topla (dosyaya dokunmadan)
         const switches = readJSON(config.DB_SWITCHES);
-        const history = readJSON(config.DB_HISTORY);
-        let updated = false;
-        const statusChanges = [];
+        const pingResults = {};
 
         await Promise.all(switches.map(async (s) => {
             if (s.type === 'cloud') return;
             try {
                 const isWin = process.platform === 'win32';
                 const res = await ping.promise.probe(s.ip, { timeout: 2, extra: isWin ? ['-n', '1'] : ['-c', '1'] });
-                const prevStatus = s.status;
-                s.status = res.alive ? 'UP' : 'DOWN';
-                s.latency = res.time === 'unknown' ? -1 : Math.round(res.time);
-
-                history.push({ switchId: s.id, timestamp: Date.now(), value: s.latency });
-
-                if (prevStatus !== s.status) {
-                    updated = true;
-                    statusChanges.push({
-                        deviceId: s.id,
-                        deviceName: s.name,
-                        deviceIp: s.ip,
-                        previousStatus: prevStatus,
-                        newStatus: s.status,
-                        timestamp: new Date().toISOString()
-                    });
-                } else if (Math.abs(s.latency - (s.lastLatency || 0)) > 5) {
-                    updated = true;
-                }
-                s.lastLatency = s.latency;
+                pingResults[s.id] = {
+                    status: res.alive ? 'UP' : 'DOWN',
+                    latency: res.time === 'unknown' ? -1 : Math.round(res.time)
+                };
             } catch (e) {
-                s.status = 'DOWN';
-                updated = true;
+                pingResults[s.id] = { status: 'DOWN', latency: -1 };
             }
         }));
 
-        if (updated) writeJSON(config.DB_SWITCHES, switches);
+        // Dosyayı TEKRAR oku (arada PUT olmuş olabilir) ve sadece status/latency güncelle
+        const freshSwitches = readJSON(config.DB_SWITCHES);
+        const history = readJSON(config.DB_HISTORY);
+        let updated = false;
+        const statusChanges = [];
 
-        // Ping history — performans optimizasyonu: sadece son MAX_HISTORY kaydı tut
+        for (const s of freshSwitches) {
+            const result = pingResults[s.id];
+            if (!result) continue;
+
+            const prevStatus = s.status;
+            s.status = result.status;
+            s.latency = result.latency;
+
+            history.push({ switchId: s.id, timestamp: Date.now(), value: s.latency });
+
+            if (prevStatus !== s.status) {
+                updated = true;
+                statusChanges.push({
+                    deviceId: s.id,
+                    deviceName: s.name,
+                    deviceIp: s.ip,
+                    previousStatus: prevStatus,
+                    newStatus: s.status,
+                    timestamp: new Date().toISOString()
+                });
+            } else if (Math.abs(s.latency - (s.lastLatency || 0)) > 5) {
+                updated = true;
+            }
+            s.lastLatency = s.latency;
+        }
+
+        if (updated) writeJSON(config.DB_SWITCHES, freshSwitches);
+
         if (history.length > config.MAX_HISTORY) {
             await safeWriteJSON(config.DB_HISTORY, history.slice(-config.MAX_HISTORY));
         } else {
             await safeWriteJSON(config.DB_HISTORY, history);
         }
 
-        // Durum değişikliği bildirimi
         for (const change of statusChanges) {
             for (const listener of statusChangeListeners) {
-                try { listener(change); } catch (e) { /* ignore listener errors */ }
+                try { listener(change); } catch (e) { /* ignore */ }
             }
         }
     }, config.PING_INTERVAL);
