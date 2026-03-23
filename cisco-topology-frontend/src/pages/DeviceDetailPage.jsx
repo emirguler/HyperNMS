@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import Gauge from '../components/Gauge';
 import PingHistoryChart from '../components/PingHistoryChart';
 import { t } from '../i18n';
+import { API_BASE } from '../config';
 
 export default function DeviceDetailPage() {
   const { id } = useParams();
@@ -111,6 +112,73 @@ export default function DeviceDetailPage() {
           </tbody>
         </table>
       </div>
+
+      {/* Show Run Kartı */}
+      <ShowRunCard deviceId={id} />
+    </div>
+  );
+}
+
+function ShowRunCard({ deviceId }) {
+  const { token, isAdmin } = useAuth();
+  const [output, setOutput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [expanded, setExpanded] = useState(false);
+
+  const fetchShowRun = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch(`${API_BASE}/switches/${deviceId}/exec`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ command: 'show running-config' })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setOutput(data.output || 'No output');
+        setExpanded(true);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || 'Failed');
+      }
+    } catch (e) {
+      setError('Connection failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!isAdmin) return null;
+
+  return (
+    <div className="chart-container" style={{ marginTop: 24, padding: 0, overflow: 'hidden' }}>
+      <div style={{ padding: '12px 24px', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--primary)' }}>Running Configuration</h3>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {output && (
+            <button className="btn btn-ghost btn-sm" onClick={() => setExpanded(!expanded)}>
+              {expanded ? 'Collapse' : 'Expand'}
+            </button>
+          )}
+          <button className="btn btn-primary btn-sm" onClick={fetchShowRun} disabled={loading}>
+            {loading ? 'Loading...' : output ? 'Refresh' : 'Load Config'}
+          </button>
+        </div>
+      </div>
+      {error && (
+        <div style={{ padding: '12px 24px', color: 'var(--danger)', fontSize: '0.85rem' }}>{error}</div>
+      )}
+      {expanded && output && (
+        <pre style={{
+          margin: 0, padding: '16px 24px', fontSize: '0.75rem', lineHeight: 1.5,
+          fontFamily: 'monospace', color: 'var(--text-main)', background: 'rgba(0,0,0,0.3)',
+          maxHeight: 500, overflowY: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-all'
+        }}>
+          {output}
+        </pre>
+      )}
     </div>
   );
 }

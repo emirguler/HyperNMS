@@ -2,16 +2,22 @@ const express = require('express');
 const store = require('../utils/memoryStore');
 const { authenticate, requireAdmin } = require('../middleware/auth');
 const { validateSwitch, sanitizeSwitch } = require('../utils/validation');
-const { encryptPassword } = require('../utils/crypto');
+const { encryptPassword, decryptPassword } = require('../utils/crypto');
 const { getDeviceDetails } = require('../services/snmpService');
 const { logAction } = require('../services/auditLog');
+const { snmpCache } = require('../utils/cache');
+const ssh2 = require('ssh2').Client;
 
 const router = express.Router();
 
 router.get('/topology', authenticate, (req, res) => {
     const switches = store.getSwitches();
     const edges = store.getEdges();
-    const safeSwitches = switches.map(({ sshPassword, sshUsername, snmpCommunity, ...s }) => s);
+    const isAdmin = req.user.role === 'Administrator';
+    const safeSwitches = switches.map(({ sshPassword, ...s }) => {
+        if (!isAdmin) { delete s.sshUsername; delete s.snmpCommunity; }
+        return s;
+    });
     res.json({ switches: safeSwitches, edges });
 });
 
@@ -80,6 +86,61 @@ router.get('/switches/:id/ping-history', authenticate, (req, res) => {
     const since = Date.now() - duration;
     const history = store.getHistory(req.params.id, since);
     res.json(history);
+});
+
+// SSH komutu çalıştır (show run vb.)
+router.post('/switches/:id/exec', authenticate, requireAdmin, async (req, res) => {
+    const device = store.getSwitch(req.params.id);
+    if (!device) return res.status(404).json({ error: 'Cihaz bulunamadı' });
+    if (!device.sshUsername || !device.sshPassword) return res.status(400).json({ error: 'SSH bilgileri eksik' });
+
+    const command = req.body.command;
+    if (!command || typeof command !== 'string') return res.status(400).json({ error: 'Komut gerekli' });
+
+    // Güvenlik: tehlikeli komutları engelle
+    const blocked = ['reload', 'erase', 'delete', 'format', 'write erase', 'wr erase'];
+    if (blocked.some(b => command.toLowerCase().includes(b))) {
+        return res.status(403).json({ error: 'Bu komut güvenlik nedeniyle engellenmiştir' });
+    }
+
+    const cacheKey = `exec:${device.id}:${command}`;
+    const cached = snmpCache.get(cacheKey);
+    if (cached) return res.json({ output: cached });
+
+    try {
+        const output = await new Promise((resolve, reject) => {
+            const conn = new ssh2();
+            let result = '';
+            const timeout = setTimeout(() => { conn.end(); reject(new Error('SSH timeout')); }, 15000);
+
+            conn.on('ready', () => {
+                conn.exec(command + '\n', (err, stream) => {
+                    if (err) { clearTimeout(timeout); conn.end(); return reject(err); }
+                    stream.on('data', (data) => { result += data.toString(); });
+                    stream.stderr.on('data', (data) => { result += data.toString(); });
+                    stream.on('close', () => { clearTimeout(timeout); conn.end(); resolve(result); });
+                });
+            }).on('error', (err) => {
+                clearTimeout(timeout);
+                reject(err);
+            }).connect({
+                host: device.ip, port: 22,
+                username: device.sshUsername,
+                password: decryptPassword(device.sshPassword),
+                algorithms: {
+                    kex: ["diffie-hellman-group1-sha1", "diffie-hellman-group14-sha1", "ecdh-sha2-nistp256", "ecdh-sha2-nistp384", "ecdh-sha2-nistp521", "diffie-hellman-group-exchange-sha256"],
+                    cipher: ["aes128-ctr", "aes192-ctr", "aes256-ctr", "aes128-cbc", "3des-cbc"],
+                    serverHostKey: ["ssh-rsa", "ssh-dss"]
+                }
+            });
+        });
+
+        snmpCache.set(cacheKey, output, 120000); // 2 dakika cache
+        await logAction(req.user, 'SSH_EXEC', device.name, { command });
+        res.json({ output });
+    } catch (err) {
+        res.status(500).json({ error: 'SSH hatası: ' + err.message });
+    }
 });
 
 router.get('/switches/export/csv', authenticate, (req, res) => {

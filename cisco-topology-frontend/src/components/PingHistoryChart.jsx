@@ -71,7 +71,7 @@ export default function PingHistoryChart({ deviceId }) {
     return () => clearInterval(i);
   }, [fetchHistory]);
 
-  const data = useMemo(() => downsample(rawData, 250), [rawData]);
+  const data = useMemo(() => downsample(rawData, 500), [rawData]);
 
   return (
     <div className="chart-container" style={{ height: 350 }}>
@@ -95,8 +95,8 @@ export default function PingHistoryChart({ deviceId }) {
           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
           <XAxis dataKey="time" stroke="var(--text-muted)" fontSize={10} tickLine={false} axisLine={false} interval="preserveStartEnd" />
           <YAxis stroke="var(--text-muted)" fontSize={11} unit=" ms" tickLine={false} axisLine={false} />
-          <Tooltip content={<CustomTooltip />} />
-          <Area type="monotone" dataKey="ms" stroke="var(--primary)" fill="url(#colorPing)" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 2 }} />
+          <Tooltip content={<CustomTooltip />} isAnimationActive={false} />
+          <Area type="linear" dataKey="ms" stroke="var(--primary)" fill="url(#colorPing)" strokeWidth={1.5} dot={false} activeDot={{ r: 3, strokeWidth: 1.5, fill: 'var(--primary)' }} isAnimationActive={false} />
         </AreaChart>
       </ResponsiveContainer>
     </div>

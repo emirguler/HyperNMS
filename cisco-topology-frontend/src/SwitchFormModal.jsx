@@ -102,7 +102,7 @@ function SwitchFormModal({ mode, initialValues, onCancel, onSave, topologyTabs }
 
             <div>
               <label className="input-label" style={{display:'block', marginBottom:8, color:'var(--text-muted)'}}>{t('sshPassword')}</label>
-              <input className="modern-input" type="password" name="sshPassword" value={values.sshPassword} onChange={handleChange} placeholder={isEdit ? t('sshPasswordHint') : ''} autoComplete="new-password" />
+              <input className="modern-input" type="password" name="sshPassword" value={values.sshPassword} onChange={handleChange} placeholder={isEdit ? '•••••' : ''} autoComplete="new-password" />
             </div>
 
             <div style={{ gridColumn: 'span 2', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
