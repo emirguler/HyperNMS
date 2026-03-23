@@ -5,7 +5,7 @@ const http = require('http');
 const path = require('path');
 const bcrypt = require('bcryptjs');
 const config = require('./config');
-const { readJSON, writeJSON } = require('./utils/db');
+const store = require('./utils/memoryStore');
 const { encryptPassword } = require('./utils/crypto');
 const { startPingService, onStatusChange } = require('./services/pingService');
 const { setupWebSocket } = require('./services/sshService');
@@ -22,13 +22,9 @@ const auditRoutes = require('./routes/audit');
 const app = express();
 
 // --- Middleware ---
-app.use(cors({
-    origin: config.CORS_ORIGIN,
-    credentials: true
-}));
+app.use(cors({ origin: config.CORS_ORIGIN, credentials: true }));
 app.use(express.json({ limit: '1mb' }));
 
-// Security headers
 app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
@@ -46,71 +42,54 @@ app.use(edgeRoutes);
 app.use(userRoutes);
 app.use(auditRoutes);
 
-// Notifications REST endpoint
 app.get('/notifications', authenticate, (req, res) => {
     res.json(getNotifications(parseInt(req.query.limit) || 50));
 });
 
-// Health check
 app.get('/health', (req, res) => {
     res.json({
         status: 'ok',
         uptime: process.uptime(),
         env: config.NODE_ENV,
+        devices: store.getSwitches().length,
+        cacheInfo: `SNMP cache active`,
         timestamp: new Date().toISOString()
     });
 });
 
-// Production: serve frontend static files
 if (config.NODE_ENV === 'production') {
     const publicPath = path.resolve(__dirname, '../public');
     if (fs.existsSync(publicPath)) {
         app.use(express.static(publicPath));
-        app.get('*', (req, res) => {
-            res.sendFile(path.join(publicPath, 'index.html'));
-        });
+        app.get('*', (req, res) => res.sendFile(path.join(publicPath, 'index.html')));
     }
 }
 
 // --- DB Initialization ---
 async function initDB() {
-    if (!fs.existsSync(config.DATA_DIR)) {
-        fs.mkdirSync(config.DATA_DIR, { recursive: true });
-    }
+    // MemoryStore'u başlat (dosyalardan yükler)
+    store.init();
 
-    if (!fs.existsSync(config.DB_SWITCHES)) fs.writeFileSync(config.DB_SWITCHES, JSON.stringify([]));
-    if (!fs.existsSync(config.DB_HISTORY)) fs.writeFileSync(config.DB_HISTORY, JSON.stringify([]));
-    if (!fs.existsSync(config.DB_EDGES)) fs.writeFileSync(config.DB_EDGES, JSON.stringify([]));
-
-    if (!fs.existsSync(config.DB_USERS)) {
+    // Varsayılan admin yoksa oluştur
+    if (store.getUsers().length === 0) {
         const hashedPw = await bcrypt.hash('admin123', config.BCRYPT_ROUNDS);
-        fs.writeFileSync(config.DB_USERS, JSON.stringify([
-            { id: 1, username: 'admin', password: hashedPw, role: 'Administrator', mustChangePassword: true }
-        ]));
+        store.addUser({ id: 1, username: 'admin', password: hashedPw, role: 'Administrator', mustChangePassword: true });
         console.log('[INIT] Varsayılan admin oluşturuldu (parola: admin123)');
     }
 
     // Migration: plain-text user parolaları
-    const users = readJSON(config.DB_USERS);
-    let migrated = false;
-    for (const user of users) {
+    for (const user of store.getUsers()) {
         if (user.password && !user.password.startsWith('$2')) {
-            user.password = await bcrypt.hash(user.password, config.BCRYPT_ROUNDS);
-            migrated = true;
+            store.updateUser(user.id, { password: await bcrypt.hash(user.password, config.BCRYPT_ROUNDS) });
         }
     }
-    if (migrated) writeJSON(config.DB_USERS, users);
 
     // Migration: plain-text SSH parolaları
-    const switches = readJSON(config.DB_SWITCHES);
-    let sshMigrated = false;
-    for (const sw of switches) {
+    for (const sw of store.getSwitches()) {
         if (sw.sshPassword && !sw.sshPassword.includes(':')) {
-            sw.sshPassword = encryptPassword(sw.sshPassword);
-            sshMigrated = true;
+            store.updateSwitch(sw.id, { sshPassword: encryptPassword(sw.sshPassword) });
         }
     }
-    if (sshMigrated) writeJSON(config.DB_SWITCHES, switches);
 }
 
 // --- Durum değişikliği → bildirim ---
@@ -121,15 +100,15 @@ onStatusChange((change) => {
     addNotification({
         type: change.newStatus === 'DOWN' ? 'alert' : 'info',
         severity: change.newStatus === 'DOWN' ? 'critical' : 'resolved',
-        title: change.newStatus === 'DOWN'
-            ? `${change.deviceName} is DOWN`
-            : `${change.deviceName} is back UP`,
-        message: `${change.deviceName} (${change.deviceIp}) changed from ${change.previousStatus} to ${change.newStatus}`,
-        deviceId: change.deviceId,
-        deviceName: change.deviceName,
-        deviceIp: change.deviceIp
+        title: change.newStatus === 'DOWN' ? `${change.deviceName} is DOWN` : `${change.deviceName} is back UP`,
+        message: `${change.deviceName} (${change.deviceIp}) ${change.previousStatus} → ${change.newStatus}`,
+        deviceId: change.deviceId, deviceName: change.deviceName, deviceIp: change.deviceIp
     });
 });
+
+// --- Graceful shutdown ---
+process.on('SIGINT', () => { store.flushSync(); process.exit(0); });
+process.on('SIGTERM', () => { store.flushSync(); process.exit(0); });
 
 // --- Server Başlat ---
 const httpServer = http.createServer(app);
@@ -141,8 +120,8 @@ setupNotificationWs(server);
 initDB().then(() => {
     startPingService();
     server.listen(config.PORT, () => {
-        console.log(`[SERVER] ${protocol.toUpperCase()} Port ${config.PORT} üzerinde çalışıyor (${config.NODE_ENV})`);
-        console.log(`[SERVER] CORS origin: ${config.CORS_ORIGIN}`);
+        console.log(`[SERVER] ${protocol.toUpperCase()} Port ${config.PORT} (${config.NODE_ENV})`);
+        console.log(`[SERVER] CORS: ${config.CORS_ORIGIN}`);
     });
 }).catch(err => {
     console.error('[INIT] Başlatma hatası:', err);

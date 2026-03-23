@@ -1,4 +1,5 @@
 const snmp = require('net-snmp');
+const { snmpCache } = require('../utils/cache');
 
 const TRAFFIC_CACHE = {};
 const SMOOTHING_FACTOR = 0.3;
@@ -99,6 +100,13 @@ async function getDeviceDetails(device) {
 
     if (device.status !== 'UP' || !device.snmpCommunity) {
         return responseData;
+    }
+
+    // SNMP cache — 60 saniye içinde aynı cihaz için tekrar sorgu atma
+    const cacheKey = `snmp:${device.id}`;
+    const cached = snmpCache.get(cacheKey);
+    if (cached) {
+        return { ...responseData, ...cached };
     }
 
     try {
@@ -381,6 +389,14 @@ async function getDeviceDetails(device) {
         } catch (ramErr) {
             responseData.ram = 0;
         }
+
+        // Sonucu cache'le (60 saniye)
+        const cacheData = {
+            interfaces: responseData.interfaces, snmpHostname: responseData.snmpHostname,
+            uptime: responseData.uptime, cpu: responseData.cpu, ram: responseData.ram,
+            detectedVendor: responseData.detectedVendor
+        };
+        snmpCache.set(cacheKey, cacheData);
 
         return responseData;
     } catch (e) {

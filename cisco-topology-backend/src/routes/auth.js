@@ -1,8 +1,8 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
-const { readJSON, writeJSON } = require('../utils/db');
-const { SECRET_KEY, DB_USERS, JWT_EXPIRY, BCRYPT_ROUNDS } = require('../config');
+const store = require('../utils/memoryStore');
+const { SECRET_KEY, JWT_EXPIRY, BCRYPT_ROUNDS } = require('../config');
 const rateLimiter = require('../middleware/rateLimiter');
 const { authenticate } = require('../middleware/auth');
 const { logAction } = require('../services/auditLog');
@@ -17,8 +17,7 @@ router.post('/login', rateLimiter({ windowMs: 60000, max: 5, message: 'Çok fazl
         return res.status(400).json({ error: 'Kullanıcı adı ve parola gereklidir' });
     }
 
-    const users = readJSON(DB_USERS);
-    const user = users.find(u => u.username === username);
+    const user = store.getUserByUsername(username);
     if (!user) {
         return res.status(401).json({ error: 'Geçersiz kullanıcı adı veya parola' });
     }
@@ -51,8 +50,7 @@ router.post('/change-password', authenticate, async (req, res) => {
         return res.status(400).json({ error: 'Yeni parola en az 6 karakter olmalıdır' });
     }
 
-    const users = readJSON(DB_USERS);
-    const user = users.find(u => u.id === req.user.id);
+    const user = store.getUser(req.user.id);
     if (!user) return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
 
     // Mevcut parola kontrolü (zorunlu değiştirme hariç)
@@ -62,9 +60,10 @@ router.post('/change-password', authenticate, async (req, res) => {
         if (!isMatch) return res.status(401).json({ error: 'Mevcut parola yanlış' });
     }
 
-    user.password = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
-    user.mustChangePassword = false;
-    writeJSON(DB_USERS, users);
+    store.updateUser(req.user.id, {
+        password: await bcrypt.hash(newPassword, BCRYPT_ROUNDS),
+        mustChangePassword: false
+    });
 
     await logAction(req.user, 'PASSWORD_CHANGE', req.user.username);
     res.json({ success: true });

@@ -1,7 +1,6 @@
 const WebSocket = require('ws');
 const ssh2 = require('ssh2').Client;
-const { readJSON } = require('../utils/db');
-const { DB_SWITCHES } = require('../config');
+const store = require('../utils/memoryStore');
 const { decryptPassword } = require('../utils/crypto');
 const { authenticateWs } = require('../middleware/auth');
 
@@ -19,8 +18,7 @@ function setupWebSocket(server) {
 
         const urlParams = new URLSearchParams(req.url.split('?')[1]);
         const switchId = urlParams.get('switchId');
-        const switches = readJSON(DB_SWITCHES);
-        const device = switches.find(s => s.id === switchId);
+        const device = store.getSwitch(switchId);
 
         if (!device || !device.sshUsername) {
             ws.send(JSON.stringify({ type: 'error', message: 'SSH Credentials not found.' }));
