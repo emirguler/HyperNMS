@@ -18,7 +18,38 @@ router.get('/topology', authenticate, (req, res) => {
         if (!isAdmin) { delete s.sshUsername; delete s.snmpCommunity; }
         return s;
     });
-    res.json({ switches: safeSwitches, edges });
+    const tabs = store.getTopoTabs();
+    res.json({ switches: safeSwitches, edges, tabs });
+});
+
+// --- Topology Tabs ---
+router.get('/topology/tabs', authenticate, (req, res) => {
+    res.json(store.getTopoTabs());
+});
+
+router.post('/topology/tabs', authenticate, requireAdmin, (req, res) => {
+    const { name } = req.body;
+    if (!name || typeof name !== 'string' || name.trim().length === 0) {
+        return res.status(400).json({ error: 'Tab name required' });
+    }
+    const tab = store.addTopoTab({ id: 'tab-' + Date.now(), name: name.trim() });
+    res.json(tab);
+});
+
+router.put('/topology/tabs/:id', authenticate, requireAdmin, (req, res) => {
+    const { name } = req.body;
+    if (!name || typeof name !== 'string' || name.trim().length === 0) {
+        return res.status(400).json({ error: 'Tab name required' });
+    }
+    const ok = store.renameTopoTab(req.params.id, name.trim());
+    if (!ok) return res.status(404).json({ error: 'Tab not found or cannot rename main' });
+    res.json({ success: true });
+});
+
+router.delete('/topology/tabs/:id', authenticate, requireAdmin, (req, res) => {
+    const ok = store.removeTopoTab(req.params.id);
+    if (!ok) return res.status(404).json({ error: 'Tab not found or cannot delete main' });
+    res.json({ success: true });
 });
 
 router.post('/switches', authenticate, requireAdmin, async (req, res) => {

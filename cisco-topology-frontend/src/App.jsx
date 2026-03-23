@@ -19,7 +19,7 @@ import GeoMapPage from './pages/GeoMapPage';
 import { showToast } from './Toast';
 import { t, getLang, setLang, onLangChange } from './i18n';
 import { API_BASE } from './config';
-import { getTopologyTabs } from './hooks/useTopologyTabs';
+// topology tabs now come from AppContext
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated } = useAuth();
@@ -29,7 +29,7 @@ function ProtectedRoute({ children }) {
 
 function AppLayout() {
   const { isAuthenticated, isAdmin, mustChangePassword, clearMustChangePassword, authFetch, csrfToken } = useAuth();
-  const { fetchData } = useApp();
+  const { fetchData, topoTabs } = useApp();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState('add');
   const [editingNode, setEditingNode] = useState(null);
@@ -76,7 +76,7 @@ function AppLayout() {
         <SwitchFormModal
           mode={modalMode}
           initialValues={editingNode}
-          topologyTabs={getTopologyTabs()}
+          topologyTabs={topoTabs}
           onCancel={() => setIsModalOpen(false)}
           onSave={async (f) => {
             const res = await authFetch(`/switches${modalMode === 'edit' ? '/' + editingNode.id : ''}`, {

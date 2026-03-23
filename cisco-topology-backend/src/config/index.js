@@ -24,6 +24,7 @@ const DB_USERS = path.join(DATA_DIR, 'users.json');
 const DB_HISTORY = path.join(DATA_DIR, 'ping_history.json');
 const DB_EDGES = path.join(DATA_DIR, 'edges.json');
 const DB_AUDIT = path.join(DATA_DIR, 'audit_log.json');
+const DB_TOPO_TABS = path.join(DATA_DIR, 'topology_tabs.json');
 
 module.exports = {
     ENCRYPTION_KEY,
@@ -37,6 +38,7 @@ module.exports = {
     DB_HISTORY,
     DB_EDGES,
     DB_AUDIT,
+    DB_TOPO_TABS,
     PING_INTERVAL: 5000,
     MAX_HISTORY: 50000,
     SMOOTHING_FACTOR: 0.3,

@@ -119,10 +119,10 @@ function TopologyInner({ onEdit }) {
     return '#64748b';
   };
 
-  const handleAddTab = () => {
+  const handleAddTab = async () => {
     const name = `Sub Page ${tabs.length}`;
-    const id = addTab(name);
-    navigate(`/topology/${id}`);
+    const id = await addTab(name);
+    if (id) navigate(`/topology/${id}`);
   };
 
   const handleTabContextMenu = (tab, e) => {

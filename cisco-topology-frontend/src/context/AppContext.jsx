@@ -8,6 +8,7 @@ export function AppProvider({ children }) {
   const [rawDevices, setRawDevices] = useState([]);
   const [users, setUsers] = useState([]);
   const [edges, setEdges] = useState([]);
+  const [topoTabs, setTopoTabs] = useState([{ id: 'main', name: 'Main Topology' }]);
   const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark');
 
   // SSH Sessions
@@ -30,6 +31,7 @@ export function AppProvider({ children }) {
       if (!res || !res.ok) return;
       const data = await res.json();
       setRawDevices(data.switches);
+      if (data.tabs) setTopoTabs(data.tabs);
       // Edge'leri merge et — yerel sourceHandle/targetHandle bilgisini koru
       setEdges(prev => {
         const localHandleMap = {};
@@ -83,6 +85,7 @@ export function AppProvider({ children }) {
   return (
     <AppContext.Provider value={{
       rawDevices, users, edges, setEdges,
+      topoTabs, setTopoTabs,
       theme, toggleTheme,
       fetchData,
       sshSessions, activeSshTabId, setActiveSshTabId, terminalHeight, setTerminalHeight,

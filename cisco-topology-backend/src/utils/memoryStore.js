@@ -11,7 +11,8 @@ class MemoryStore {
             switches: [],
             users: [],
             edges: [],
-            history: []
+            history: [],
+            topoTabs: [{ id: 'main', name: 'Main Topology' }]
         };
         this.dirty = new Set(); // Hangi koleksiyonlar değişti
         this.writeTimer = null;
@@ -34,6 +35,11 @@ class MemoryStore {
         this.data.switches = this._readFile(config.DB_SWITCHES);
         this.data.users = this._readFile(config.DB_USERS);
         this.data.edges = this._readFile(config.DB_EDGES);
+
+        // Topology tabs
+        const savedTabs = this._readFile(config.DB_TOPO_TABS);
+        if (savedTabs.length > 0) this.data.topoTabs = savedTabs;
+        else this.data.topoTabs = [{ id: 'main', name: 'Main Topology' }];
 
         // Eski tek-dosya history'yi migrate et
         if (fs.existsSync(config.DB_HISTORY)) {
@@ -169,6 +175,41 @@ class MemoryStore {
         return false;
     }
 
+    // --- Topology Tabs ---
+    getTopoTabs() { return this.data.topoTabs; }
+
+    addTopoTab(tab) {
+        this.data.topoTabs.push(tab);
+        this._markDirty('topoTabs');
+        return tab;
+    }
+
+    renameTopoTab(id, name) {
+        const tab = this.data.topoTabs.find(t => t.id === id);
+        if (tab && id !== 'main') {
+            tab.name = name;
+            this._markDirty('topoTabs');
+            return true;
+        }
+        return false;
+    }
+
+    removeTopoTab(id) {
+        if (id === 'main') return false;
+        const len = this.data.topoTabs.length;
+        this.data.topoTabs = this.data.topoTabs.filter(t => t.id !== id);
+        if (this.data.topoTabs.length !== len) {
+            // Move devices from deleted tab back to main
+            this.data.switches.forEach(sw => {
+                if (sw.topologyPage === id) sw.topologyPage = 'main';
+            });
+            this._markDirty('topoTabs');
+            this._markDirty('switches');
+            return true;
+        }
+        return false;
+    }
+
     // --- Ping History (cihaz başına dosya) ---
     getHistory(switchId, since) {
         const file = path.join(config.DATA_DIR, 'history', `${switchId}.json`);
@@ -199,7 +240,8 @@ class MemoryStore {
             const fileMap = {
                 switches: config.DB_SWITCHES,
                 users: config.DB_USERS,
-                edges: config.DB_EDGES
+                edges: config.DB_EDGES,
+                topoTabs: config.DB_TOPO_TABS
             };
             const file = fileMap[collection];
             if (file) {

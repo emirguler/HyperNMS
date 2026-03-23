@@ -1,41 +1,53 @@
-import { useState } from 'react';
-
-const DEFAULT_TABS = [{ id: 'main', name: 'Main Topology' }];
-
-function loadTabs() {
-  try {
-    const saved = localStorage.getItem('topologyTabs');
-    if (saved) return JSON.parse(saved);
-  } catch {}
-  return DEFAULT_TABS;
-}
-
-export function getTopologyTabs() {
-  return loadTabs();
-}
+import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 
 export function useTopologyTabs() {
-  const [tabs, setTabs] = useState(loadTabs);
+  const { topoTabs: tabs, setTopoTabs } = useApp();
+  const { authFetch } = useAuth();
 
-  const saveTabs = (newTabs) => {
-    setTabs(newTabs);
-    localStorage.setItem('topologyTabs', JSON.stringify(newTabs));
+  const addTab = async (name) => {
+    try {
+      const res = await authFetch('/topology/tabs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name })
+      });
+      if (res && res.ok) {
+        const tab = await res.json();
+        setTopoTabs(prev => [...prev, tab]);
+        return tab.id;
+      }
+    } catch (e) { console.error('Failed to add tab:', e); }
+    return null;
   };
 
-  const addTab = (name) => {
-    const id = 'tab-' + Date.now();
-    saveTabs([...tabs, { id, name }]);
-    return id;
-  };
-
-  const removeTab = (id) => {
+  const removeTab = async (id) => {
     if (id === 'main') return;
-    saveTabs(tabs.filter(t => t.id !== id));
+    try {
+      const res = await authFetch(`/topology/tabs/${id}`, { method: 'DELETE' });
+      if (res && res.ok) {
+        setTopoTabs(prev => prev.filter(t => t.id !== id));
+      }
+    } catch (e) { console.error('Failed to remove tab:', e); }
   };
 
-  const renameTab = (id, name) => {
-    saveTabs(tabs.map(t => t.id === id ? { ...t, name } : t));
+  const renameTab = async (id, name) => {
+    try {
+      const res = await authFetch(`/topology/tabs/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name })
+      });
+      if (res && res.ok) {
+        setTopoTabs(prev => prev.map(t => t.id === id ? { ...t, name } : t));
+      }
+    } catch (e) { console.error('Failed to rename tab:', e); }
   };
 
   return { tabs, addTab, removeTab, renameTab };
+}
+
+// For non-hook contexts (e.g. BulkImportModal)
+export function getTopologyTabs() {
+  return [{ id: 'main', name: 'Main Topology' }]; // Fallback, real data from context
 }
