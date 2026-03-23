@@ -96,6 +96,11 @@ export default function DeviceDetailPage() {
                   <span style={{ background: 'rgba(255,255,255,0.05)', padding: '4px 8px', borderRadius: 4, fontSize: '0.85rem', fontFamily: 'monospace', color: i.vlan && i.vlan !== '-' ? 'var(--text-main)' : 'var(--text-muted)', minWidth: '30px', display: 'inline-block', textAlign: 'center' }}>
                     {i.vlan || '-'}
                   </span>
+                  {i.trunkVlans && i.trunkVlans.length > 0 && (
+                    <div style={{ marginTop: 4, fontSize: '0.65rem', color: 'var(--text-muted)', lineHeight: 1.6, maxWidth: 200 }}>
+                      {i.trunkVlans.join(', ')}
+                    </div>
+                  )}
                 </td>
                 <td style={{ fontSize: '0.8rem', color: i.vlanName && i.vlanName !== '-' ? 'var(--text-main)' : 'var(--text-muted)' }}>
                   {i.vlanName || '-'}

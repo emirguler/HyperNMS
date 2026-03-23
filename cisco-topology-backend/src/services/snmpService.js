@@ -184,13 +184,32 @@ async function getDeviceDetails(device) {
                     if (mode === 1 || mode === 5) trunkPorts.add(ifIdx);
                 });
 
-                // 2. Trunk native VLAN
+                // 2. Trunk native VLAN + allowed VLANs bitmap
+                const trunkAllowedMap = {};
                 const trunkVlanData = await getSubtree('1.3.6.1.4.1.9.9.46.1.6.1.1.5');
                 trunkVlanData.forEach(vb => {
                     const ifIdx = vb.oid.split('.').pop();
                     const val = parseSnmpInt(vb.value);
                     if (val > 0 && trunkPorts.has(ifIdx)) {
                         vlanMap[ifIdx] = val.toString() + ' (T)';
+                    }
+                });
+
+                // Trunk allowed VLANs bitmap (1.3.6.1.4.1.9.9.46.1.6.1.1.4)
+                const trunkBitmapData = await getSubtree('1.3.6.1.4.1.9.9.46.1.6.1.1.4');
+                trunkBitmapData.forEach(vb => {
+                    const ifIdx = vb.oid.split('.').pop();
+                    if (!trunkPorts.has(ifIdx)) return;
+                    if (Buffer.isBuffer(vb.value)) {
+                        const vlans = [];
+                        for (let byte = 0; byte < vb.value.length; byte++) {
+                            for (let bit = 7; bit >= 0; bit--) {
+                                if (vb.value[byte] & (1 << bit)) {
+                                    vlans.push(byte * 8 + (7 - bit));
+                                }
+                            }
+                        }
+                        trunkAllowedMap[ifIdx] = vlans;
                     }
                 });
 
@@ -278,10 +297,20 @@ async function getDeviceDetails(device) {
                     const id = v.trim().replace(/\s*\([TDB]\)/, '');
                     return vlanNameMap[id] || '-';
                 }).join(', ');
+                // Trunk portlarda geçen VLAN'lar (sadece cihazda tanımlı olanlar)
+                const activeVlanIds = new Set(Object.keys(vlanNameMap));
+                let trunkVlans = null;
+                if (trunkAllowedMap[index]) {
+                    trunkVlans = trunkAllowedMap[index]
+                        .filter(v => activeVlanIds.has(v.toString()))
+                        .map(v => v.toString());
+                }
+
                 interfacesMap[index] = {
                     index, name: '', status: statusMap[index] || 'down',
                     vlan: vlanStr,
                     vlanName: vlanNameStr,
+                    trunkVlans,
                     speedMbps: 0,
                     rawIn: BigInt(0), rawOut: BigInt(0)
                 };
@@ -330,7 +359,7 @@ async function getDeviceDetails(device) {
 
                 return {
                     index: i.index, name: i.name, status: i.status,
-                    vlan: i.vlan, vlanName: i.vlanName,
+                    vlan: i.vlan, vlanName: i.vlanName, trunkVlans: i.trunkVlans,
                     speed: i.speedMbps * 1000000, trafficIn: smoothedIn, trafficOut: smoothedOut
                 };
             });
