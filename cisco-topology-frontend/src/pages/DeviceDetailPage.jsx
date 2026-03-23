@@ -79,6 +79,7 @@ export default function DeviceDetailPage() {
             <tr>
               <th style={{ paddingLeft: 24 }}>Port</th>
               <th>VLAN</th>
+              <th>VLAN Name</th>
               <th>Status</th>
               <th>Capacity</th>
               <th>Traffic In</th>
@@ -94,6 +95,9 @@ export default function DeviceDetailPage() {
                     {i.vlan || '-'}
                   </span>
                 </td>
+                <td style={{ fontSize: '0.8rem', color: i.vlanName && i.vlanName !== '-' ? 'var(--text-main)' : 'var(--text-muted)' }}>
+                  {i.vlanName || '-'}
+                </td>
                 <td>
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 20, fontSize: '0.75rem', fontWeight: 700, background: i.status === 'up' ? 'rgba(52,211,153,0.1)' : 'rgba(248,113,113,0.1)', color: i.status === 'up' ? 'var(--success)' : 'var(--text-muted)', border: `1px solid ${i.status === 'up' ? 'rgba(52,211,153,0.2)' : 'rgba(248,113,113,0.2)'}` }}>
                     {i.status === 'up' ? '● UP' : '○ DOWN'}
@@ -104,7 +108,7 @@ export default function DeviceDetailPage() {
                 <td style={{ fontFamily: 'monospace', fontSize: '0.95rem', color: '#8b5cf6' }}>{formatTraffic(i.trafficOut)}</td>
               </tr>
             )) : (
-              <tr><td colSpan="6" style={{ textAlign: 'center', padding: 30, color: 'var(--text-muted)' }}>
+              <tr><td colSpan="7" style={{ textAlign: 'center', padding: 30, color: 'var(--text-muted)' }}>
                 {details.status === 'UP' ? t('noPortsFound') : t('deviceDown')}
               </td></tr>
             )}

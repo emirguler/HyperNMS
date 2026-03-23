@@ -159,6 +159,7 @@ async function getDeviceDetails(device) {
 
         // VLAN
         let vlanMap = {};
+        let vlanNameMap = {};
         const parseSnmpInt = (val) => {
             if (Buffer.isBuffer(val)) return val.length > 0 ? val.readUIntBE(0, val.length) : 0;
             return parseInt(val);
@@ -223,6 +224,14 @@ async function getDeviceDetails(device) {
                         vlanMap[index] = val.toString();
                     }
                 });
+                // 5. VLAN İsimlerini al (vtpVlanName)
+                // OID: 1.3.6.1.4.1.9.9.46.1.3.1.1.4
+                const vlanNameData = await getSubtree('1.3.6.1.4.1.9.9.46.1.3.1.1.4');
+                vlanNameData.forEach(vb => {
+                    const vlanId = vb.oid.split('.').pop();
+                    const name = vb.value.toString();
+                    if (name && vlanId) vlanNameMap[vlanId] = name;
+                });
             } catch (err) {
                 console.log("[VLAN] Hata:", err.message);
             }
@@ -235,9 +244,13 @@ async function getDeviceDetails(device) {
             const column = oidParts.pop();
 
             if (!interfacesMap[index]) {
+                const vlanStr = vlanMap[index] || '-';
+                const vlanId = vlanStr.replace(/\s*\(T\)/, '');
                 interfacesMap[index] = {
                     index, name: '', status: statusMap[index] || 'down',
-                    vlan: vlanMap[index] || '-', speedMbps: 0,
+                    vlan: vlanStr,
+                    vlanName: vlanNameMap[vlanId] || '-',
+                    speedMbps: 0,
                     rawIn: BigInt(0), rawOut: BigInt(0)
                 };
             }
@@ -283,7 +296,7 @@ async function getDeviceDetails(device) {
                 };
 
                 return {
-                    index: i.index, name: i.name, status: i.status, vlan: i.vlan,
+                    index: i.index, name: i.name, status: i.status, vlan: i.vlan, vlanName: i.vlanName,
                     speed: i.speedMbps * 1000000, trafficIn: smoothedIn, trafficOut: smoothedOut
                 };
             });
