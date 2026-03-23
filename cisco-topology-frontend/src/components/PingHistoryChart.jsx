@@ -1,10 +1,48 @@
-import { useState, useEffect, useCallback } from 'react';
-import { AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { useAuth } from '../context/AuthContext';
 import { getLang } from '../i18n';
 
+// Veriyi downsample et — çok yoğun olunca peak'ler kaybolmasın
+function downsample(data, maxPoints = 200) {
+  if (data.length <= maxPoints) return data;
+
+  const bucketSize = Math.ceil(data.length / maxPoints);
+  const result = [];
+
+  for (let i = 0; i < data.length; i += bucketSize) {
+    const bucket = data.slice(i, i + bucketSize);
+    // Her bucket'tan max değeri ve son değeri al (peak koruması)
+    const maxItem = bucket.reduce((max, item) => item.ms > max.ms ? item : max, bucket[0]);
+    const lastItem = bucket[bucket.length - 1];
+
+    // Peak farklıysa ikisini de ekle
+    if (maxItem !== lastItem && maxItem.ms > lastItem.ms * 1.3) {
+      result.push(maxItem);
+    }
+    result.push(lastItem);
+  }
+
+  return result;
+}
+
+const CustomTooltip = ({ active, payload, label }) => {
+  if (!active || !payload || !payload.length) return null;
+  return (
+    <div style={{
+      background: 'var(--bg-panel)', border: '1px solid var(--primary)',
+      borderRadius: 8, padding: '8px 12px', boxShadow: '0 10px 20px rgba(0,0,0,0.5)'
+    }}>
+      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 2 }}>{label}</div>
+      <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--primary)' }}>
+        {payload[0].value} ms
+      </div>
+    </div>
+  );
+};
+
 export default function PingHistoryChart({ deviceId }) {
-  const [data, setData] = useState([]);
+  const [rawData, setRawData] = useState([]);
   const [range, setRange] = useState('1H');
   const { authFetch } = useAuth();
   const ranges = { '1H': 3600000, '1D': 86400000, '1W': 604800000, '1M': 2592000000 };
@@ -14,9 +52,14 @@ export default function PingHistoryChart({ deviceId }) {
       const res = await authFetch(`/switches/${deviceId}/ping-history?duration=${ranges[range]}`);
       if (res && res.ok) {
         const d = await res.json();
-        setData(d.map(h => ({
-          time: new Date(h.timestamp).toLocaleTimeString(getLang() === 'tr' ? 'tr-TR' : 'en-US', { hour: '2-digit', minute: '2-digit' }),
-          value: h.value === -1 ? 0 : h.value
+        const locale = getLang() === 'tr' ? 'tr-TR' : 'en-US';
+        const timeOpts = range === '1H' || range === '1D'
+          ? { hour: '2-digit', minute: '2-digit' }
+          : { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' };
+
+        setRawData(d.map(h => ({
+          time: new Date(h.timestamp).toLocaleString(locale, timeOpts),
+          ms: h.value === -1 ? 0 : h.value
         })));
       }
     } catch (e) { /* ignore */ }
@@ -27,6 +70,8 @@ export default function PingHistoryChart({ deviceId }) {
     const i = setInterval(fetchHistory, 10000);
     return () => clearInterval(i);
   }, [fetchHistory]);
+
+  const data = useMemo(() => downsample(rawData, 250), [rawData]);
 
   return (
     <div className="chart-container" style={{ height: 350 }}>
@@ -48,10 +93,10 @@ export default function PingHistoryChart({ deviceId }) {
             </linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-          <XAxis dataKey="time" stroke="var(--text-muted)" fontSize={11} tickLine={false} axisLine={false} />
-          <YAxis stroke="var(--text-muted)" fontSize={11} unit="ms" tickLine={false} axisLine={false} />
-          <RechartsTooltip contentStyle={{ background: 'var(--bg-panel)', border: '1px solid var(--primary)', borderRadius: '8px', color: 'var(--text-main)', boxShadow: '0 10px 20px rgba(0,0,0,0.5)' }} />
-          <Area type="monotone" dataKey="value" stroke="var(--primary)" fill="url(#colorPing)" strokeWidth={2} />
+          <XAxis dataKey="time" stroke="var(--text-muted)" fontSize={10} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+          <YAxis stroke="var(--text-muted)" fontSize={11} unit=" ms" tickLine={false} axisLine={false} />
+          <Tooltip content={<CustomTooltip />} />
+          <Area type="monotone" dataKey="ms" stroke="var(--primary)" fill="url(#colorPing)" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 2 }} />
         </AreaChart>
       </ResponsiveContainer>
     </div>
