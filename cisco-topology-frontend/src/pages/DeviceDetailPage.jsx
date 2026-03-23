@@ -62,7 +62,7 @@ export default function DeviceDetailPage() {
             </div>
           ))}
         </div>
-        {(details.snmpCommunity || details.sshUsername) && (
+        {(details.snmpCommunity || details.sshUsername || details.sshPasswordSet !== undefined) && (
           <div style={{ display: 'flex', gap: 32, borderTop: '1px solid var(--border-color)', paddingTop: 16 }}>
             {details.snmpCommunity && (
               <div>
