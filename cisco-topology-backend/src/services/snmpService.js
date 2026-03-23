@@ -168,6 +168,8 @@ async function getDeviceDetails(device) {
         // VLAN
         let vlanMap = {};
         let vlanNameMap = {};
+        let trunkAllowedMap = {};
+        let trunkPorts = new Set();
         const parseSnmpInt = (val) => {
             if (Buffer.isBuffer(val)) return val.length > 0 ? val.readUIntBE(0, val.length) : 0;
             return parseInt(val);
@@ -176,7 +178,6 @@ async function getDeviceDetails(device) {
         if (responseData.detectedVendor === 'Cisco') {
             try {
                 // 1. Trunk portları tespit et
-                const trunkPorts = new Set();
                 const trunkModeData = await getSubtree('1.3.6.1.4.1.9.9.46.1.6.1.1.14');
                 trunkModeData.forEach(vb => {
                     const ifIdx = vb.oid.split('.').pop();
