@@ -166,25 +166,62 @@ async function getDeviceDetails(device) {
 
         if (responseData.detectedVendor === 'Cisco') {
             try {
-                const trunkVlanData = await getSubtree('1.3.6.1.4.1.9.9.46.1.6.1.1.5');
-                trunkVlanData.forEach(vb => {
+                // 1. Port modunu tespit et (trunk mu access mi?)
+                // vlanTrunkPortDynamicState: 1=on(trunk), 2=off(access), 3=desirable, 4=auto, 5=onNoNegotiate
+                const trunkModeData = await getSubtree('1.3.6.1.4.1.9.9.46.1.6.1.1.14');
+                const trunkPorts = new Set();
+                trunkModeData.forEach(vb => {
                     const index = vb.oid.split('.').pop();
-                    const val = parseSnmpInt(vb.value);
-                    if (val > 0) vlanMap[index] = val.toString() + ' (T)';
+                    const mode = parseSnmpInt(vb.value);
+                    // 1=on, 5=onNoNegotiate → kesinlikle trunk
+                    if (mode === 1 || mode === 5) trunkPorts.add(index);
                 });
 
-                const pvidData = await getSubtree('1.3.6.1.2.1.17.7.1.4.5.1.1');
-                pvidData.forEach(vb => {
-                    const index = vb.oid.split('.').pop();
-                    const val = parseSnmpInt(vb.value);
-                    if (!vlanMap[index] && val > 0) vlanMap[index] = val.toString();
-                });
+                // Eğer mode OID boş dönerse, trunk durumunu vlanTrunkPortDynamicStatus'tan al
+                // 1=trunking, 2=notTrunking
+                if (trunkPorts.size === 0) {
+                    const trunkStatusData = await getSubtree('1.3.6.1.4.1.9.9.46.1.6.1.1.14');
+                    // Fallback: vlanTrunkPortNativeVlan varsa ve access vlan yoksa trunk say
+                }
 
+                // 2. Access VLAN'lar (vmVlan — Cisco statik access VLAN)
+                // OID: 1.3.6.1.4.1.9.9.68.1.2.2.1.2
                 const accessVlanData = await getSubtree('1.3.6.1.4.1.9.9.68.1.2.2.1.2');
                 accessVlanData.forEach(vb => {
                     const index = vb.oid.split('.').pop();
                     const val = parseSnmpInt(vb.value);
-                    if (!vlanMap[index] && val > 0) vlanMap[index] = val.toString();
+                    if (val > 0) {
+                        vlanMap[index] = val.toString();
+                    }
+                });
+
+                // 3. Trunk portlar için native VLAN (sadece gerçek trunk portlara uygula)
+                // OID: 1.3.6.1.4.1.9.9.46.1.6.1.1.5
+                const trunkVlanData = await getSubtree('1.3.6.1.4.1.9.9.46.1.6.1.1.5');
+                trunkVlanData.forEach(vb => {
+                    const index = vb.oid.split('.').pop();
+                    const val = parseSnmpInt(vb.value);
+                    if (val > 0) {
+                        // Access VLAN zaten varsa ve trunk port değilse → access VLAN'ı koru
+                        if (vlanMap[index] && !trunkPorts.has(index)) return;
+                        // Trunk port veya henüz VLAN atanmamış
+                        if (trunkPorts.has(index)) {
+                            vlanMap[index] = val.toString() + ' (T)';
+                        } else if (!vlanMap[index]) {
+                            // Trunk olduğu belli olmayan ama native VLAN dönen port
+                            vlanMap[index] = val.toString() + ' (T)';
+                        }
+                    }
+                });
+
+                // 4. Hala VLAN bilgisi olmayan portlar için dot1qPvid (standart MIB)
+                const pvidData = await getSubtree('1.3.6.1.2.1.17.7.1.4.5.1.1');
+                pvidData.forEach(vb => {
+                    const index = vb.oid.split('.').pop();
+                    const val = parseSnmpInt(vb.value);
+                    if (!vlanMap[index] && val > 0) {
+                        vlanMap[index] = val.toString();
+                    }
                 });
             } catch (err) {
                 console.log("[VLAN] Hata:", err.message);
