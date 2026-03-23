@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__Claude_Preview__preview_start",
+      "Bash(where npx:*)",
+      "Bash(where npm:*)",
+      "Bash(node -e \":*)",
+      "Bash(curl -s -X POST http://localhost:4000/login -H \"Content-Type: application/json\" -d '{\"\"username\"\":\"\"admin\"\",\"\"password\"\":\"\"p123456**\"\"}')"
+    ]
+  }
+}

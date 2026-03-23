@@ -1,50 +1,94 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { useApp } from '../context/AppContext';
 import NotificationBell from './NotificationBell';
 import SettingsModal from './SettingsModal';
-import { t } from '../i18n';
 
 export default function Navbar({ onAddDevice }) {
-  const { logout, isAdmin } = useAuth();
-  const { theme, toggleTheme } = useApp();
+  const { logout, isAdmin, username } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const path = location.pathname;
   const [showSettings, setShowSettings] = useState(false);
 
+  const navItems = [
+    { label: 'Dashboard', path: '/dashboard' },
+    { label: 'Devices', path: '/devices' },
+  ];
+
   return (
     <>
       <header className="nav-header" onClick={e => e.stopPropagation()}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: '1.8rem', filter: 'drop-shadow(0 0 5px var(--primary))' }}>⚡</span>
-          <div>
-            <h3 style={{ margin: 0, lineHeight: 1 }}>NetPulse</h3>
-            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', letterSpacing: '1px' }}>Keep the Pulse of Your Network</span>
+        {/* Left — Brand + Nav */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }} onClick={() => navigate('/dashboard')}>
+            <div style={{
+              width: 32, height: 32, borderRadius: 8,
+              background: 'linear-gradient(135deg, var(--primary), #6366f1)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '1rem', color: '#fff', fontWeight: 700
+            }}>N</div>
+            <span style={{ fontSize: '1rem', fontWeight: 700, letterSpacing: '-0.3px', color: 'var(--text-main)' }}>NetPulse</span>
           </div>
-          <nav className="nav-menu" style={{ marginLeft: 40 }}>
-            <button className={`nav-btn ${path === '/dashboard' ? 'active' : ''}`} onClick={() => navigate('/dashboard')}>Dashboard</button>
-            <button className={`nav-btn ${path === '/devices' ? 'active' : ''}`} onClick={() => navigate('/devices')}>{t('devices')}</button>
+
+          <div style={{ width: 1, height: 24, background: 'var(--border-color)', margin: '0 4px' }} />
+
+          <nav className="nav-menu">
+            {navItems.map(item => (
+              <button
+                key={item.path}
+                className={`nav-btn ${path === item.path ? 'active' : ''}`}
+                onClick={() => navigate(item.path)}
+              >{item.label}</button>
+            ))}
+
             <div className="dropdown">
-              <button className={`nav-btn ${path.startsWith('/topology') || path === '/geomap' ? 'active' : ''}`}>{t('maps')} ▼</button>
+              <button className={`nav-btn ${path.startsWith('/topology') || path === '/geomap' ? 'active' : ''}`}>
+                Maps ▾
+              </button>
               <div className="dropdown-content">
-                <a className="dropdown-item" onClick={() => navigate('/topology')}>🕸️ {t('topology')}</a>
-                <a className="dropdown-item" onClick={() => navigate('/geomap')}>🌍 {t('geographic')}</a>
+                <a className="dropdown-item" onClick={() => navigate('/topology')}>Topology Map</a>
+                <a className="dropdown-item" onClick={() => navigate('/geomap')}>Geographic Map</a>
               </div>
             </div>
-            {isAdmin && <button className={`nav-btn ${path === '/audit' ? 'active' : ''}`} onClick={() => navigate('/audit')}>Audit Log</button>}
+
+            {isAdmin && (
+              <button className={`nav-btn ${path === '/audit' ? 'active' : ''}`} onClick={() => navigate('/audit')}>
+                Audit Log
+              </button>
+            )}
+
             {isAdmin && (path === '/devices' || path.startsWith('/topology')) && onAddDevice && (
-              <button className="btn btn-primary btn-sm" style={{ marginLeft: 15 }} onClick={onAddDevice}>{t('addDevice')}</button>
+              <button className="btn btn-primary btn-sm" style={{ marginLeft: 8 }} onClick={onAddDevice}>
+                + Add Device
+              </button>
             )}
           </nav>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+
+        {/* Right — Actions */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <NotificationBell />
-          <button className="nav-btn" onClick={toggleTheme} title={t('changeTheme')} style={{ fontSize: '1.2rem' }}>{theme === 'dark' ? '☀️' : '🌙'}</button>
-          {isAdmin && <button className={`nav-btn ${path === '/users' ? 'active' : ''}`} onClick={() => navigate('/users')}>👥 {t('users')}</button>}
-          {isAdmin && <button className="nav-btn" onClick={() => setShowSettings(true)} title="Settings" style={{ fontSize: '1.1rem' }}>⚙️</button>}
-          <button className="btn btn-danger btn-sm" onClick={() => { logout(); navigate('/login'); }}>{t('logout')}</button>
+
+          {isAdmin && (
+            <button className={`nav-btn ${path === '/users' ? 'active' : ''}`} onClick={() => navigate('/users')} title="User Management">
+              Users
+            </button>
+          )}
+
+          {isAdmin && (
+            <button className="nav-btn" onClick={() => setShowSettings(true)} title="Settings" style={{ fontSize: '0.95rem' }}>
+              ⚙
+            </button>
+          )}
+
+          <div style={{ width: 1, height: 20, background: 'var(--border-color)', margin: '0 4px' }} />
+
+          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginRight: 4 }}>{username}</span>
+          <button className="btn btn-ghost btn-sm" onClick={() => { logout(); navigate('/login'); }}
+            style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+            Sign Out
+          </button>
         </div>
       </header>
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}

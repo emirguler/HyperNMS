@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { t } from '../i18n';
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
@@ -23,7 +22,7 @@ export default function LoginPage() {
         setError(result.error);
       }
     } catch {
-      setError(t('serverUnavailable'));
+      setError('Server unavailable. Please try again later.');
     } finally {
       setLoading(false);
     }
@@ -31,31 +30,77 @@ export default function LoginPage() {
 
   return (
     <div className="login-wrapper">
-      <div className="login-orb"></div>
+      <div className="login-orb" />
       <div className="login-card">
-        <div className="login-header">
-          <div style={{ fontSize: '4rem', marginBottom: '10px', filter: 'drop-shadow(0 0 10px var(--primary))' }}>⚡</div>
-          <h1 style={{ margin: '10px 0', fontSize: '2rem', letterSpacing: '-1px' }}>NetPulse</h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', letterSpacing: '1px', textTransform: 'uppercase' }}>Keep the Pulse of Your Network</p>
+        <div style={{ marginBottom: 32 }}>
+          <div style={{
+            width: 48, height: 48, borderRadius: 12,
+            background: 'linear-gradient(135deg, var(--primary), #6366f1)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: '1.4rem', color: '#fff', fontWeight: 700,
+            margin: '0 auto 16px'
+          }}>N</div>
+          <h1 style={{ margin: '0 0 6px', fontSize: '1.6rem', fontWeight: 700, letterSpacing: '-0.5px' }}>
+            NetPulse
+          </h1>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: 0 }}>
+            Network Management System
+          </p>
         </div>
-        <form onSubmit={handleSubmit} style={{ textAlign: 'left', marginTop: '2rem' }}>
+
+        <form onSubmit={handleSubmit} style={{ textAlign: 'left' }}>
           {error && (
             <div className="login-error">
-              <span style={{ marginRight: 8 }}>✕</span>{error}
+              <span style={{ marginRight: 8, flexShrink: 0 }}>✕</span>{error}
             </div>
           )}
-          <div style={{ marginBottom: 20 }}>
-            <label style={{ display: 'block', marginBottom: 8, fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-muted)', letterSpacing: '1px' }}>{t('username')}</label>
-            <input className="modern-input" placeholder="admin" value={username} onChange={e => setUsername(e.target.value)} required autoComplete="username" />
+
+          <div style={{ marginBottom: 16 }}>
+            <label style={{
+              display: 'block', marginBottom: 6,
+              fontSize: '0.75rem', fontWeight: 600,
+              color: 'var(--text-muted)', letterSpacing: '0.3px'
+            }}>USERNAME</label>
+            <input
+              className="modern-input"
+              placeholder="Enter username"
+              value={username}
+              onChange={e => setUsername(e.target.value)}
+              required
+              autoComplete="username"
+              autoFocus
+            />
           </div>
+
           <div style={{ marginBottom: 24 }}>
-            <label style={{ display: 'block', marginBottom: 8, fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-muted)', letterSpacing: '1px' }}>{t('password')}</label>
-            <input className="modern-input" type="password" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} required autoComplete="current-password" />
+            <label style={{
+              display: 'block', marginBottom: 6,
+              fontSize: '0.75rem', fontWeight: 600,
+              color: 'var(--text-muted)', letterSpacing: '0.3px'
+            }}>PASSWORD</label>
+            <input
+              className="modern-input"
+              type="password"
+              placeholder="Enter password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              required
+              autoComplete="current-password"
+            />
           </div>
-          <button className="btn btn-primary" style={{ width: '100%', padding: '16px', fontSize: '1rem' }} disabled={loading}>
-            {loading ? t('loggingIn') : t('login')}
+
+          <button
+            className="btn btn-primary"
+            style={{ width: '100%', padding: '12px', fontSize: '0.9rem' }}
+            disabled={loading}
+          >
+            {loading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
+
+        <p style={{ marginTop: 24, fontSize: '0.7rem', color: 'var(--text-dim)', textAlign: 'center' }}>
+          NetPulse NMS v2.0
+        </p>
       </div>
     </div>
   );
