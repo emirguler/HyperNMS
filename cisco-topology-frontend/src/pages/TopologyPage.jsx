@@ -38,7 +38,7 @@ function TopologyInner({ onEdit }) {
   useEffect(() => {
     setLocalNodes(prev => {
       const devices = activeTabId === 'main'
-        ? rawDevices
+        ? rawDevices.filter(s => !s.topologyPage || s.topologyPage === 'main')
         : rawDevices.filter(s => s.topologyPage === activeTabId);
       let updated = [];
       devices.forEach(s => {
