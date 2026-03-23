@@ -186,7 +186,6 @@ async function getDeviceDetails(device) {
                 });
 
                 // 2. Trunk native VLAN + allowed VLANs bitmap
-                const trunkAllowedMap = {};
                 const trunkVlanData = await getSubtree('1.3.6.1.4.1.9.9.46.1.6.1.1.5');
                 trunkVlanData.forEach(vb => {
                     const ifIdx = vb.oid.split('.').pop();
@@ -198,9 +197,9 @@ async function getDeviceDetails(device) {
 
                 // Trunk allowed VLANs bitmap (1.3.6.1.4.1.9.9.46.1.6.1.1.4)
                 const trunkBitmapData = await getSubtree('1.3.6.1.4.1.9.9.46.1.6.1.1.4');
-                trunkBitmapData.forEach(vb => {
+                for (const vb of trunkBitmapData) {
                     const ifIdx = vb.oid.split('.').pop();
-                    if (!trunkPorts.has(ifIdx)) return;
+                    if (!trunkPorts.has(ifIdx)) continue;
                     if (Buffer.isBuffer(vb.value)) {
                         const vlans = [];
                         for (let byte = 0; byte < vb.value.length; byte++) {
@@ -212,7 +211,7 @@ async function getDeviceDetails(device) {
                         }
                         trunkAllowedMap[ifIdx] = vlans;
                     }
-                });
+                }
 
                 // 3. Statik config VLAN'ları al (vmVlan) — dinamik karşılaştırma için
                 const staticVlanMap = {};
