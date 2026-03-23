@@ -111,17 +111,39 @@ router.post('/switches/:id/exec', authenticate, requireAdmin, async (req, res) =
         const output = await new Promise((resolve, reject) => {
             const conn = new ssh2();
             let result = '';
-            const timeout = setTimeout(() => { conn.end(); reject(new Error('SSH timeout')); }, 15000);
+            let dataTimeout = null;
+            const hardTimeout = setTimeout(() => { conn.end(); resolve(result); }, 20000);
 
             conn.on('ready', () => {
-                conn.exec(command + '\n', (err, stream) => {
-                    if (err) { clearTimeout(timeout); conn.end(); return reject(err); }
-                    stream.on('data', (data) => { result += data.toString(); });
-                    stream.stderr.on('data', (data) => { result += data.toString(); });
-                    stream.on('close', () => { clearTimeout(timeout); conn.end(); resolve(result); });
+                // Cisco IOS shell modunda çalıştır (exec desteklemiyor)
+                conn.shell((err, stream) => {
+                    if (err) { clearTimeout(hardTimeout); conn.end(); return reject(err); }
+
+                    stream.on('data', (data) => {
+                        result += data.toString();
+                        // Her veri geldiğinde timer'ı sıfırla — 2 saniye veri gelmezse bitir
+                        if (dataTimeout) clearTimeout(dataTimeout);
+                        dataTimeout = setTimeout(() => {
+                            clearTimeout(hardTimeout);
+                            stream.end();
+                            conn.end();
+                            resolve(result);
+                        }, 2000);
+                    });
+
+                    stream.on('close', () => {
+                        clearTimeout(hardTimeout);
+                        if (dataTimeout) clearTimeout(dataTimeout);
+                        conn.end();
+                        resolve(result);
+                    });
+
+                    // terminal length 0 ile paging'i kapat, sonra komutu çalıştır
+                    stream.write('terminal length 0\n');
+                    setTimeout(() => stream.write(command + '\n'), 500);
                 });
             }).on('error', (err) => {
-                clearTimeout(timeout);
+                clearTimeout(hardTimeout);
                 reject(err);
             }).connect({
                 host: device.ip, port: 22,
@@ -135,9 +157,18 @@ router.post('/switches/:id/exec', authenticate, requireAdmin, async (req, res) =
             });
         });
 
-        snmpCache.set(cacheKey, output, 120000); // 2 dakika cache
+        // Çıktıyı temizle — ANSI escape kodlarını ve prompt'ları kaldır
+        const cleanOutput = output
+            .replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '') // ANSI escape
+            .replace(/\r/g, '')                      // carriage return
+            .split('\n')
+            .filter(line => !line.includes('terminal length 0')) // komut echo'sunu kaldır
+            .join('\n')
+            .trim();
+
+        snmpCache.set(cacheKey, cleanOutput, 120000); // 2 dakika cache
         await logAction(req.user, 'SSH_EXEC', device.name, { command });
-        res.json({ output });
+        res.json({ output: cleanOutput });
     } catch (err) {
         res.status(500).json({ error: 'SSH hatası: ' + err.message });
     }
