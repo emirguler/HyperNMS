@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Terminal } from 'xterm';
 import 'xterm/css/xterm.css';
+import { WS_BASE } from './config';
 
 function TerminalModal({ switchId, onClose }) {
   const containerRef = useRef(null);
@@ -23,7 +24,7 @@ function TerminalModal({ switchId, onClose }) {
     term.focus();
     term.write(`Connecting to switch ${switchId}...\r\n`);
 
-    const ws = new WebSocket(`ws://localhost:4000/ws/terminal?switchId=${switchId}`);
+    const ws = new WebSocket(`${WS_BASE}/ws/terminal?switchId=${switchId}`);
 
     socketRef.current = ws;
     termRef.current = term;
