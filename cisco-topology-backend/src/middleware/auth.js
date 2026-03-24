@@ -4,7 +4,7 @@ const { SECRET_KEY, NODE_ENV } = require('../config');
 // Cookie options
 const COOKIE_OPTIONS = {
     httpOnly: true,
-    secure: NODE_ENV === 'production',
+    secure: process.env.COOKIE_SECURE === 'true', // Only true when HTTPS is configured
     sameSite: 'strict',
     maxAge: 8 * 60 * 60 * 1000, // 8 hours
     path: '/'
