@@ -121,7 +121,7 @@ if (config.NODE_ENV === 'production') {
     const publicPath = path.resolve(__dirname, '../public');
     if (fs.existsSync(publicPath)) {
         app.use(express.static(publicPath));
-        app.get('*', (req, res) => res.sendFile(path.join(publicPath, 'index.html')));
+        app.get('/{*path}', (req, res) => res.sendFile(path.join(publicPath, 'index.html')));
     }
 }
 

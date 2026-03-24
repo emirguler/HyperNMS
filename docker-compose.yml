@@ -3,12 +3,11 @@ services:
     build: .
     ports:
       - "4000:4000"
+    env_file:
+      - .env.docker
     environment:
       - NODE_ENV=production
       - PORT=4000
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
-      - JWT_SECRET=${JWT_SECRET}
-      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:4000}
     volumes:
       - netpulse-data:/app/backend/data
     restart: unless-stopped
