@@ -54,7 +54,7 @@ router.delete('/topology/tabs/:id', authenticate, requireAdmin, (req, res) => {
 
 // --- Auto Topology Discovery (CDP/LLDP) ---
 router.post('/topology/auto-discover', authenticate, requireAdmin, async (req, res) => {
-    const { deviceIds } = req.body;
+    const { deviceIds, rootDeviceId } = req.body;
     if (!deviceIds || !Array.isArray(deviceIds) || deviceIds.length === 0) {
         return res.status(400).json({ error: 'deviceIds array required' });
     }
@@ -148,14 +148,38 @@ router.post('/topology/auto-discover', authenticate, requireAdmin, async (req, r
         adjacency[p.b].push(p.a);
     }
 
-    // Find root = most connections (core switch) → goes to TOP
-    let rootId = deviceIds[0];
-    let maxConn = 0;
-    for (const id of deviceIds) {
-        if ((adjacency[id] || []).length > maxConn) {
-            maxConn = (adjacency[id] || []).length;
-            rootId = id;
+    // Find root device — goes to TOP of tree
+    let rootId;
+    if (rootDeviceId && deviceIds.includes(rootDeviceId)) {
+        // User explicitly selected root
+        rootId = rootDeviceId;
+    } else {
+        // Auto-detect: use "in-degree" — how many page devices discovered this device as neighbor
+        // The device discovered by the MOST other page devices is likely the core/backbone
+        const inDegree = {};
+        for (const id of deviceIds) inDegree[id] = 0;
+
+        for (const result of discoveryResults) {
+            const target = findMatchingDevice(result);
+            if (target && target.id !== result.sourceId && deviceIds.includes(target.id)) {
+                inDegree[target.id] = (inDegree[target.id] || 0) + 1;
+            }
         }
+
+        // Pick device with highest in-degree (most other devices see it as neighbor)
+        // Tie-break: prefer device with most total adjacency connections
+        rootId = deviceIds[0];
+        let maxInDeg = -1;
+        for (const id of deviceIds) {
+            const deg = inDegree[id] || 0;
+            if (deg > maxInDeg || (deg === maxInDeg && (adjacency[id] || []).length > (adjacency[rootId] || []).length)) {
+                maxInDeg = deg;
+                rootId = id;
+            }
+        }
+
+        const rootDevice = allSwitches.find(s => s.id === rootId);
+        console.log(`[DISCOVERY] Auto-selected root: ${rootDevice?.name} (in-degree: ${maxInDeg})`);
     }
 
     // BFS to assign depth (root=0=top, leaves=deepest=bottom)

@@ -171,6 +171,8 @@ function TopologyInner({ onEdit }) {
 
   const [discovering, setDiscovering] = useState(false);
   const [discoveryResult, setDiscoveryResult] = useState(null);
+  const [showDiscoverDialog, setShowDiscoverDialog] = useState(false);
+  const [selectedRootId, setSelectedRootId] = useState('auto');
 
   const handleAutoDiscover = async () => {
     const deviceIds = localNodes.map(n => n.id);
@@ -178,17 +180,20 @@ function TopologyInner({ onEdit }) {
       showToast('No devices on this page', 'error');
       return;
     }
+    setShowDiscoverDialog(false);
     setDiscovering(true);
     setDiscoveryResult(null);
     try {
+      const body = { deviceIds };
+      if (selectedRootId !== 'auto') body.rootDeviceId = selectedRootId;
+
       const res = await authFetch('/topology/auto-discover', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ deviceIds })
+        body: JSON.stringify(body)
       });
       if (res && res.ok) {
         const data = await res.json();
-        // Apply new positions to local nodes
         if (data.positions) {
           setLocalNodes(prev => prev.map(n => {
             if (data.positions[n.id]) {
@@ -197,7 +202,6 @@ function TopologyInner({ onEdit }) {
             return n;
           }));
         }
-        // Refresh to get new edges
         await fetchData();
         setTimeout(() => fitView({ duration: 500 }), 200);
         setDiscoveryResult(data);
@@ -293,7 +297,7 @@ function TopologyInner({ onEdit }) {
             <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 5, display: 'flex', gap: 6 }}>
               <button
                 className="btn btn-primary btn-sm"
-                onClick={handleAutoDiscover}
+                onClick={() => { setSelectedRootId('auto'); setShowDiscoverDialog(true); }}
                 disabled={discovering}
                 style={{ fontSize: '0.75rem', padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 4 }}
               >
@@ -333,6 +337,45 @@ function TopologyInner({ onEdit }) {
           </div>
         )}
       </div>
+
+      {/* Auto Topology Dialog */}
+      {showDiscoverDialog && (
+        <div className="modal-overlay" onClick={() => setShowDiscoverDialog(false)}>
+          <div className="confirm-modal-content" onClick={e => e.stopPropagation()} style={{ minWidth: 340 }}>
+            <h3 className="confirm-title">🔍 Auto Topology</h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: 16 }}>
+              Discovers connections via CDP/LLDP and arranges devices in a tree layout.
+            </p>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>
+                Root Device (top of tree)
+              </label>
+              <select
+                className="modern-input"
+                value={selectedRootId}
+                onChange={e => setSelectedRootId(e.target.value)}
+                style={{ width: '100%' }}
+              >
+                <option value="auto">Auto-detect (most referenced device)</option>
+                {localNodes
+                  .slice()
+                  .sort((a, b) => (a.data.label || '').localeCompare(b.data.label || ''))
+                  .map(n => (
+                    <option key={n.id} value={n.id}>
+                      {n.data.label} ({n.data.ip})
+                    </option>
+                  ))}
+              </select>
+            </div>
+            <div className="confirm-actions">
+              <button className="btn btn-ghost" onClick={() => setShowDiscoverDialog(false)}>Cancel</button>
+              <button className="btn btn-primary" onClick={handleAutoDiscover}>
+                Start Discovery
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
