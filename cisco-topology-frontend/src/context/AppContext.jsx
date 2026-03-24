@@ -59,12 +59,13 @@ export function AppProvider({ children }) {
   }, [fetchData]);
 
   // SSH helpers
-  const openSshSession = useCallback((id, label) => {
+  const openSshSession = useCallback((id, label, protocol = 'ssh') => {
+    const sessionId = `${id}-${protocol}`;
     setSshSessions(prev => {
-      if (prev.find(s => s.id === id)) return prev;
-      return [...prev, { id, name: label }];
+      if (prev.find(s => s.id === sessionId)) return prev;
+      return [...prev, { id: sessionId, deviceId: id, name: label, protocol }];
     });
-    setActiveSshTabId(id);
+    setActiveSshTabId(sessionId);
   }, []);
 
   const closeSshSession = useCallback((id) => {

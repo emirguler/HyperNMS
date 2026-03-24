@@ -4,7 +4,7 @@ import { FitAddon } from 'xterm-addon-fit';
 import 'xterm/css/xterm.css';
 import { WS_BASE } from './config';
 
-function TerminalPane({ switchId, switchName }) {
+function TerminalPane({ switchId, switchName, protocol = 'ssh' }) {
   const containerRef = useRef(null);
   const fitAddonRef = useRef(null);
 
@@ -31,11 +31,11 @@ function TerminalPane({ switchId, switchName }) {
     term.write(`Connecting to switch ${switchId} (${switchName})...\r\n`);
 
     const ws = new WebSocket(
-      `${WS_BASE}/ws/terminal?switchId=${encodeURIComponent(switchId)}`
+      `${WS_BASE}/ws/terminal?switchId=${encodeURIComponent(switchId)}&protocol=${protocol}`
     );
 
     ws.onopen = () => {
-      term.write('*** SSH connection opening ***\r\n');
+      term.write(`*** ${protocol.toUpperCase()} connection opening ***\r\n`);
     };
 
     ws.onmessage = (event) => {
@@ -71,7 +71,7 @@ function TerminalPane({ switchId, switchName }) {
       try { ws.close(); } catch (e) {}
       term.dispose();
     };
-  }, [switchId, switchName]);
+  }, [switchId, switchName, protocol]);
 
   useEffect(() => {
     if (!containerRef.current) return;

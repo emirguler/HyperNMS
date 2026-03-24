@@ -255,7 +255,8 @@ function TopologyInner({ onEdit }) {
           <div className="context-menu" style={{ top: menu.top, left: menu.left }}>
             <div className="context-menu-item" onClick={() => { navigate(`/devices/${menu.id}`); setMenu(null); }}>📊 Details</div>
             {isAdmin && <div className="context-menu-item" onClick={() => { onEdit(rawDevices.find(d => d.id === menu.id)); setMenu(null); }}>✏️ Edit</div>}
-            {isAdmin && <div className="context-menu-item" onClick={() => { openSshSession(menu.id, menu.label); setMenu(null); }}>💻 Terminal</div>}
+            {isAdmin && <div className="context-menu-item" onClick={() => { openSshSession(menu.id, menu.label, 'ssh'); setMenu(null); }}>💻 SSH Terminal</div>}
+            {isAdmin && <div className="context-menu-item" onClick={() => { openSshSession(menu.id, menu.label, 'telnet'); setMenu(null); }}>🔌 Telnet Terminal</div>}
             <div className="context-menu-item" onClick={() => {
               const pos = localNodes.find(n => n.id === menu.id)?.position;
               if (pos) setCenter(pos.x + 65, pos.y + 40, { zoom: 2, duration: 500 });

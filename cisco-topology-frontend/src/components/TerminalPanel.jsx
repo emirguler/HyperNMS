@@ -45,7 +45,10 @@ export default function TerminalPanel() {
               fontWeight: activeSshTabId === session.id ? '600' : '400',
               display: 'flex', alignItems: 'center', gap: 8, minWidth: 120, justifyContent: 'space-between', transition: 'all 0.2s'
             }}>
-            <span style={{ fontSize: 13 }}>{session.name}</span>
+            <span style={{ fontSize: 13 }}>
+              {session.protocol === 'telnet' && <span style={{ fontSize: 10, opacity: 0.7, marginRight: 4 }}>TEL</span>}
+              {session.name}
+            </span>
             <span onClick={(e) => { e.stopPropagation(); closeSshSession(session.id); }}
               style={{ fontSize: '1.2rem', lineHeight: 0.5, opacity: 0.6, cursor: 'pointer', fontWeight: 700 }}>&times;</span>
           </div>
@@ -57,7 +60,7 @@ export default function TerminalPanel() {
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden', background: '#000' }}>
         {sshSessions.map(session => (
           <div key={session.id} style={{ display: activeSshTabId === session.id ? 'block' : 'none', height: '100%', width: '100%' }}>
-            <TerminalPane switchId={session.id} switchName={session.name} />
+            <TerminalPane switchId={session.deviceId || session.id} switchName={session.name} protocol={session.protocol || 'ssh'} />
           </div>
         ))}
       </div>
