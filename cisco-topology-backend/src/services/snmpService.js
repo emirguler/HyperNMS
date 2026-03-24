@@ -435,4 +435,137 @@ async function getDeviceDetails(device) {
     }
 }
 
-module.exports = { getDeviceDetails, getVendorConfig };
+// --- CDP/LLDP Auto-Discovery ---
+// CDP OIDs
+const CDP_CACHE_DEVICE_ID = '1.3.6.1.4.1.9.9.23.1.2.1.1.6';    // cdpCacheDeviceId (hostname)
+const CDP_CACHE_ADDRESS = '1.3.6.1.4.1.9.9.23.1.2.1.1.4';       // cdpCacheAddress (IP, binary)
+const CDP_CACHE_DEVICE_PORT = '1.3.6.1.4.1.9.9.23.1.2.1.1.7';   // cdpCacheDevicePort (remote port name)
+const CDP_CACHE_PLATFORM = '1.3.6.1.4.1.9.9.23.1.2.1.1.8';      // cdpCachePlatform
+
+// LLDP OIDs
+const LLDP_REM_SYS_NAME = '1.0.8802.1.1.2.1.4.1.1.9';           // lldpRemSysName
+const LLDP_REM_MAN_ADDR = '1.0.8802.1.1.2.1.4.2.1.4';           // lldpRemManAddrIfId (management address)
+const LLDP_REM_PORT_DESC = '1.0.8802.1.1.2.1.4.1.1.8';           // lldpRemPortDesc
+
+async function discoverNeighbors(device) {
+    if (!device.snmpCommunity || device.status !== 'UP') return [];
+
+    const neighbors = [];
+
+    try {
+        const session = createSnmpSession(device.ip, device.snmpCommunity, device.snmpPort, device.snmpVersion);
+
+        const getSubtree = (oid) => new Promise((resolve) => {
+            const results = [];
+            session.subtree(oid, 20, (varbinds) => {
+                for (const vb of varbinds) results.push(vb);
+            }, (err) => resolve(results));
+        });
+
+        // --- CDP Discovery ---
+        const [cdpDeviceIds, cdpAddresses, cdpPorts, cdpPlatforms] = await Promise.all([
+            getSubtree(CDP_CACHE_DEVICE_ID),
+            getSubtree(CDP_CACHE_ADDRESS),
+            getSubtree(CDP_CACHE_DEVICE_PORT),
+            getSubtree(CDP_CACHE_PLATFORM)
+        ]);
+
+        // Parse CDP entries — OID format: ...ifIndex.cdpCacheDeviceIndex
+        const cdpMap = {};
+        for (const vb of cdpDeviceIds) {
+            const parts = vb.oid.split('.');
+            const key = parts.slice(-2).join('.');
+            if (!cdpMap[key]) cdpMap[key] = {};
+            cdpMap[key].hostname = vb.value.toString().split('.')[0]; // Strip domain
+        }
+        for (const vb of cdpAddresses) {
+            const parts = vb.oid.split('.');
+            const key = parts.slice(-2).join('.');
+            if (cdpMap[key] && Buffer.isBuffer(vb.value) && vb.value.length === 4) {
+                cdpMap[key].ip = `${vb.value[0]}.${vb.value[1]}.${vb.value[2]}.${vb.value[3]}`;
+            }
+        }
+        for (const vb of cdpPorts) {
+            const parts = vb.oid.split('.');
+            const key = parts.slice(-2).join('.');
+            if (cdpMap[key]) cdpMap[key].remotePort = vb.value.toString();
+        }
+        for (const vb of cdpPlatforms) {
+            const parts = vb.oid.split('.');
+            const key = parts.slice(-2).join('.');
+            if (cdpMap[key]) cdpMap[key].platform = vb.value.toString();
+        }
+
+        for (const [, entry] of Object.entries(cdpMap)) {
+            if (entry.hostname || entry.ip) {
+                neighbors.push({
+                    protocol: 'CDP',
+                    hostname: entry.hostname || '',
+                    ip: entry.ip || '',
+                    remotePort: entry.remotePort || '',
+                    platform: entry.platform || ''
+                });
+            }
+        }
+
+        // --- LLDP Discovery ---
+        const [lldpNames, lldpPorts] = await Promise.all([
+            getSubtree(LLDP_REM_SYS_NAME),
+            getSubtree(LLDP_REM_PORT_DESC)
+        ]);
+
+        // Also try to get LLDP management addresses
+        let lldpAddrs = [];
+        try { lldpAddrs = await getSubtree(LLDP_REM_MAN_ADDR); } catch {}
+
+        const lldpMap = {};
+        for (const vb of lldpNames) {
+            const parts = vb.oid.split('.');
+            const key = parts.slice(-3, -1).join('.'); // timeMark.localPortNum
+            if (!lldpMap[key]) lldpMap[key] = {};
+            lldpMap[key].hostname = vb.value.toString().split('.')[0];
+        }
+        for (const vb of lldpPorts) {
+            const parts = vb.oid.split('.');
+            const key = parts.slice(-3, -1).join('.');
+            if (lldpMap[key]) lldpMap[key].remotePort = vb.value.toString();
+        }
+        // LLDP management address — OID includes IP bytes
+        for (const vb of lldpAddrs) {
+            const oidStr = vb.oid;
+            // Try to extract IP from OID tail (subtype.len.a.b.c.d)
+            const parts = oidStr.split('.');
+            if (parts.length >= 4) {
+                const ipParts = parts.slice(-4);
+                const ip = ipParts.join('.');
+                if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(ip)) {
+                    // Find which lldp entry this belongs to
+                    const key = parts.slice(-7, -5).join('.');
+                    if (lldpMap[key]) lldpMap[key].ip = ip;
+                }
+            }
+        }
+
+        for (const [, entry] of Object.entries(lldpMap)) {
+            // Skip if already found via CDP (same hostname)
+            const alreadyFound = neighbors.some(n => n.hostname && n.hostname === entry.hostname);
+            if (!alreadyFound && (entry.hostname || entry.ip)) {
+                neighbors.push({
+                    protocol: 'LLDP',
+                    hostname: entry.hostname || '',
+                    ip: entry.ip || '',
+                    remotePort: entry.remotePort || '',
+                    platform: ''
+                });
+            }
+        }
+
+        session.close();
+    } catch (e) {
+        console.error(`[DISCOVERY] ${device.name} (${device.ip}): ${e.message}`);
+    }
+
+    return neighbors;
+}
+
+module.exports = { getDeviceDetails, getVendorConfig, discoverNeighbors };

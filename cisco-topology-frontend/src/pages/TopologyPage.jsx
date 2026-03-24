@@ -17,7 +17,7 @@ import { useTopologyTabs } from '../hooks/useTopologyTabs';
 const nodeTypes = { switchNode: SwitchNode };
 
 function TopologyInner({ onEdit }) {
-  const { rawDevices, edges, setEdges, sshSessions, openSshSession } = useApp();
+  const { rawDevices, edges, setEdges, fetchData, sshSessions, openSshSession } = useApp();
   const { isAdmin, authFetch, csrfToken } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -169,6 +169,48 @@ function TopologyInner({ onEdit }) {
     });
   }, [renameValue, renameTab]);
 
+  const [discovering, setDiscovering] = useState(false);
+  const [discoveryResult, setDiscoveryResult] = useState(null);
+
+  const handleAutoDiscover = async () => {
+    const deviceIds = localNodes.map(n => n.id);
+    if (deviceIds.length === 0) {
+      showToast('No devices on this page', 'error');
+      return;
+    }
+    setDiscovering(true);
+    setDiscoveryResult(null);
+    try {
+      const res = await authFetch('/topology/auto-discover', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceIds })
+      });
+      if (res && res.ok) {
+        const data = await res.json();
+        // Apply new positions to local nodes
+        if (data.positions) {
+          setLocalNodes(prev => prev.map(n => {
+            if (data.positions[n.id]) {
+              return { ...n, position: data.positions[n.id] };
+            }
+            return n;
+          }));
+        }
+        // Refresh to get new edges
+        await fetchData();
+        setTimeout(() => fitView({ duration: 500 }), 200);
+        setDiscoveryResult(data);
+        showToast(`Discovered ${data.totalNeighbors} neighbors, created ${data.newEdges} connections`, 'success');
+      } else {
+        showToast('Discovery failed', 'error');
+      }
+    } catch (e) {
+      showToast('Discovery error: ' + e.message, 'error');
+    }
+    setDiscovering(false);
+  };
+
   return (
     <div style={{ width: '100%', height: sshSessions.length > 0 ? '60%' : '100%', position: 'relative', display: 'flex', flexDirection: 'column' }}>
 
@@ -245,6 +287,21 @@ function TopologyInner({ onEdit }) {
         >
           <Background color="var(--primary)" gap={25} size={1} style={{ opacity: 0.1 }} />
           <Controls style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-color)', borderRadius: 8 }} />
+
+          {/* Auto Topology Button */}
+          {isAdmin && (
+            <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 5, display: 'flex', gap: 6 }}>
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={handleAutoDiscover}
+                disabled={discovering}
+                style={{ fontSize: '0.75rem', padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 4 }}
+              >
+                {discovering ? '⏳ Discovering...' : '🔍 Auto Topology'}
+              </button>
+            </div>
+          )}
+
           <MiniMap
             nodeColor={minimapNodeColor}
             nodeStrokeWidth={2}

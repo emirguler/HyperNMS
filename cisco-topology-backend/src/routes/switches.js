@@ -3,7 +3,7 @@ const store = require('../utils/memoryStore');
 const { authenticate, requireAdmin } = require('../middleware/auth');
 const { validateSwitch, sanitizeSwitch } = require('../utils/validation');
 const { encryptPassword, decryptPassword } = require('../utils/crypto');
-const { getDeviceDetails } = require('../services/snmpService');
+const { getDeviceDetails, discoverNeighbors } = require('../services/snmpService');
 const { logAction } = require('../services/auditLog');
 const { snmpCache } = require('../utils/cache');
 const ssh2 = require('ssh2').Client;
@@ -50,6 +50,196 @@ router.delete('/topology/tabs/:id', authenticate, requireAdmin, (req, res) => {
     const ok = store.removeTopoTab(req.params.id);
     if (!ok) return res.status(404).json({ error: 'Tab not found or cannot delete main' });
     res.json({ success: true });
+});
+
+// --- Auto Topology Discovery (CDP/LLDP) ---
+router.post('/topology/auto-discover', authenticate, requireAdmin, async (req, res) => {
+    const { deviceIds } = req.body;
+    if (!deviceIds || !Array.isArray(deviceIds) || deviceIds.length === 0) {
+        return res.status(400).json({ error: 'deviceIds array required' });
+    }
+
+    const allSwitches = store.getSwitches();
+    const targetDevices = allSwitches.filter(s => deviceIds.includes(s.id));
+    const existingEdges = store.getEdges();
+
+    console.log(`[DISCOVERY] Starting auto-discovery for ${targetDevices.length} devices...`);
+
+    // Step 1: Collect all CDP/LLDP neighbors from all target devices
+    const discoveryResults = [];
+    for (const device of targetDevices) {
+        const neighbors = await discoverNeighbors(device);
+        for (const neighbor of neighbors) {
+            discoveryResults.push({ sourceId: device.id, sourceName: device.name, ...neighbor });
+        }
+        if (neighbors.length > 0) {
+            console.log(`[DISCOVERY] ${device.name}: found ${neighbors.length} neighbors via ${[...new Set(neighbors.map(n => n.protocol))].join('+')}`);
+        }
+    }
+
+    // Step 2: Match neighbors to known devices
+    // Multi-IP matching: try hostname first, then IP, then partial hostname
+    function findMatchingDevice(neighbor) {
+        const neighHostname = (neighbor.hostname || '').toLowerCase().split('.')[0];
+        const neighIp = neighbor.ip;
+
+        // 1. Exact hostname match (case-insensitive, strip domain)
+        if (neighHostname) {
+            const byHostname = allSwitches.find(s => {
+                const sName = (s.name || '').toLowerCase().split('.')[0];
+                const sSnmpHostname = (s.snmpHostname || '').toLowerCase().split('.')[0];
+                return sName === neighHostname || sSnmpHostname === neighHostname;
+            });
+            if (byHostname) return byHostname;
+        }
+
+        // 2. IP match (CDP/LLDP IP might differ from monitor IP)
+        if (neighIp) {
+            const byIp = allSwitches.find(s => s.ip === neighIp);
+            if (byIp) return byIp;
+        }
+
+        // 3. Partial hostname match (neighbor hostname contains device name or vice versa)
+        if (neighHostname && neighHostname.length > 3) {
+            const byPartial = allSwitches.find(s => {
+                const sName = (s.name || '').toLowerCase();
+                return sName.includes(neighHostname) || neighHostname.includes(sName);
+            });
+            if (byPartial) return byPartial;
+        }
+
+        return null;
+    }
+
+    // Step 3: Create edges for matched neighbors
+    const newEdges = [];
+    for (const result of discoveryResults) {
+        const target = findMatchingDevice(result);
+        if (!target || target.id === result.sourceId) continue;
+
+        // Skip if both devices are not in target list (only connect page devices)
+        if (!deviceIds.includes(target.id)) continue;
+
+        // Skip if edge already exists (either direction)
+        const edgeExists = existingEdges.some(e =>
+            (e.source === result.sourceId && e.target === target.id) ||
+            (e.source === target.id && e.target === result.sourceId)
+        ) || newEdges.some(e =>
+            (e.source === result.sourceId && e.target === target.id) ||
+            (e.source === target.id && e.target === result.sourceId)
+        );
+
+        if (!edgeExists) {
+            const edge = {
+                id: `e-${result.sourceId}-${target.id}-${Date.now()}`,
+                source: result.sourceId,
+                target: target.id,
+                sourceHandle: 'bottom',
+                targetHandle: 'top'
+            };
+            newEdges.push(edge);
+            store.addEdge(edge);
+        }
+    }
+
+    // Step 4: Calculate tree layout positions
+    // Build adjacency map from all edges (existing + new)
+    const allEdges = [...existingEdges, ...newEdges].filter(e =>
+        deviceIds.includes(e.source) && deviceIds.includes(e.target)
+    );
+
+    const adjacency = {};
+    for (const id of deviceIds) adjacency[id] = [];
+    for (const e of allEdges) {
+        if (adjacency[e.source]) adjacency[e.source].push(e.target);
+        if (adjacency[e.target]) adjacency[e.target].push(e.source);
+    }
+
+    // Find root (most connections = likely core switch)
+    let rootId = deviceIds[0];
+    let maxConn = 0;
+    for (const id of deviceIds) {
+        if ((adjacency[id] || []).length > maxConn) {
+            maxConn = (adjacency[id] || []).length;
+            rootId = id;
+        }
+    }
+
+    // BFS tree layout
+    const positions = {};
+    const visited = new Set();
+    const queue = [{ id: rootId, depth: 0, index: 0 }];
+    visited.add(rootId);
+    const depthCounts = {}; // How many nodes at each depth
+    const depthNodes = {};  // Nodes per depth for centering
+
+    // First pass: BFS to assign depth
+    const nodeDepths = {};
+    const bfsQueue = [rootId];
+    const bfsVisited = new Set([rootId]);
+    nodeDepths[rootId] = 0;
+
+    while (bfsQueue.length > 0) {
+        const current = bfsQueue.shift();
+        const depth = nodeDepths[current];
+        if (!depthNodes[depth]) depthNodes[depth] = [];
+        depthNodes[depth].push(current);
+
+        for (const neighbor of (adjacency[current] || [])) {
+            if (!bfsVisited.has(neighbor)) {
+                bfsVisited.add(neighbor);
+                nodeDepths[neighbor] = depth + 1;
+                bfsQueue.push(neighbor);
+            }
+        }
+    }
+
+    // Handle disconnected nodes (not reachable from root)
+    let maxDepth = Math.max(...Object.values(nodeDepths), 0);
+    for (const id of deviceIds) {
+        if (!bfsVisited.has(id)) {
+            maxDepth += 1;
+            nodeDepths[id] = maxDepth;
+            if (!depthNodes[maxDepth]) depthNodes[maxDepth] = [];
+            depthNodes[maxDepth].push(id);
+        }
+    }
+
+    // Second pass: assign x,y positions
+    const HORIZONTAL_SPACING = 180;
+    const VERTICAL_SPACING = 150;
+
+    for (const [depth, nodes] of Object.entries(depthNodes)) {
+        const d = parseInt(depth);
+        const totalWidth = (nodes.length - 1) * HORIZONTAL_SPACING;
+        const startX = -totalWidth / 2;
+
+        nodes.forEach((nodeId, idx) => {
+            positions[nodeId] = {
+                x: startX + idx * HORIZONTAL_SPACING + 300,
+                y: d * VERTICAL_SPACING + 50
+            };
+        });
+    }
+
+    // Step 5: Update device positions
+    for (const [id, pos] of Object.entries(positions)) {
+        store.updateSwitch(id, { position: pos });
+    }
+
+    console.log(`[DISCOVERY] Done: ${newEdges.length} new edges, ${Object.keys(positions).length} devices positioned`);
+
+    res.json({
+        newEdges: newEdges.length,
+        totalNeighbors: discoveryResults.length,
+        positions,
+        discoveryResults: discoveryResults.map(r => ({
+            source: r.sourceName,
+            protocol: r.protocol,
+            neighbor: r.hostname || r.ip,
+            matched: !!findMatchingDevice(r)
+        }))
+    });
 });
 
 router.post('/switches', authenticate, requireAdmin, async (req, res) => {
