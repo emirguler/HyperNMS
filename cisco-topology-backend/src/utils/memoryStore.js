@@ -165,6 +165,16 @@ class MemoryStore {
         }
     }
 
+    updateEdge(id, updates) {
+        const edge = this.data.edges.find(e => e.id === id);
+        if (edge) {
+            Object.assign(edge, updates);
+            this._markDirty('edges');
+            return true;
+        }
+        return false;
+    }
+
     deleteEdge(id) {
         const len = this.data.edges.length;
         this.data.edges = this.data.edges.filter(e => e.id !== id);

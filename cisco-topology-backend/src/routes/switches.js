@@ -111,51 +111,44 @@ router.post('/topology/auto-discover', authenticate, requireAdmin, async (req, r
         return null;
     }
 
-    // Step 3: Create edges for matched neighbors
-    const newEdges = [];
+    // Step 3: Collect neighbor pairs (don't create edges yet — need tree depth first)
+    const neighborPairs = [];
     for (const result of discoveryResults) {
         const target = findMatchingDevice(result);
         if (!target || target.id === result.sourceId) continue;
-
-        // Skip if both devices are not in target list (only connect page devices)
         if (!deviceIds.includes(target.id)) continue;
 
-        // Skip if edge already exists (either direction)
-        const edgeExists = existingEdges.some(e =>
+        // Skip duplicates (either direction)
+        const exists = existingEdges.some(e =>
             (e.source === result.sourceId && e.target === target.id) ||
             (e.source === target.id && e.target === result.sourceId)
-        ) || newEdges.some(e =>
-            (e.source === result.sourceId && e.target === target.id) ||
-            (e.source === target.id && e.target === result.sourceId)
+        ) || neighborPairs.some(p =>
+            (p.a === result.sourceId && p.b === target.id) ||
+            (p.a === target.id && p.b === result.sourceId)
         );
 
-        if (!edgeExists) {
-            const edge = {
-                id: `e-${result.sourceId}-${target.id}-${Date.now()}`,
-                source: result.sourceId,
-                target: target.id,
-                sourceHandle: 'bottom',
-                targetHandle: 'top'
-            };
-            newEdges.push(edge);
-            store.addEdge(edge);
+        if (!exists) {
+            neighborPairs.push({ a: result.sourceId, b: target.id });
         }
     }
 
-    // Step 4: Calculate tree layout positions
-    // Build adjacency map from all edges (existing + new)
-    const allEdges = [...existingEdges, ...newEdges].filter(e =>
-        deviceIds.includes(e.source) && deviceIds.includes(e.target)
-    );
-
+    // Step 4: Calculate tree layout
+    // Build adjacency from existing edges + new pairs
     const adjacency = {};
     for (const id of deviceIds) adjacency[id] = [];
-    for (const e of allEdges) {
-        if (adjacency[e.source]) adjacency[e.source].push(e.target);
-        if (adjacency[e.target]) adjacency[e.target].push(e.source);
+
+    for (const e of existingEdges) {
+        if (deviceIds.includes(e.source) && deviceIds.includes(e.target)) {
+            if (adjacency[e.source]) adjacency[e.source].push(e.target);
+            if (adjacency[e.target]) adjacency[e.target].push(e.source);
+        }
+    }
+    for (const p of neighborPairs) {
+        adjacency[p.a].push(p.b);
+        adjacency[p.b].push(p.a);
     }
 
-    // Find root (most connections = likely core switch)
+    // Find root = most connections (core switch) → goes to TOP
     let rootId = deviceIds[0];
     let maxConn = 0;
     for (const id of deviceIds) {
@@ -165,16 +158,10 @@ router.post('/topology/auto-discover', authenticate, requireAdmin, async (req, r
         }
     }
 
-    // BFS tree layout
-    const positions = {};
-    const visited = new Set();
-    const queue = [{ id: rootId, depth: 0, index: 0 }];
-    visited.add(rootId);
-    const depthCounts = {}; // How many nodes at each depth
-    const depthNodes = {};  // Nodes per depth for centering
-
-    // First pass: BFS to assign depth
+    // BFS to assign depth (root=0=top, leaves=deepest=bottom)
     const nodeDepths = {};
+    const parentMap = {}; // child → parent (for edge direction)
+    const depthNodes = {};
     const bfsQueue = [rootId];
     const bfsVisited = new Set([rootId]);
     nodeDepths[rootId] = 0;
@@ -189,13 +176,15 @@ router.post('/topology/auto-discover', authenticate, requireAdmin, async (req, r
             if (!bfsVisited.has(neighbor)) {
                 bfsVisited.add(neighbor);
                 nodeDepths[neighbor] = depth + 1;
+                parentMap[neighbor] = current;
                 bfsQueue.push(neighbor);
             }
         }
     }
 
-    // Handle disconnected nodes (not reachable from root)
-    let maxDepth = Math.max(...Object.values(nodeDepths), 0);
+    // Disconnected nodes → last row
+    let maxDepth = Object.keys(depthNodes).length > 0
+        ? Math.max(...Object.values(nodeDepths)) : 0;
     for (const id of deviceIds) {
         if (!bfsVisited.has(id)) {
             maxDepth += 1;
@@ -205,7 +194,8 @@ router.post('/topology/auto-discover', authenticate, requireAdmin, async (req, r
         }
     }
 
-    // Second pass: assign x,y positions
+    // Assign positions: root at top, children below, centered
+    const positions = {};
     const HORIZONTAL_SPACING = 180;
     const VERTICAL_SPACING = 150;
 
@@ -216,18 +206,62 @@ router.post('/topology/auto-discover', authenticate, requireAdmin, async (req, r
 
         nodes.forEach((nodeId, idx) => {
             positions[nodeId] = {
-                x: startX + idx * HORIZONTAL_SPACING + 300,
+                x: startX + idx * HORIZONTAL_SPACING + 400,
                 y: d * VERTICAL_SPACING + 50
             };
         });
     }
 
-    // Step 5: Update device positions
+    // Step 5: Create edges with correct direction (parent→child, bottom→top)
+    const newEdges = [];
+    for (const pair of neighborPairs) {
+        // Determine which is parent (shallower depth) and which is child
+        const depthA = nodeDepths[pair.a] ?? 999;
+        const depthB = nodeDepths[pair.b] ?? 999;
+        const parentId = depthA <= depthB ? pair.a : pair.b;
+        const childId = depthA <= depthB ? pair.b : pair.a;
+
+        const edge = {
+            id: `e-${parentId}-${childId}-${Date.now() + newEdges.length}`,
+            source: parentId,
+            target: childId,
+            sourceHandle: 'bottom',
+            targetHandle: 'top'
+        };
+        newEdges.push(edge);
+        store.addEdge(edge);
+    }
+
+    // Also fix existing edges: set handles based on tree depth
+    const updatedEdges = [];
+    for (const e of existingEdges) {
+        if (!deviceIds.includes(e.source) || !deviceIds.includes(e.target)) continue;
+        const depthS = nodeDepths[e.source] ?? 999;
+        const depthT = nodeDepths[e.target] ?? 999;
+
+        if (depthS <= depthT) {
+            // source is parent → bottom to top (correct)
+            if (e.sourceHandle !== 'bottom' || e.targetHandle !== 'top') {
+                store.updateEdge(e.id, { sourceHandle: 'bottom', targetHandle: 'top' });
+                updatedEdges.push(e.id);
+            }
+        } else {
+            // source is actually child → swap direction in handles
+            // Keep source/target IDs but flip handles
+            store.updateEdge(e.id, {
+                source: e.target, target: e.source,
+                sourceHandle: 'bottom', targetHandle: 'top'
+            });
+            updatedEdges.push(e.id);
+        }
+    }
+
+    // Step 6: Update device positions
     for (const [id, pos] of Object.entries(positions)) {
         store.updateSwitch(id, { position: pos });
     }
 
-    console.log(`[DISCOVERY] Done: ${newEdges.length} new edges, ${Object.keys(positions).length} devices positioned`);
+    console.log(`[DISCOVERY] Done: ${newEdges.length} new edges, ${updatedEdges.length} edges fixed, ${Object.keys(positions).length} devices positioned`);
 
     res.json({
         newEdges: newEdges.length,
