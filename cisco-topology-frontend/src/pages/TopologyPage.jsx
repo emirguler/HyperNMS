@@ -33,6 +33,28 @@ function TopologyInner({ onEdit }) {
   const [localNodes, setLocalNodes] = useState([]);
   const [renamingTab, setRenamingTab] = useState(null);
   const [renameValue, setRenameValue] = useState('');
+  const prevTabId = useRef(activeTabId);
+
+  // FitView on tab change
+  useEffect(() => {
+    if (prevTabId.current !== activeTabId) {
+      prevTabId.current = activeTabId;
+      setTimeout(() => fitView({ duration: 200 }), 50);
+    }
+  }, [activeTabId, fitView]);
+
+  // Close all context menus on outside click
+  useEffect(() => {
+    const handleClick = (e) => {
+      if (!e.target.closest('.context-menu')) {
+        setMenu(null);
+        setEdgeMenu(null);
+        setTabMenu(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
 
   // Node'ları sync — main tab tüm cihazları gösterir, diğer tab'lar kendi cihazlarını
   useEffect(() => {
@@ -137,16 +159,17 @@ function TopologyInner({ onEdit }) {
     setTabMenu(null);
   };
 
-  const handleFinishRename = () => {
-    if (renamingTab && renameValue.trim()) {
-      renameTab(renamingTab, renameValue.trim());
-    }
-    setRenamingTab(null);
-  };
+  const handleFinishRename = useCallback(() => {
+    setRenamingTab(prev => {
+      if (prev && renameValue.trim()) {
+        renameTab(prev, renameValue.trim());
+      }
+      return null;
+    });
+  }, [renameValue, renameTab]);
 
   return (
-    <div style={{ width: '100%', height: sshSessions.length > 0 ? '60%' : '100%', position: 'relative', display: 'flex', flexDirection: 'column' }}
-      onClick={() => { setMenu(null); setEdgeMenu(null); setTabMenu(null); }}>
+    <div style={{ width: '100%', height: sshSessions.length > 0 ? '60%' : '100%', position: 'relative', display: 'flex', flexDirection: 'column' }}>
 
       {/* Tab Bar */}
       <div className="topology-tabs">
@@ -184,7 +207,8 @@ function TopologyInner({ onEdit }) {
 
       {/* Tab sağ tık menüsü */}
       {isAdmin && tabMenu && (
-        <div className="context-menu" style={{ top: tabMenu.top, left: tabMenu.left, zIndex: 9999 }}>
+        <div className="context-menu" style={{ top: tabMenu.top, left: tabMenu.left, zIndex: 9999 }}
+          onClick={e => e.stopPropagation()} onContextMenu={e => e.preventDefault()}>
           <div className="context-menu-item" onClick={() => handleStartRename(tabMenu.id, tabMenu.name)}>✏️ Rename</div>
           {tabMenu.id !== 'main' && (
             <div className="context-menu-item" style={{ color: 'var(--danger)' }} onClick={() => {

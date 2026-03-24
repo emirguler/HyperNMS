@@ -42,7 +42,7 @@ router.put('/topology/tabs/:id', authenticate, requireAdmin, (req, res) => {
         return res.status(400).json({ error: 'Tab name required' });
     }
     const ok = store.renameTopoTab(req.params.id, name.trim());
-    if (!ok) return res.status(404).json({ error: 'Tab not found or cannot rename main' });
+    if (!ok) return res.status(404).json({ error: 'Tab not found' });
     res.json({ success: true });
 });
 

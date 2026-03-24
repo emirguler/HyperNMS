@@ -62,28 +62,26 @@ export default function DeviceDetailPage() {
             </div>
           ))}
         </div>
-        {(details.snmpCommunity || details.sshUsername || details.sshPasswordSet !== undefined) && (
+        {details.sshPasswordSet !== undefined && (
           <div style={{ display: 'flex', gap: 32, borderTop: '1px solid var(--border-color)', paddingTop: 16 }}>
-            {details.snmpCommunity && (
-              <div>
-                <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>SNMP Community</span>
-                <div style={{ fontFamily: 'monospace', fontSize: '0.9rem', marginTop: 4 }}>{details.snmpCommunity}</div>
+            <div>
+              <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>SNMP Community</span>
+              <div style={{ fontFamily: 'monospace', fontSize: '0.9rem', marginTop: 4, color: details.snmpCommunity ? 'var(--text-main)' : 'var(--danger)' }}>
+                {details.snmpCommunity || 'Not set  ✕'}
               </div>
-            )}
-            {details.sshUsername && (
-              <div>
-                <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>SSH Username</span>
-                <div style={{ fontFamily: 'monospace', fontSize: '0.9rem', marginTop: 4 }}>{details.sshUsername}</div>
+            </div>
+            <div>
+              <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>SSH Username</span>
+              <div style={{ fontFamily: 'monospace', fontSize: '0.9rem', marginTop: 4, color: details.sshUsername ? 'var(--text-main)' : 'var(--danger)' }}>
+                {details.sshUsername || 'Not set  ✕'}
               </div>
-            )}
-            {details.sshPasswordSet !== undefined && (
-              <div>
-                <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>SSH Password</span>
-                <div style={{ fontSize: '0.9rem', marginTop: 4, color: details.sshPasswordSet ? 'var(--success)' : 'var(--danger)' }}>
-                  {details.sshPasswordSet ? '••••••••  ✓' : 'Not set  ✕'}
-                </div>
+            </div>
+            <div>
+              <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>SSH Password</span>
+              <div style={{ fontSize: '0.9rem', marginTop: 4, color: details.sshPasswordSet ? 'var(--success)' : 'var(--danger)' }}>
+                {details.sshPasswordSet ? '••••••••  ✓' : 'Not set  ✕'}
               </div>
-            )}
+            </div>
             {details.model && (
               <div>
                 <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>Model</span>

@@ -32,14 +32,19 @@ export function useTopologyTabs() {
   };
 
   const renameTab = async (id, name) => {
+    // Optimistic update first
+    setTopoTabs(prev => prev.map(t => t.id === id ? { ...t, name } : t));
     try {
       const res = await authFetch(`/topology/tabs/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name })
       });
-      if (res && res.ok) {
-        setTopoTabs(prev => prev.map(t => t.id === id ? { ...t, name } : t));
+      if (!res || !res.ok) {
+        console.error('Rename failed, reverting');
+        // Revert on failure
+        const tabsRes = await authFetch('/topology/tabs');
+        if (tabsRes && tabsRes.ok) setTopoTabs(await tabsRes.json());
       }
     } catch (e) { console.error('Failed to rename tab:', e); }
   };

@@ -186,7 +186,7 @@ class MemoryStore {
 
     renameTopoTab(id, name) {
         const tab = this.data.topoTabs.find(t => t.id === id);
-        if (tab && id !== 'main') {
+        if (tab) {
             tab.name = name;
             this._markDirty('topoTabs');
             return true;

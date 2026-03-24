@@ -10,6 +10,7 @@ node_modules/
 cisco-topology-backend/data/
 cisco-topology-backend/*.json
 !cisco-topology-backend/package.json
+!cisco-topology-backend/package-lock.json
 cisco-topology-backend/*.tmp
 
 # Build output

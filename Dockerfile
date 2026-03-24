@@ -2,7 +2,7 @@
 FROM node:20-alpine AS backend
 WORKDIR /app/backend
 COPY cisco-topology-backend/package*.json ./
-RUN npm ci --production
+RUN npm ci --omit=dev
 COPY cisco-topology-backend/ ./
 
 # --- Frontend Build ---
