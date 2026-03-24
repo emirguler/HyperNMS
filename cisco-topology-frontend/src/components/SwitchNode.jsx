@@ -1,7 +1,7 @@
 import { memo, useState } from 'react';
 import { Handle, Position } from 'reactflow';
 
-// --- Profesyonel SVG İkonlar ---
+// --- Professional SVG Icons ---
 const RouterIcon = () => (
   <svg width="32" height="32" viewBox="0 0 40 40" fill="none">
     <circle cx="20" cy="20" r="16" stroke="var(--primary)" strokeWidth="2" fill="rgba(56,189,248,0.08)" />
@@ -91,7 +91,7 @@ function SwitchNode({ data }) {
 
       {/* Latency badge */}
       {data.latency != null && data.latency > 0 && (
-        <div style={{
+        <div className="node-latency" style={{
           position: 'absolute', top: -6, right: -6,
           background: latencyColor(data.latency), color: '#0f172a',
           fontSize: '0.5rem', fontWeight: 700, padding: '1px 5px',
@@ -101,18 +101,18 @@ function SwitchNode({ data }) {
         </div>
       )}
 
-      {/* İkon */}
+      {/* Icon */}
       <div className="node-icon" style={{ lineHeight: 0, display: 'flex', justifyContent: 'center' }}>
         <IconComponent status={data.status} />
       </div>
 
-      {/* İsim ve IP */}
+      {/* Name and IP */}
       <div className="node-label">{data.label}</div>
       <div className="node-ip">{data.ip}</div>
 
       {/* Mini CPU/RAM bar */}
       {data.cpu != null && data.cpu > 0 && (
-        <div style={{ display: 'flex', gap: 3, marginTop: 3, padding: '0 6px' }}>
+        <div className="node-stats" style={{ display: 'flex', gap: 3, marginTop: 3, padding: '0 6px' }}>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: '0.48rem', color: 'var(--text-muted)', marginBottom: 1 }}>CPU</div>
             <div style={{ height: 2, background: 'rgba(255,255,255,0.1)', borderRadius: 1, overflow: 'hidden' }}>
@@ -128,9 +128,9 @@ function SwitchNode({ data }) {
         </div>
       )}
 
-      {/* Tag chip'leri */}
+      {/* Tag chips */}
       {data.tags && data.tags.length > 0 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2, marginTop: 3, justifyContent: 'center', padding: '0 4px' }}>
+        <div className="node-tags" style={{ display: 'flex', flexWrap: 'wrap', gap: 2, marginTop: 3, justifyContent: 'center', padding: '0 4px' }}>
           {data.tags.slice(0, 3).map(tag => (
             <span key={tag} style={{
               background: 'rgba(99,102,241,0.2)', color: 'var(--primary)',

@@ -363,6 +363,42 @@ body {
   pointer-events: none;
 }
 
+/* --- Zoom-Adaptive Labels --- */
+/* Compact mode (zoom 0.45-0.7): hide details, show only name + icon */
+.zoom-compact .node-ip,
+.zoom-compact .node-tooltip,
+.zoom-compact .node-stats,
+.zoom-compact .node-tags,
+.zoom-compact .node-latency { display: none !important; }
+
+.zoom-compact .topology-node {
+  min-height: 48px;
+  padding: 5px 4px 4px;
+}
+
+/* Minimal mode (zoom < 0.45): only border color + tiny label */
+.zoom-minimal .node-ip,
+.zoom-minimal .node-icon,
+.zoom-minimal .node-tooltip,
+.zoom-minimal .node-stats,
+.zoom-minimal .node-tags,
+.zoom-minimal .node-latency { display: none !important; }
+
+.zoom-minimal .topology-node {
+  width: 64px;
+  min-height: 22px;
+  padding: 3px 2px;
+  border-radius: var(--radius-sm);
+}
+
+.zoom-minimal .node-label {
+  font-size: 0.5rem;
+  font-weight: 700;
+  max-width: 100%;
+}
+
+.zoom-minimal .react-flow__handle { width: 3px !important; height: 3px !important; }
+
 /* ============================================
    DATA TABLES
    ============================================ */

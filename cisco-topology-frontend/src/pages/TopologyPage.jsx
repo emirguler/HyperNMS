@@ -33,6 +33,7 @@ function TopologyInner({ onEdit }) {
   const [localNodes, setLocalNodes] = useState([]);
   const [renamingTab, setRenamingTab] = useState(null);
   const [renameValue, setRenameValue] = useState('');
+  const [zoomLevel, setZoomLevel] = useState(1);
   const prevTabId = useRef(activeTabId);
 
   // FitView on tab change
@@ -221,7 +222,7 @@ function TopologyInner({ onEdit }) {
       )}
 
       {/* React Flow Canvas */}
-      <div style={{ flex: 1, position: 'relative' }} ref={reactFlowWrapper}>
+      <div className={`topology-canvas ${zoomLevel < 0.45 ? 'zoom-minimal' : zoomLevel < 0.7 ? 'zoom-compact' : ''}`} style={{ flex: 1, position: 'relative' }} ref={reactFlowWrapper}>
         <ReactFlow
           nodes={localNodes}
           edges={styledEdges}
@@ -233,6 +234,7 @@ function TopologyInner({ onEdit }) {
           onEdgeContextMenu={isAdmin ? ((e, edge) => { e.preventDefault(); setEdgeMenu({ id: edge.id, top: e.clientY, left: e.clientX }); setMenu(null); }) : undefined}
           onNodeContextMenu={(e, n) => { e.preventDefault(); setMenu({ id: n.id, label: n.data.label, top: e.clientY, left: e.clientX, data: n.data }); setEdgeMenu(null); }}
           onNodeDragStop={isAdmin ? onNodeDragStop : undefined}
+          onMoveEnd={(_, viewport) => setZoomLevel(viewport.zoom)}
           nodesDraggable={isAdmin}
           nodesConnectable={isAdmin}
           elementsSelectable
