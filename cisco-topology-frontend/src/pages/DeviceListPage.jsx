@@ -8,18 +8,22 @@ import { t } from '../i18n';
 import { API_BASE } from '../config';
 
 export default function DeviceListPage({ onEdit }) {
-  const { rawDevices, fetchData } = useApp();
+  const { rawDevices, topoTabs, fetchData } = useApp();
   const { isAdmin, authFetch } = useAuth();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: 'name', dir: 'asc' });
   const [statusFilter, setStatusFilter] = useState('all');
+  const [topoFilter, setTopoFilter] = useState('all');
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [showBulkImport, setShowBulkImport] = useState(false);
 
   const filteredDevices = useMemo(() => {
     let list = [...rawDevices];
     if (statusFilter !== 'all') list = list.filter(d => d.status === statusFilter);
+    if (topoFilter !== 'all') {
+      list = list.filter(d => (d.topologyPage || 'main') === topoFilter);
+    }
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       list = list.filter(d => d.name?.toLowerCase().includes(q) || d.ip?.toLowerCase().includes(q) || d.type?.toLowerCase().includes(q));
@@ -34,7 +38,7 @@ export default function DeviceListPage({ onEdit }) {
       return 0;
     });
     return list;
-  }, [rawDevices, searchQuery, sortConfig, statusFilter]);
+  }, [rawDevices, searchQuery, sortConfig, statusFilter, topoFilter]);
 
   const handleSort = (key) => setSortConfig(prev => ({ key, dir: prev.key === key && prev.dir === 'asc' ? 'desc' : 'asc' }));
   const sortIcon = (key) => sortConfig.key === key ? (sortConfig.dir === 'asc' ? ' ▲' : ' ▼') : '';
@@ -78,8 +82,15 @@ export default function DeviceListPage({ onEdit }) {
               onClick={() => setStatusFilter(f.value)}>{f.label}</button>
           ))}
         </div>
-        {isAdmin && <button className="btn btn-ghost btn-sm" onClick={() => setShowBulkImport(true)} title="Bulk Import">📤 Import</button>}
-        {isAdmin && <button className="btn btn-ghost btn-sm" onClick={handleExportCSV} title="Export CSV">📥 CSV</button>}
+        <select className="modern-input" value={topoFilter} onChange={e => setTopoFilter(e.target.value)}
+          style={{ width: 'auto', minWidth: 140, fontSize: '0.8rem', padding: '8px 12px' }}>
+          <option value="all">All Pages</option>
+          {topoTabs.map(tab => (
+            <option key={tab.id} value={tab.id}>{tab.name}</option>
+          ))}
+        </select>
+        {isAdmin && <button className="btn btn-ghost btn-sm" onClick={() => setShowBulkImport(true)} title="Bulk Import">📤 Import List</button>}
+        {isAdmin && <button className="btn btn-ghost btn-sm" onClick={handleExportCSV} title="Export CSV">📥 Download List</button>}
         <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{filteredDevices.length} / {rawDevices.length} {t('deviceCount')}</span>
       </div>
 
