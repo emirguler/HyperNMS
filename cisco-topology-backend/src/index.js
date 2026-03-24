@@ -86,12 +86,14 @@ app.use((req, res, next) => {
 app.use(rateLimiter({ windowMs: 60000, max: 100, message: 'Too many requests, please slow down' }));
 
 // --- Routes ---
-app.use(authRoutes);
-app.use(switchRoutes);
-app.use(edgeRoutes);
-app.use(userRoutes);
-app.use(auditRoutes);
-app.use(settingsRoutes);
+// API routes — mounted at /api for production, root for dev
+const apiPrefix = config.NODE_ENV === 'production' ? '/api' : '';
+app.use(apiPrefix, authRoutes);
+app.use(apiPrefix, switchRoutes);
+app.use(apiPrefix, edgeRoutes);
+app.use(apiPrefix, userRoutes);
+app.use(apiPrefix, auditRoutes);
+app.use(apiPrefix, settingsRoutes);
 
 app.get('/notifications', authenticate, (req, res) => {
     res.json(getNotifications(parseInt(req.query.limit) || 50));
@@ -106,7 +108,8 @@ app.get('/health', (req, res) => {
 });
 
 // CSRF token endpoint — generates and sets CSRF cookie
-app.get('/csrf-token', (req, res) => {
+// CSRF token endpoint — accessible at both /csrf-token and /api/csrf-token
+const csrfHandler = (req, res) => {
     const csrfToken = crypto.randomBytes(32).toString('hex');
     res.cookie('csrfToken', csrfToken, {
         httpOnly: false, // JS needs to read this to send in header
@@ -115,13 +118,22 @@ app.get('/csrf-token', (req, res) => {
         maxAge: 8 * 60 * 60 * 1000
     });
     res.json({ csrfToken });
-});
+};
+app.get('/csrf-token', csrfHandler);
+app.get('/api/csrf-token', csrfHandler);
 
 if (config.NODE_ENV === 'production') {
     const publicPath = path.resolve(__dirname, '../public');
     if (fs.existsSync(publicPath)) {
         app.use(express.static(publicPath));
-        app.get('/{*path}', (req, res) => res.sendFile(path.join(publicPath, 'index.html')));
+        // SPA catch-all: any GET request not handled by /api routes or static files
+        // → serve index.html so React Router handles client-side routing
+        app.use((req, res, next) => {
+            if (req.method === 'GET' && !req.path.startsWith('/api') && !req.path.startsWith('/ws')) {
+                return res.sendFile(path.join(publicPath, 'index.html'));
+            }
+            next();
+        });
     }
 }
 

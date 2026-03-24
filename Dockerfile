@@ -11,7 +11,7 @@ WORKDIR /app/frontend
 COPY cisco-topology-frontend/package*.json ./
 RUN npm ci
 COPY cisco-topology-frontend/ ./
-ENV VITE_API_URL=/
+ENV VITE_API_URL=/api
 RUN npm run build
 
 # --- Production ---
