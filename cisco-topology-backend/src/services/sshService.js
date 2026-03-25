@@ -3,6 +3,7 @@ const ssh2 = require('ssh2').Client;
 const store = require('../utils/memoryStore');
 const { decryptPassword } = require('../utils/crypto');
 const { authenticateWs } = require('../middleware/auth');
+const { isBlockedIP } = require('../utils/validation');
 
 function setupWebSocket(server) {
     const wss = new WebSocket.Server({ noServer: true, perMessageDeflate: false });
@@ -23,12 +24,24 @@ function setupWebSocket(server) {
             return;
         }
 
+        if (user.role !== 'Administrator') {
+            ws.send(JSON.stringify({ type: 'error', message: 'Admin access required' }));
+            ws.close();
+            return;
+        }
+
         const urlParams = new URLSearchParams(req.url.split('?')[1]);
         const switchId = urlParams.get('switchId');
         const device = store.getSwitch(switchId);
 
         if (!device || !device.sshUsername) {
             ws.send(JSON.stringify({ type: 'error', message: 'SSH Credentials not found.' }));
+            return;
+        }
+
+        if (isBlockedIP(device.ip)) {
+            ws.send(JSON.stringify({ type: 'error', message: 'Connection to this IP is not allowed' }));
+            ws.close();
             return;
         }
 
@@ -62,13 +75,12 @@ function setupWebSocket(server) {
             algorithms: {
                 kex: [
                     "ecdh-sha2-nistp256", "ecdh-sha2-nistp384", "ecdh-sha2-nistp521",
-                    "diffie-hellman-group-exchange-sha256", "diffie-hellman-group14-sha1",
-                    "diffie-hellman-group1-sha1", "diffie-hellman-group-exchange-sha1"
+                    "diffie-hellman-group-exchange-sha256", "diffie-hellman-group14-sha1"
                 ],
                 cipher: [
-                    "aes128-ctr", "aes192-ctr", "aes256-ctr", "aes128-cbc", "3des-cbc"
+                    "aes128-ctr", "aes192-ctr", "aes256-ctr", "aes128-cbc"
                 ],
-                serverHostKey: ["ssh-rsa", "ssh-dss", "ecdsa-sha2-nistp256", "ecdsa-sha2-nistp384"]
+                serverHostKey: ["ssh-rsa", "ecdsa-sha2-nistp256", "ecdsa-sha2-nistp384"]
             }
         });
 

@@ -8,7 +8,7 @@ const { logAction } = require('../services/auditLog');
 
 const router = express.Router();
 
-router.get('/users', authenticate, (req, res) => {
+router.get('/users', authenticate, requireAdmin, (req, res) => {
     const safeUsers = store.getUsers().map(({ password, ...u }) => u);
     res.json(safeUsers);
 });

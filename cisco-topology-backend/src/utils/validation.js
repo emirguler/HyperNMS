@@ -30,6 +30,8 @@ function validateSwitch(data) {
 
     if (!data.ip || !isValidHost(data.ip)) {
         errors.push('Valid IP address or hostname required');
+    } else if (isBlockedIP(data.ip)) {
+        errors.push('This IP address is not allowed (loopback, link-local, or reserved)');
     }
 
     const validTypes = ['switch', 'router', 'firewall', 'server', 'pc', 'cloud'];
@@ -138,4 +140,16 @@ function sanitizeUser(data) {
     return clean;
 }
 
-module.exports = { isValidIPv4, isValidHost, validateSwitch, validateUser, sanitizeSwitch, sanitizeUser };
+function isBlockedIP(ip) {
+    if (!ip || typeof ip !== 'string') return false;
+    const trimmed = ip.trim();
+    if (trimmed === '0.0.0.0' || trimmed === '::1' || trimmed.startsWith('fe80:')) return true;
+    if (isValidIPv4(trimmed)) {
+        const parts = trimmed.split('.').map(Number);
+        if (parts[0] === 127) return true;
+        if (parts[0] === 169 && parts[1] === 254) return true;
+    }
+    return false;
+}
+
+module.exports = { isValidIPv4, isValidHost, isBlockedIP, validateSwitch, validateUser, sanitizeSwitch, sanitizeUser };

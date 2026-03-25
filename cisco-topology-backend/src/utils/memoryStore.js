@@ -222,6 +222,7 @@ class MemoryStore {
 
     // --- Ping History (cihaz başına dosya) ---
     getHistory(switchId, since) {
+        if (!/^[a-zA-Z0-9_-]+$/.test(switchId)) return [];
         const file = path.join(config.DATA_DIR, 'history', `${switchId}.json`);
         const records = this._readFile(file);
         if (since) return records.filter(h => h.timestamp > since);
@@ -229,6 +230,7 @@ class MemoryStore {
     }
 
     appendHistory(switchId, record) {
+        if (!/^[a-zA-Z0-9_-]+$/.test(switchId)) return;
         const file = path.join(config.DATA_DIR, 'history', `${switchId}.json`);
         let records = this._readFile(file);
         records.push(record);

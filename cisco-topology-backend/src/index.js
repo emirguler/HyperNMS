@@ -49,12 +49,11 @@ app.use((req, res, next) => {
     res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
     res.setHeader('Content-Security-Policy',
         "default-src 'self'; " +
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
+        "script-src 'self'; " +
         "style-src 'self' 'unsafe-inline'; " +
         "img-src 'self' data: blob:; " +
         "connect-src 'self' ws: wss:; " +
-        "font-src 'self' data:; " +
-        "frame-ancestors 'none'"
+        "font-src 'self'"
     );
     if (config.NODE_ENV === 'production') {
         res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
@@ -64,17 +63,18 @@ app.use((req, res, next) => {
 
 // --- H1: CSRF Protection (Double Submit Cookie) ---
 app.use((req, res, next) => {
-    // Skip CSRF for safe methods and login
-    if (['GET', 'HEAD', 'OPTIONS'].includes(req.method) || req.path === '/login') {
+    if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
         return next();
     }
 
-    // For state-changing requests, validate CSRF token
+    if (req.path === '/login' || req.path === '/api/login') {
+        return next();
+    }
+
     const csrfCookie = req.cookies?.csrfToken;
     const csrfHeader = req.headers['x-csrf-token'];
 
-    // If no CSRF cookie exists yet, skip (will be set on login)
-    if (!csrfCookie) return next();
+    if (!csrfCookie) return res.status(403).json({ error: 'CSRF token required' });
 
     if (!csrfHeader || csrfHeader !== csrfCookie) {
         return res.status(403).json({ error: 'CSRF token mismatch' });

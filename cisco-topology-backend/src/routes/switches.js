@@ -1,7 +1,7 @@
 const express = require('express');
 const store = require('../utils/memoryStore');
 const { authenticate, requireAdmin } = require('../middleware/auth');
-const { validateSwitch, sanitizeSwitch } = require('../utils/validation');
+const { validateSwitch, sanitizeSwitch, isBlockedIP } = require('../utils/validation');
 const { encryptPassword, decryptPassword } = require('../utils/crypto');
 const { getDeviceDetails, discoverNeighbors } = require('../services/snmpService');
 const { logAction } = require('../services/auditLog');
@@ -14,8 +14,15 @@ router.get('/topology', authenticate, (req, res) => {
     const switches = store.getSwitches();
     const edges = store.getEdges();
     const isAdmin = req.user.role === 'Administrator';
+    const TOPOLOGY_ALLOWLIST = ['id', 'name', 'ip', 'type', 'status', 'latency', 'position', 'tags', 'topologyPage', 'lastLatency', 'healthIntervalSec'];
     const safeSwitches = switches.map(({ sshPassword, ...s }) => {
-        if (!isAdmin) { delete s.sshUsername; delete s.snmpCommunity; }
+        if (!isAdmin) {
+            const filtered = {};
+            for (const key of TOPOLOGY_ALLOWLIST) {
+                if (s[key] !== undefined) filtered[key] = s[key];
+            }
+            return filtered;
+        }
         return s;
     });
     const tabs = store.getTopoTabs();
@@ -379,23 +386,23 @@ router.post('/switches/:id/exec', authenticate, async (req, res) => {
     const device = store.getSwitch(req.params.id);
     if (!device) return res.status(404).json({ error: 'Device not found' });
     if (!device.sshUsername || !device.sshPassword) return res.status(400).json({ error: 'SSH credentials missing' });
+    if (isBlockedIP(device.ip)) return res.status(403).json({ error: 'Connection to this IP is not allowed' });
 
     const command = req.body.command;
     if (!command || typeof command !== 'string' || command.length > 500) {
         return res.status(400).json({ error: 'Valid command required (max 500 chars)' });
     }
 
-    // Security: strict whitelist — only read-only commands allowed
     const cmd = command.trim().toLowerCase();
-    const ALLOWED_PREFIXES = [
-        'show ', 'display ', 'ping ', 'traceroute ',
-        'dir', 'more '
-    ];
-    if (!ALLOWED_PREFIXES.some(p => cmd.startsWith(p) || cmd === p.trim())) {
-        return res.status(403).json({ error: 'Only read-only commands (show, display, ping, traceroute) are allowed' });
+    const ALLOWED_PREFIXES = ['show ', 'display '];
+    if (!ALLOWED_PREFIXES.some(p => cmd.startsWith(p))) {
+        return res.status(403).json({ error: 'Only read-only commands (show, display) are allowed' });
     }
 
-    // Block pipe/redirect that could exfiltrate data
+    if (/[;|&`\n\r]/.test(command) || /\$\(/.test(command)) {
+        return res.status(403).json({ error: 'Command contains blocked characters' });
+    }
+
     const BLOCKED_PIPES = ['redirect', 'tee', 'append', '>', 'tftp:', 'ftp:', 'scp:', 'http:'];
     if (BLOCKED_PIPES.some(b => cmd.includes(b))) {
         return res.status(403).json({ error: 'Output redirection is not allowed' });
