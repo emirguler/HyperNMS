@@ -8,9 +8,9 @@ const { logAction } = require('../services/auditLog');
 
 const router = express.Router();
 
-// Full config backup — encrypted, passwords excluded (C4)
+// Full config backup — includes encrypted credentials
 router.get('/backup', authenticate, requireAdmin, async (req, res) => {
-    const switches = store.getSwitches().map(({ sshPassword, snmpCommunity, ...s }) => s);
+    const switches = store.getSwitches();
     const edges = store.getEdges();
     const users = store.getUsers().map(({ password, ...u }) => u);
 
@@ -52,22 +52,35 @@ router.post('/restore', authenticate, requireAdmin, async (req, res) => {
     const { switches, edges, users } = backup.data;
     const results = { devices: 0, edges: 0, users: 0, skipped: 0 };
 
-    // Restore devices (skip duplicates by IP)
+    // Restore devices — match by ID or IP, update existing or add new
     if (Array.isArray(switches)) {
         const existing = store.getSwitches();
         for (const sw of switches) {
             if (!sw.name || !sw.ip) { results.skipped++; continue; }
-            if (existing.find(e => e.ip === sw.ip)) { results.skipped++; continue; }
-            const newSw = {
-                ...sw,
-                id: sw.id || Date.now().toString() + crypto.randomBytes(4).toString('hex'),
-                status: 'DOWN',
-                latency: 0,
-            };
-            store.addSwitch(newSw);
-            existing.push(newSw);
-            results.devices++;
+            const match = existing.find(e => e.id === sw.id || e.ip === sw.ip);
+            if (match) {
+                // Update existing device with backup data (preserve current status/latency)
+                Object.assign(match, {
+                    ...sw,
+                    id: match.id,
+                    status: match.status,
+                    latency: match.latency,
+                    lastLatency: match.lastLatency,
+                });
+                results.skipped++;
+            } else {
+                const newSw = {
+                    ...sw,
+                    id: sw.id || Date.now().toString() + crypto.randomBytes(4).toString('hex'),
+                    status: 'DOWN',
+                    latency: 0,
+                };
+                store.addSwitch(newSw);
+                existing.push(newSw);
+                results.devices++;
+            }
         }
+        store._markDirty('switches');
     }
 
     // Restore edges (skip duplicates)
