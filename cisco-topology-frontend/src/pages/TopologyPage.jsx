@@ -97,6 +97,14 @@ function TopologyInner({ onEdit }) {
     }
   }, [searchParams, rawDevices, setCenter]);
 
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') { setMenu(null); setEdgeMenu(null); setTabMenu(null); }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   const styledEdges = useMemo(() => {
     return edges.map(e => {
       const src = rawDevices.find(s => s.id === e.source);
@@ -279,6 +287,7 @@ function TopologyInner({ onEdit }) {
           onEdgesDelete={isAdmin ? onEdgesDelete : undefined}
           onEdgeContextMenu={isAdmin ? ((e, edge) => { e.preventDefault(); setEdgeMenu({ id: edge.id, top: e.clientY, left: e.clientX }); setMenu(null); }) : undefined}
           onNodeContextMenu={(e, n) => { e.preventDefault(); setMenu({ id: n.id, label: n.data.label, top: e.clientY, left: e.clientX, data: n.data }); setEdgeMenu(null); }}
+          onPaneClick={() => { setMenu(null); setEdgeMenu(null); setTabMenu(null); }}
           onNodeDragStop={isAdmin ? onNodeDragStop : undefined}
           onMoveEnd={(_, viewport) => setZoomLevel(viewport.zoom)}
           nodesDraggable={isAdmin}
