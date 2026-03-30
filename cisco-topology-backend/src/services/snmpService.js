@@ -57,6 +57,11 @@ function formatUptime(ticks) {
     return result.join(', ') || 'Just Started';
 }
 
+function parseSnmpInt(val) {
+    if (Buffer.isBuffer(val)) return val.length > 0 ? val.readUIntBE(0, Math.min(val.length, 6)) : 0;
+    return parseInt(val) || 0;
+}
+
 function createSnmpSession(ip, community, port, version, v3Options) {
     if (version === 'v3' && v3Options) {
         // SNMPv3 — authPriv desteği
@@ -170,10 +175,7 @@ async function getDeviceDetails(device) {
         let vlanNameMap = {};
         let trunkAllowedMap = {};
         let trunkPorts = new Set();
-        const parseSnmpInt = (val) => {
-            if (Buffer.isBuffer(val)) return val.length > 0 ? val.readUIntBE(0, val.length) : 0;
-            return parseInt(val);
-        };
+        // parseSnmpInt is now a module-level function
 
         if (responseData.detectedVendor === 'Cisco') {
             try {
@@ -736,15 +738,24 @@ async function searchMAC(devices, searchTerm) {
         }
     }
 
-    // Sort: access ports first (more likely the actual endpoint)
-    results.sort((a, b) => {
+    // Deduplicate by switchId+port+vlan
+    const seen = new Set();
+    const unique = results.filter(r => {
+        const key = `${r.switchId}-${r.port}-${r.vlan}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
+
+    // Sort: access ports first
+    unique.sort((a, b) => {
         if (a.type === 'access' && b.type === 'trunk') return -1;
         if (a.type === 'trunk' && b.type === 'access') return 1;
         return 0;
     });
 
-    console.log(`[MAC-SEARCH] Found ${results.length} result(s) for ${formattedMac}`);
-    return { results, resolvedMac: formattedMac, searchedDevices: devices.length };
+    console.log(`[MAC-SEARCH] Found ${unique.length} result(s) for ${formattedMac}`);
+    return { results: unique, resolvedMac: formattedMac, searchedDevices: devices.length };
 }
 
 module.exports = { getDeviceDetails, getVendorConfig, discoverNeighbors, searchMAC };
