@@ -18,8 +18,10 @@ export function AuthProvider({ children }) {
       if (res.ok) {
         const data = await res.json();
         setCsrfToken(data.csrfToken);
+        return data.csrfToken;
       }
     } catch { /* ignore */ }
+    return null;
   }, []);
 
   // Check session on mount (cookie-based)
@@ -112,9 +114,13 @@ export function AuthProvider({ children }) {
       // Check if it's a CSRF error — refresh token and retry once
       if (res.status === 403) {
         const data = await res.clone().json().catch(() => ({}));
-        if (data.error === 'CSRF token mismatch') {
-          await fetchCsrfToken();
-          // Don't auto-retry, let the caller handle it
+        if (data.error === 'CSRF token mismatch' || data.error === 'CSRF token required') {
+          const newToken = await fetchCsrfToken();
+          if (newToken) {
+            headers['X-CSRF-Token'] = newToken;
+            const retry = await fetch(`${API_BASE}${url}`, { ...options, credentials: 'include', headers });
+            return retry;
+          }
         }
       }
       if (res.status === 401) {
