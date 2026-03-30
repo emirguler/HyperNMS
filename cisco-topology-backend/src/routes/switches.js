@@ -307,6 +307,32 @@ router.post('/topology/auto-discover', authenticate, requireAdmin, async (req, r
     });
 });
 
+router.put('/switches/batch', authenticate, requireAdmin, async (req, res) => {
+    const { ids, updates } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0 || !updates || typeof updates !== 'object') {
+        return res.status(400).json({ error: 'ids array and updates object required' });
+    }
+
+    const allowed = ['sshUsername', 'sshPassword', 'snmpCommunity', 'tags', 'topologyPage', 'type', 'healthIntervalSec'];
+    const safeUpdates = {};
+    for (const key of Object.keys(updates)) {
+        if (allowed.includes(key)) safeUpdates[key] = updates[key];
+    }
+
+    if (safeUpdates.sshPassword) {
+        safeUpdates.sshPassword = encryptPassword(safeUpdates.sshPassword);
+    }
+
+    let count = 0;
+    for (const id of ids) {
+        const updated = store.updateSwitch(id, safeUpdates);
+        if (updated) count++;
+    }
+
+    await logAction(req.user, 'DEVICE_BATCH_UPDATE', `${count} devices updated`, { fields: Object.keys(safeUpdates) });
+    res.json({ success: true, updated: count });
+});
+
 router.post('/switches', authenticate, requireAdmin, async (req, res) => {
     const payload = sanitizeSwitch(req.body);
     const errors = validateSwitch(payload);

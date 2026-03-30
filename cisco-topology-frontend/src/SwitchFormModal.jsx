@@ -56,7 +56,7 @@ function SwitchFormModal({ mode, initialValues, onCancel, onSave, topologyTabs }
   };
 
   return (
-    <div className="modal-overlay">
+    <div className="modal-overlay" onKeyDown={e => { if (e.key === 'Escape') onCancel(); }}>
       <div className="modal-content" style={{ width: '500px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
           <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 600, color: 'var(--text-main)' }}>

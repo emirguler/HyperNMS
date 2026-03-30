@@ -32,7 +32,7 @@ function UserFormModal({ mode, initialValues, onCancel, onSave }) {
   };
 
   return (
-    <div className="modal-overlay">
+    <div className="modal-overlay" onKeyDown={e => { if (e.key === 'Escape') onCancel(); }}>
       <div className="modal-content" style={{ width: '400px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
           <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 600, color: '#f1f5f9' }}>

@@ -51,13 +51,13 @@ export default function UsersPage() {
       </div>
 
       {deleteTarget && (
-        <div className="modal-overlay">
+        <div className="modal-overlay" onKeyDown={e => { if (e.key === 'Enter') confirmDelete(); if (e.key === 'Escape') setDeleteTarget(null); }}>
           <div className="confirm-modal-content">
             <h3 className="confirm-title">{t('deleteUser')}</h3>
             <p className="confirm-desc">{t('deleteUserConfirm')} <strong>{deleteTarget.username}</strong> ({deleteTarget.role})?</p>
             <div className="confirm-actions">
               <button className="btn btn-ghost" onClick={() => setDeleteTarget(null)}>{t('cancel')}</button>
-              <button className="btn btn-danger" onClick={confirmDelete}>{t('yesDelete')}</button>
+              <button className="btn btn-danger" onClick={confirmDelete} autoFocus>{t('yesDelete')}</button>
             </div>
           </div>
         </div>

@@ -324,6 +324,22 @@ function TopologyInner({ onEdit }) {
               if (pos) setCenter(pos.x + 65, pos.y + 40, { zoom: 2, duration: 500 });
               setMenu(null);
             }}>🔍 Zoom Here</div>
+            {isAdmin && <div className="context-menu-item" style={{ color: 'var(--danger)' }} onClick={async () => {
+              const nodeId = menu.id;
+              const nodeName = menu.label;
+              setMenu(null);
+              if (!window.confirm(`Delete device "${nodeName}"? This action cannot be undone.`)) return;
+              try {
+                const res = await authFetch('/switches/' + nodeId, { method: 'DELETE' });
+                if (res && res.ok) {
+                  showToast(`"${nodeName}" deleted`, 'success');
+                  fetchData();
+                } else {
+                  const d = await res.json().catch(() => ({}));
+                  showToast(d.error || 'Delete failed', 'error');
+                }
+              } catch { showToast('Delete failed', 'error'); }
+            }}>🗑️ Delete Device</div>}
           </div>
         )}
 
@@ -340,7 +356,7 @@ function TopologyInner({ onEdit }) {
 
       {/* Auto Topology Dialog */}
       {showDiscoverDialog && (
-        <div className="modal-overlay" onClick={() => setShowDiscoverDialog(false)}>
+        <div className="modal-overlay" onClick={() => setShowDiscoverDialog(false)} onKeyDown={e => { if (e.key === 'Escape') setShowDiscoverDialog(false); }}>
           <div className="confirm-modal-content" onClick={e => e.stopPropagation()} style={{ minWidth: 340 }}>
             <h3 className="confirm-title">🔍 Auto Topology</h3>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: 16 }}>
@@ -369,7 +385,7 @@ function TopologyInner({ onEdit }) {
             </div>
             <div className="confirm-actions">
               <button className="btn btn-ghost" onClick={() => setShowDiscoverDialog(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={handleAutoDiscover}>
+              <button className="btn btn-primary" onClick={handleAutoDiscover} autoFocus>
                 Start Discovery
               </button>
             </div>
