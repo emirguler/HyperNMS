@@ -23,6 +23,7 @@ router.get('/topology', authenticate, (req, res) => {
             }
             return filtered;
         }
+        s.sshPasswordSet = !!(sshPassword && sshPassword.length > 0);
         return s;
     });
     const tabs = store.getTopoTabs();
