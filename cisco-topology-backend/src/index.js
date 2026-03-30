@@ -110,8 +110,8 @@ const csrfHandler = (req, res) => {
     const csrfToken = crypto.randomBytes(32).toString('hex');
     res.cookie('csrfToken', csrfToken, {
         httpOnly: false,
-        secure: config.NODE_ENV === 'production',
-        sameSite: config.NODE_ENV === 'production' ? 'strict' : 'lax',
+        secure: process.env.COOKIE_SECURE === 'true',
+        sameSite: 'strict',
         maxAge: 8 * 60 * 60 * 1000
     });
     res.json({ csrfToken });
