@@ -63,19 +63,16 @@ app.use((req, res, next) => {
 
 // --- H1: CSRF Protection (Double Submit Cookie) ---
 app.use((req, res, next) => {
-    if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
-        return next();
-    }
+    if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
+    if (req.path === '/login' || req.path === '/api/login') return next();
 
-    if (req.path === '/login' || req.path === '/api/login') {
-        return next();
-    }
+    // Dev mode: skip CSRF (cross-origin cookie won't work 5173→4000)
+    if (config.NODE_ENV !== 'production') return next();
 
     const csrfCookie = req.cookies?.csrfToken;
     const csrfHeader = req.headers['x-csrf-token'];
 
     if (!csrfCookie) return res.status(403).json({ error: 'CSRF token required' });
-
     if (!csrfHeader || csrfHeader !== csrfCookie) {
         return res.status(403).json({ error: 'CSRF token mismatch' });
     }
@@ -112,9 +109,9 @@ app.get('/health', (req, res) => {
 const csrfHandler = (req, res) => {
     const csrfToken = crypto.randomBytes(32).toString('hex');
     res.cookie('csrfToken', csrfToken, {
-        httpOnly: false, // JS needs to read this to send in header
+        httpOnly: false,
         secure: config.NODE_ENV === 'production',
-        sameSite: 'strict',
+        sameSite: config.NODE_ENV === 'production' ? 'strict' : 'lax',
         maxAge: 8 * 60 * 60 * 1000
     });
     res.json({ csrfToken });
