@@ -47,6 +47,10 @@ export default function Navbar({ onAddDevice }) {
               </div>
             </div>
 
+            <button className={`nav-btn ${path === '/mac-search' ? 'active' : ''}`} onClick={() => navigate('/mac-search')}>
+              MAC Search
+            </button>
+
             {isAdmin && (
               <button className={`nav-btn ${path === '/audit' ? 'active' : ''}`} onClick={() => navigate('/audit')}>
                 Audit Log

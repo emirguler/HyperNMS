@@ -16,6 +16,7 @@ import TopologyPage from './pages/TopologyPage';
 import UsersPage from './pages/UsersPage';
 import AuditPage from './pages/AuditPage';
 import GeoMapPage from './pages/GeoMapPage';
+import MacSearchPage from './pages/MacSearchPage';
 import { showToast } from './Toast';
 import { t, getLang, setLang, onLangChange } from './i18n';
 import { API_BASE } from './config';
@@ -65,6 +66,7 @@ function AppLayout() {
           <Route path="/users" element={<UsersPage />} />
           <Route path="/audit" element={<AuditPage />} />
           <Route path="/geomap" element={<GeoMapPage />} />
+          <Route path="/mac-search" element={<MacSearchPage />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
         <TerminalPanel />

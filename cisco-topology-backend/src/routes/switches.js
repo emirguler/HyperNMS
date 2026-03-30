@@ -3,7 +3,7 @@ const store = require('../utils/memoryStore');
 const { authenticate, requireAdmin } = require('../middleware/auth');
 const { validateSwitch, sanitizeSwitch, isBlockedIP } = require('../utils/validation');
 const { encryptPassword, decryptPassword } = require('../utils/crypto');
-const { getDeviceDetails, discoverNeighbors } = require('../services/snmpService');
+const { getDeviceDetails, discoverNeighbors, searchMAC } = require('../services/snmpService');
 const { logAction } = require('../services/auditLog');
 const { snmpCache } = require('../utils/cache');
 const ssh2 = require('ssh2').Client;
@@ -306,6 +306,26 @@ router.post('/topology/auto-discover', authenticate, requireAdmin, async (req, r
             matched: !!findMatchingDevice(r)
         }))
     });
+});
+
+router.post('/mac-search', authenticate, async (req, res) => {
+    const { query } = req.body;
+    if (!query || typeof query !== 'string' || query.trim().length < 5) {
+        return res.status(400).json({ error: 'Valid IP or MAC address required' });
+    }
+
+    const devices = store.getSwitches().filter(s => s.status === 'UP' && s.snmpCommunity);
+    if (devices.length === 0) {
+        return res.json({ results: [], error: 'No devices with SNMP available' });
+    }
+
+    try {
+        const result = await searchMAC(devices, query.trim());
+        res.json(result);
+    } catch (e) {
+        console.error('[MAC-SEARCH] Error:', e.message);
+        res.status(500).json({ error: 'Search failed: ' + e.message });
+    }
 });
 
 router.put('/switches/batch', authenticate, requireAdmin, async (req, res) => {

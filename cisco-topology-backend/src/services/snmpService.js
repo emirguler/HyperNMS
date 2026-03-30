@@ -568,4 +568,183 @@ async function discoverNeighbors(device) {
     return neighbors;
 }
 
-module.exports = { getDeviceDetails, getVendorConfig, discoverNeighbors };
+async function searchMAC(devices, searchTerm) {
+    const results = [];
+    let searchMac = null;
+    let searchIp = null;
+
+    // Determine if input is IP or MAC
+    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(searchTerm.trim())) {
+        searchIp = searchTerm.trim();
+    } else {
+        // Normalize MAC to lowercase hex without separators
+        searchMac = searchTerm.replace(/[:\-\.]/g, '').toLowerCase();
+        if (!/^[0-9a-f]{12}$/.test(searchMac)) {
+            return { error: 'Invalid MAC address format', results: [] };
+        }
+    }
+
+    // Step 1: If IP given, resolve to MAC via ARP tables
+    if (searchIp) {
+        console.log(`[MAC-SEARCH] Resolving IP ${searchIp} via ARP tables...`);
+        for (const device of devices) {
+            if (!device.snmpCommunity) continue;
+            try {
+                const session = createSnmpSession(device.ip, device.snmpCommunity, device.snmpPort, device.snmpVersion);
+                const arpData = await new Promise((resolve) => {
+                    const r = [];
+                    session.subtree('1.3.6.1.2.1.4.22.1.2', 20, (vbs) => {
+                        for (const vb of vbs) r.push(vb);
+                    }, () => resolve(r));
+                });
+                session.close();
+
+                for (const vb of arpData) {
+                    const oidParts = vb.oid.split('.');
+                    const ip = oidParts.slice(-4).join('.');
+                    if (ip === searchIp && Buffer.isBuffer(vb.value) && vb.value.length === 6) {
+                        searchMac = vb.value.toString('hex').toLowerCase();
+                        console.log(`[MAC-SEARCH] Resolved ${searchIp} → ${searchMac} via ${device.name}`);
+                        break;
+                    }
+                }
+                if (searchMac) break;
+            } catch (e) { /* continue */ }
+        }
+
+        if (!searchMac) {
+            return { error: `IP ${searchIp} not found in ARP tables`, results: [], resolvedMac: null };
+        }
+    }
+
+    const formattedMac = searchMac.replace(/(.{2})/g, '$1:').slice(0, 17);
+    console.log(`[MAC-SEARCH] Searching MAC ${formattedMac} across ${devices.length} devices...`);
+
+    // Step 2: Search MAC address table on each device
+    for (const device of devices) {
+        if (!device.snmpCommunity) continue;
+
+        try {
+            const session = createSnmpSession(device.ip, device.snmpCommunity, device.snmpPort, device.snmpVersion);
+
+            // Get VLAN list
+            const vlanData = await new Promise((resolve) => {
+                const r = [];
+                session.subtree('1.3.6.1.4.1.9.9.46.1.3.1.1.4', 20, (vbs) => {
+                    for (const vb of vbs) r.push(vb);
+                }, () => resolve(r));
+            });
+
+            const vlanIds = vlanData
+                .map(vb => vb.oid.split('.').pop())
+                .filter(v => { const n = parseInt(v); return n > 0 && n < 1002; });
+
+            // Get interface names
+            const ifNameData = await new Promise((resolve) => {
+                const r = [];
+                session.subtree('1.3.6.1.2.1.31.1.1.1.1', 20, (vbs) => {
+                    for (const vb of vbs) r.push(vb);
+                }, () => resolve(r));
+            });
+            const ifNames = {};
+            ifNameData.forEach(vb => {
+                const idx = vb.oid.split('.').pop();
+                ifNames[idx] = vb.value.toString();
+            });
+
+            // Get trunk ports
+            const trunkData = await new Promise((resolve) => {
+                const r = [];
+                session.subtree('1.3.6.1.4.1.9.9.46.1.6.1.1.14', 20, (vbs) => {
+                    for (const vb of vbs) r.push(vb);
+                }, () => resolve(r));
+            });
+            const trunkPorts = new Set();
+            trunkData.forEach(vb => {
+                const val = parseSnmpInt(vb.value);
+                if (val === 1) trunkPorts.add(vb.oid.split('.').pop());
+            });
+
+            session.close();
+
+            // Search per-VLAN MAC tables
+            for (const vid of vlanIds) {
+                try {
+                    const vlanSession = snmp.createSession(device.ip, device.snmpCommunity + '@' + vid, {
+                        port: device.snmpPort || 161, version: snmp.Version2c, timeout: 3000, retries: 0
+                    });
+
+                    // Get MAC addresses
+                    const macData = await new Promise((resolve) => {
+                        const r = [];
+                        vlanSession.subtree('1.3.6.1.2.1.17.4.3.1.1', 20, (vbs) => {
+                            for (const vb of vbs) r.push(vb);
+                        }, () => resolve(r));
+                    });
+
+                    let foundBridgePort = null;
+                    for (const vb of macData) {
+                        if (Buffer.isBuffer(vb.value) && vb.value.length === 6) {
+                            const mac = vb.value.toString('hex').toLowerCase();
+                            if (mac === searchMac) {
+                                // Extract bridge port index from OID
+                                const oidParts = vb.oid.split('.');
+                                const macOidSuffix = oidParts.slice(-6).join('.');
+                                // Get bridge port for this MAC
+                                const portData = await new Promise((resolve) => {
+                                    vlanSession.get(['1.3.6.1.2.1.17.4.3.1.2.' + macOidSuffix], (err, vbs) => {
+                                        if (err || !vbs || vbs.length === 0) resolve(null);
+                                        else resolve(parseSnmpInt(vbs[0].value));
+                                    });
+                                });
+                                if (portData) foundBridgePort = portData;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (foundBridgePort) {
+                        // Map bridge port → ifIndex
+                        const ifIdxData = await new Promise((resolve) => {
+                            vlanSession.get(['1.3.6.1.2.1.17.1.4.1.2.' + foundBridgePort], (err, vbs) => {
+                                if (err || !vbs || vbs.length === 0) resolve(null);
+                                else resolve(parseSnmpInt(vbs[0].value));
+                            });
+                        });
+
+                        if (ifIdxData) {
+                            const portName = ifNames[ifIdxData.toString()] || `Port-${ifIdxData}`;
+                            const isTrunk = trunkPorts.has(ifIdxData.toString());
+
+                            results.push({
+                                switchId: device.id,
+                                switchName: device.name,
+                                switchIp: device.ip,
+                                port: portName,
+                                ifIndex: ifIdxData,
+                                vlan: parseInt(vid),
+                                type: isTrunk ? 'trunk' : 'access'
+                            });
+                        }
+                    }
+
+                    vlanSession.close();
+                } catch (e) { /* VLAN query failed, continue */ }
+            }
+        } catch (e) {
+            console.log(`[MAC-SEARCH] ${device.name}: ${e.message}`);
+        }
+    }
+
+    // Sort: access ports first (more likely the actual endpoint)
+    results.sort((a, b) => {
+        if (a.type === 'access' && b.type === 'trunk') return -1;
+        if (a.type === 'trunk' && b.type === 'access') return 1;
+        return 0;
+    });
+
+    console.log(`[MAC-SEARCH] Found ${results.length} result(s) for ${formattedMac}`);
+    return { results, resolvedMac: formattedMac, searchedDevices: devices.length };
+}
+
+module.exports = { getDeviceDetails, getVendorConfig, discoverNeighbors, searchMAC };
