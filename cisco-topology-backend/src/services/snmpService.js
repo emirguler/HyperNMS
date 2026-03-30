@@ -570,192 +570,248 @@ async function discoverNeighbors(device) {
     return neighbors;
 }
 
+// --- MAC Address Search with in-memory cache + parallel queries ---
+
+// In-memory MAC table cache: { mac -> [{ switchId, switchName, switchIp, port, vlan, type }] }
+let macCache = new Map();
+let macCacheTimestamp = 0;
+const MAC_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+let macCacheBuilding = false;
+
+// ARP cache: { ip -> mac }
+let arpCache = new Map();
+
+// Scan a single device's MAC table (called in parallel)
+async function scanDeviceMacTable(device) {
+    const entries = [];
+    if (!device.snmpCommunity) return entries;
+
+    try {
+        const session = createSnmpSession(device.ip, device.snmpCommunity, device.snmpPort, device.snmpVersion);
+        const getSubtree = (oid) => new Promise((resolve) => {
+            const r = [];
+            session.subtree(oid, 20, (vbs) => { for (const vb of vbs) r.push(vb); }, () => resolve(r));
+        });
+
+        // Get VLAN list, interface names, trunk ports in parallel
+        const [vlanData, ifNameData, trunkData] = await Promise.all([
+            getSubtree('1.3.6.1.4.1.9.9.46.1.3.1.1.4'),
+            getSubtree('1.3.6.1.2.1.31.1.1.1.1'),
+            getSubtree('1.3.6.1.4.1.9.9.46.1.6.1.1.14')
+        ]);
+
+        const vlanIds = vlanData.map(vb => vb.oid.split('.').pop())
+            .filter(v => { const n = parseInt(v); return n > 0 && n < 1002; });
+
+        const ifNames = {};
+        ifNameData.forEach(vb => { ifNames[vb.oid.split('.').pop()] = vb.value.toString(); });
+
+        const trunkPorts = new Set();
+        trunkData.forEach(vb => { if (parseSnmpInt(vb.value) === 1) trunkPorts.add(vb.oid.split('.').pop()); });
+
+        session.close();
+
+        // Scan VLANs in parallel (batches of 5 to avoid overwhelming)
+        const batchSize = 5;
+        for (let i = 0; i < vlanIds.length; i += batchSize) {
+            const batch = vlanIds.slice(i, i + batchSize);
+            const batchResults = await Promise.all(batch.map(vid => scanVlanMacTable(device, vid, ifNames, trunkPorts)));
+            for (const vlanEntries of batchResults) entries.push(...vlanEntries);
+        }
+    } catch (e) {
+        // Device unreachable, skip
+    }
+    return entries;
+}
+
+// Scan MAC table for a single VLAN on a device
+async function scanVlanMacTable(device, vid, ifNames, trunkPorts) {
+    const entries = [];
+    try {
+        const vlanSession = snmp.createSession(device.ip, device.snmpCommunity + '@' + vid, {
+            port: device.snmpPort || 161, version: snmp.Version2c, timeout: 3000, retries: 0
+        });
+
+        const getSubtree = (oid) => new Promise((resolve) => {
+            const r = [];
+            vlanSession.subtree(oid, 20, (vbs) => { for (const vb of vbs) r.push(vb); }, () => resolve(r));
+        });
+
+        // Get MAC addresses, bridge ports, and bridge→ifIndex mappings in parallel
+        const [macData, portData, bridgeData] = await Promise.all([
+            getSubtree('1.3.6.1.2.1.17.4.3.1.1'),
+            getSubtree('1.3.6.1.2.1.17.4.3.1.2'),
+            getSubtree('1.3.6.1.2.1.17.1.4.1.2')
+        ]);
+
+        // Build bridge port → ifIndex map
+        const bridgeToIf = {};
+        bridgeData.forEach(vb => {
+            const bp = vb.oid.split('.').pop();
+            bridgeToIf[bp] = parseSnmpInt(vb.value);
+        });
+
+        // Build MAC suffix → bridge port map
+        const macToBridge = {};
+        portData.forEach(vb => {
+            const suffix = vb.oid.replace('1.3.6.1.2.1.17.4.3.1.2.', '');
+            macToBridge[suffix] = parseSnmpInt(vb.value);
+        });
+
+        // Process MACs
+        for (const vb of macData) {
+            if (!Buffer.isBuffer(vb.value) || vb.value.length !== 6) continue;
+            const mac = vb.value.toString('hex').toLowerCase();
+            const macSuffix = vb.oid.replace('1.3.6.1.2.1.17.4.3.1.1.', '');
+            const bridgePort = macToBridge[macSuffix];
+            if (!bridgePort) continue;
+            const ifIdx = bridgeToIf[bridgePort.toString()];
+            if (!ifIdx) continue;
+
+            const portName = ifNames[ifIdx.toString()] || `Port-${ifIdx}`;
+            const isTrunk = trunkPorts.has(ifIdx.toString());
+
+            entries.push({
+                mac,
+                switchId: device.id,
+                switchName: device.name,
+                switchIp: device.ip,
+                port: portName,
+                ifIndex: ifIdx,
+                vlan: parseInt(vid),
+                type: isTrunk ? 'trunk' : 'access'
+            });
+        }
+
+        vlanSession.close();
+    } catch (e) { /* VLAN query failed */ }
+    return entries;
+}
+
+// Build full MAC cache from all devices
+async function buildMacCache(devices) {
+    if (macCacheBuilding) return;
+    macCacheBuilding = true;
+    const start = Date.now();
+    console.log(`[MAC-CACHE] Building cache from ${devices.length} devices...`);
+
+    try {
+        // Scan all devices in parallel
+        const allResults = await Promise.all(
+            devices.filter(d => d.status === 'UP' && d.snmpCommunity)
+                .map(d => scanDeviceMacTable(d))
+        );
+
+        const newCache = new Map();
+        let totalEntries = 0;
+        for (const deviceEntries of allResults) {
+            for (const entry of deviceEntries) {
+                totalEntries++;
+                const existing = newCache.get(entry.mac) || [];
+                const key = `${entry.switchId}-${entry.port}-${entry.vlan}`;
+                if (!existing.find(e => `${e.switchId}-${e.port}-${e.vlan}` === key)) {
+                    existing.push(entry);
+                    newCache.set(entry.mac, existing);
+                }
+            }
+        }
+
+        macCache = newCache;
+        macCacheTimestamp = Date.now();
+        console.log(`[MAC-CACHE] Built in ${Date.now() - start}ms: ${newCache.size} unique MACs, ${totalEntries} total entries`);
+    } catch (e) {
+        console.error(`[MAC-CACHE] Build failed:`, e.message);
+    }
+    macCacheBuilding = false;
+}
+
+// Resolve IP to MAC via parallel ARP queries
+async function resolveIpToMac(devices, ip) {
+    // Check ARP cache first
+    const cached = arpCache.get(ip);
+    if (cached) return cached;
+
+    const arpPromises = devices
+        .filter(d => d.status === 'UP' && d.snmpCommunity)
+        .map(device => new Promise(async (resolve) => {
+            try {
+                const session = createSnmpSession(device.ip, device.snmpCommunity, device.snmpPort, device.snmpVersion);
+                const arpData = await new Promise((res) => {
+                    const r = [];
+                    session.subtree('1.3.6.1.2.1.4.22.1.2', 20, (vbs) => {
+                        for (const vb of vbs) r.push(vb);
+                    }, () => res(r));
+                });
+                session.close();
+
+                for (const vb of arpData) {
+                    const entryIp = vb.oid.split('.').slice(-4).join('.');
+                    if (entryIp === ip && Buffer.isBuffer(vb.value) && vb.value.length === 6) {
+                        const mac = vb.value.toString('hex').toLowerCase();
+                        arpCache.set(ip, mac);
+                        resolve(mac);
+                        return;
+                    }
+                }
+                resolve(null);
+            } catch (e) { resolve(null); }
+        }));
+
+    const results = await Promise.all(arpPromises);
+    return results.find(r => r !== null) || null;
+}
+
 async function searchMAC(devices, searchTerm) {
-    const results = [];
     let searchMac = null;
     let searchIp = null;
 
-    // Determine if input is IP or MAC
     if (/^\d{1,3}(\.\d{1,3}){3}$/.test(searchTerm.trim())) {
         searchIp = searchTerm.trim();
     } else {
-        // Normalize MAC to lowercase hex without separators
         searchMac = searchTerm.replace(/[:\-\.]/g, '').toLowerCase();
         if (!/^[0-9a-f]{12}$/.test(searchMac)) {
             return { error: 'Invalid MAC address format', results: [] };
         }
     }
 
-    // Step 1: If IP given, resolve to MAC via ARP tables
+    // Step 1: Resolve IP → MAC (parallel)
     if (searchIp) {
-        console.log(`[MAC-SEARCH] Resolving IP ${searchIp} via ARP tables...`);
-        for (const device of devices) {
-            if (!device.snmpCommunity) continue;
-            try {
-                const session = createSnmpSession(device.ip, device.snmpCommunity, device.snmpPort, device.snmpVersion);
-                const arpData = await new Promise((resolve) => {
-                    const r = [];
-                    session.subtree('1.3.6.1.2.1.4.22.1.2', 20, (vbs) => {
-                        for (const vb of vbs) r.push(vb);
-                    }, () => resolve(r));
-                });
-                session.close();
-
-                for (const vb of arpData) {
-                    const oidParts = vb.oid.split('.');
-                    const ip = oidParts.slice(-4).join('.');
-                    if (ip === searchIp && Buffer.isBuffer(vb.value) && vb.value.length === 6) {
-                        searchMac = vb.value.toString('hex').toLowerCase();
-                        console.log(`[MAC-SEARCH] Resolved ${searchIp} → ${searchMac} via ${device.name}`);
-                        break;
-                    }
-                }
-                if (searchMac) break;
-            } catch (e) { /* continue */ }
-        }
-
+        console.log(`[MAC-SEARCH] Resolving IP ${searchIp}...`);
+        searchMac = await resolveIpToMac(devices, searchIp);
         if (!searchMac) {
             return { error: `IP ${searchIp} not found in ARP tables`, results: [], resolvedMac: null };
         }
+        console.log(`[MAC-SEARCH] Resolved ${searchIp} → ${searchMac}`);
     }
 
     const formattedMac = searchMac.replace(/(.{2})/g, '$1:').slice(0, 17);
-    console.log(`[MAC-SEARCH] Searching MAC ${formattedMac} across ${devices.length} devices...`);
 
-    // Step 2: Search MAC address table on each device
-    for (const device of devices) {
-        if (!device.snmpCommunity) continue;
-
-        try {
-            const session = createSnmpSession(device.ip, device.snmpCommunity, device.snmpPort, device.snmpVersion);
-
-            // Get VLAN list
-            const vlanData = await new Promise((resolve) => {
-                const r = [];
-                session.subtree('1.3.6.1.4.1.9.9.46.1.3.1.1.4', 20, (vbs) => {
-                    for (const vb of vbs) r.push(vb);
-                }, () => resolve(r));
-            });
-
-            const vlanIds = vlanData
-                .map(vb => vb.oid.split('.').pop())
-                .filter(v => { const n = parseInt(v); return n > 0 && n < 1002; });
-
-            // Get interface names
-            const ifNameData = await new Promise((resolve) => {
-                const r = [];
-                session.subtree('1.3.6.1.2.1.31.1.1.1.1', 20, (vbs) => {
-                    for (const vb of vbs) r.push(vb);
-                }, () => resolve(r));
-            });
-            const ifNames = {};
-            ifNameData.forEach(vb => {
-                const idx = vb.oid.split('.').pop();
-                ifNames[idx] = vb.value.toString();
-            });
-
-            // Get trunk ports
-            const trunkData = await new Promise((resolve) => {
-                const r = [];
-                session.subtree('1.3.6.1.4.1.9.9.46.1.6.1.1.14', 20, (vbs) => {
-                    for (const vb of vbs) r.push(vb);
-                }, () => resolve(r));
-            });
-            const trunkPorts = new Set();
-            trunkData.forEach(vb => {
-                const val = parseSnmpInt(vb.value);
-                if (val === 1) trunkPorts.add(vb.oid.split('.').pop());
-            });
-
-            session.close();
-
-            // Search per-VLAN MAC tables
-            for (const vid of vlanIds) {
-                try {
-                    const vlanSession = snmp.createSession(device.ip, device.snmpCommunity + '@' + vid, {
-                        port: device.snmpPort || 161, version: snmp.Version2c, timeout: 3000, retries: 0
-                    });
-
-                    // Get MAC addresses
-                    const macData = await new Promise((resolve) => {
-                        const r = [];
-                        vlanSession.subtree('1.3.6.1.2.1.17.4.3.1.1', 20, (vbs) => {
-                            for (const vb of vbs) r.push(vb);
-                        }, () => resolve(r));
-                    });
-
-                    let foundBridgePort = null;
-                    for (const vb of macData) {
-                        if (Buffer.isBuffer(vb.value) && vb.value.length === 6) {
-                            const mac = vb.value.toString('hex').toLowerCase();
-                            if (mac === searchMac) {
-                                // Extract bridge port index from OID
-                                const oidParts = vb.oid.split('.');
-                                const macOidSuffix = oidParts.slice(-6).join('.');
-                                // Get bridge port for this MAC
-                                const portData = await new Promise((resolve) => {
-                                    vlanSession.get(['1.3.6.1.2.1.17.4.3.1.2.' + macOidSuffix], (err, vbs) => {
-                                        if (err || !vbs || vbs.length === 0) resolve(null);
-                                        else resolve(parseSnmpInt(vbs[0].value));
-                                    });
-                                });
-                                if (portData) foundBridgePort = portData;
-                                break;
-                            }
-                        }
-                    }
-
-                    if (foundBridgePort) {
-                        // Map bridge port → ifIndex
-                        const ifIdxData = await new Promise((resolve) => {
-                            vlanSession.get(['1.3.6.1.2.1.17.1.4.1.2.' + foundBridgePort], (err, vbs) => {
-                                if (err || !vbs || vbs.length === 0) resolve(null);
-                                else resolve(parseSnmpInt(vbs[0].value));
-                            });
-                        });
-
-                        if (ifIdxData) {
-                            const portName = ifNames[ifIdxData.toString()] || `Port-${ifIdxData}`;
-                            const isTrunk = trunkPorts.has(ifIdxData.toString());
-
-                            results.push({
-                                switchId: device.id,
-                                switchName: device.name,
-                                switchIp: device.ip,
-                                port: portName,
-                                ifIndex: ifIdxData,
-                                vlan: parseInt(vid),
-                                type: isTrunk ? 'trunk' : 'access'
-                            });
-                        }
-                    }
-
-                    vlanSession.close();
-                } catch (e) { /* VLAN query failed, continue */ }
-            }
-        } catch (e) {
-            console.log(`[MAC-SEARCH] ${device.name}: ${e.message}`);
-        }
+    // Step 2: Check cache first
+    const cacheAge = Date.now() - macCacheTimestamp;
+    if (cacheAge < MAC_CACHE_TTL && macCache.size > 0) {
+        console.log(`[MAC-SEARCH] Cache hit (age: ${Math.round(cacheAge / 1000)}s)`);
+        const cached = macCache.get(searchMac) || [];
+        const sorted = [...cached].sort((a, b) => {
+            if (a.type === 'access' && b.type === 'trunk') return -1;
+            if (a.type === 'trunk' && b.type === 'access') return 1;
+            return 0;
+        });
+        return { results: sorted, resolvedMac: formattedMac, searchedDevices: devices.length, fromCache: true };
     }
 
-    // Deduplicate by switchId+port+vlan
-    const seen = new Set();
-    const unique = results.filter(r => {
-        const key = `${r.switchId}-${r.port}-${r.vlan}`;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-    });
+    // Step 3: Cache miss — build cache (parallel scan), then search
+    console.log(`[MAC-SEARCH] Cache miss, scanning all devices in parallel...`);
+    await buildMacCache(devices);
 
-    // Sort: access ports first
-    unique.sort((a, b) => {
+    const results = macCache.get(searchMac) || [];
+    const sorted = [...results].sort((a, b) => {
         if (a.type === 'access' && b.type === 'trunk') return -1;
         if (a.type === 'trunk' && b.type === 'access') return 1;
         return 0;
     });
 
-    console.log(`[MAC-SEARCH] Found ${unique.length} result(s) for ${formattedMac}`);
-    return { results: unique, resolvedMac: formattedMac, searchedDevices: devices.length };
+    console.log(`[MAC-SEARCH] Found ${sorted.length} result(s) for ${formattedMac}`);
+    return { results: sorted, resolvedMac: formattedMac, searchedDevices: devices.length, fromCache: false };
 }
 
 module.exports = { getDeviceDetails, getVendorConfig, discoverNeighbors, searchMAC };
