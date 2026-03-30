@@ -7,26 +7,28 @@ export default function MacSearchPage() {
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
+  const [loadingType, setLoadingType] = useState('');
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
 
-  const handleSearch = async (e) => {
-    e.preventDefault();
+  const doSearch = async (force = false) => {
     if (!query.trim() || query.trim().length < 5) return;
     setLoading(true);
+    setLoadingType(force ? 'live' : 'search');
     setError(null);
-    setResult(null);
+    if (!force) setResult(null);
 
     try {
       const res = await authFetch('/mac-search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: query.trim() })
+        body: JSON.stringify({ query: query.trim(), force })
       });
       if (res && res.ok) {
         const data = await res.json();
         if (data.error && data.results?.length === 0) {
           setError(data.error);
+          setResult(null);
         } else {
           setResult(data);
         }
@@ -38,6 +40,14 @@ export default function MacSearchPage() {
       setError('Network error: ' + err.message);
     }
     setLoading(false);
+    setLoadingType('');
+  };
+
+  const handleSearch = (e) => { e.preventDefault(); doSearch(false); };
+
+  const formatCacheAge = (seconds) => {
+    if (seconds < 60) return `${seconds}s ago`;
+    return `${Math.floor(seconds / 60)}m ${seconds % 60}s ago`;
   };
 
   return (
@@ -66,14 +76,14 @@ export default function MacSearchPage() {
           disabled={loading || query.trim().length < 5}
           style={{ padding: '12px 24px', fontSize: '0.9rem', whiteSpace: 'nowrap' }}
         >
-          {loading ? 'Searching...' : 'Search'}
+          {loading && loadingType === 'search' ? 'Searching...' : 'Search'}
         </button>
       </form>
 
       {loading && (
         <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
           <div style={{ fontSize: '2rem', marginBottom: 12 }}>⏳</div>
-          <p>Scanning switch MAC tables via SNMP...</p>
+          <p>{loadingType === 'live' ? 'Live scanning switch MAC tables...' : 'Scanning switch MAC tables via SNMP...'}</p>
           <p style={{ fontSize: '0.8rem' }}>This may take 10-30 seconds depending on the number of devices and VLANs</p>
         </div>
       )}
@@ -87,10 +97,32 @@ export default function MacSearchPage() {
       {result && !loading && (
         <div>
           {result.resolvedMac && (
-            <div style={{ marginBottom: 16, padding: '10px 16px', background: 'rgba(99,102,241,0.1)', borderRadius: 8, border: '1px solid rgba(99,102,241,0.2)', fontSize: '0.85rem' }}>
-              <span style={{ color: 'var(--text-muted)' }}>MAC Address: </span>
-              <span style={{ color: 'var(--primary)', fontFamily: 'monospace', fontWeight: 600 }}>{result.resolvedMac}</span>
-              <span style={{ color: 'var(--text-muted)', marginLeft: 16 }}>Searched {result.searchedDevices} device(s)</span>
+            <div style={{ marginBottom: 16, padding: '10px 16px', background: 'rgba(99,102,241,0.1)', borderRadius: 8, border: '1px solid rgba(99,102,241,0.2)', fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+              <div>
+                <span style={{ color: 'var(--text-muted)' }}>MAC: </span>
+                <span style={{ color: 'var(--primary)', fontFamily: 'monospace', fontWeight: 600 }}>{result.resolvedMac}</span>
+                <span style={{ color: 'var(--text-muted)', marginLeft: 16 }}>{result.searchedDevices} device(s)</span>
+                {result.fromCache && (
+                  <span style={{ marginLeft: 12, color: '#f59e0b', fontSize: '0.78rem' }}>
+                    ⚡ cached ({formatCacheAge(result.cacheAge)})
+                  </span>
+                )}
+                {!result.fromCache && (
+                  <span style={{ marginLeft: 12, color: 'var(--success)', fontSize: '0.78rem' }}>
+                    ✓ live result
+                  </span>
+                )}
+              </div>
+              {result.fromCache && (
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => doSearch(true)}
+                  disabled={loading}
+                  style={{ fontSize: '0.75rem', padding: '4px 12px', whiteSpace: 'nowrap' }}
+                >
+                  🔄 Live Search
+                </button>
+              )}
             </div>
           )}
 
@@ -139,6 +171,11 @@ export default function MacSearchPage() {
               <div style={{ fontSize: '2rem', marginBottom: 12 }}>🔍</div>
               <p>MAC address not found in any switch MAC table</p>
               <p style={{ fontSize: '0.8rem' }}>The device may be offline or on a different network segment</p>
+              {result.fromCache && (
+                <button className="btn btn-primary btn-sm" style={{ marginTop: 12 }} onClick={() => doSearch(true)} disabled={loading}>
+                  🔄 Try Live Search
+                </button>
+              )}
             </div>
           )}
         </div>

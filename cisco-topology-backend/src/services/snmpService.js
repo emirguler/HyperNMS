@@ -761,7 +761,7 @@ async function resolveIpToMac(devices, ip) {
     return results.find(r => r !== null) || null;
 }
 
-async function searchMAC(devices, searchTerm) {
+async function searchMAC(devices, searchTerm, forceRefresh = false) {
     let searchMac = null;
     let searchIp = null;
 
@@ -785,33 +785,34 @@ async function searchMAC(devices, searchTerm) {
     }
 
     const formattedMac = searchMac.replace(/(.{2})/g, '$1:').slice(0, 17);
-
-    // Step 2: Check cache first
-    const cacheAge = Date.now() - macCacheTimestamp;
-    if (cacheAge < MAC_CACHE_TTL && macCache.size > 0) {
-        console.log(`[MAC-SEARCH] Cache hit (age: ${Math.round(cacheAge / 1000)}s)`);
-        const cached = macCache.get(searchMac) || [];
-        const sorted = [...cached].sort((a, b) => {
-            if (a.type === 'access' && b.type === 'trunk') return -1;
-            if (a.type === 'trunk' && b.type === 'access') return 1;
-            return 0;
-        });
-        return { results: sorted, resolvedMac: formattedMac, searchedDevices: devices.length, fromCache: true };
-    }
-
-    // Step 3: Cache miss — build cache (parallel scan), then search
-    console.log(`[MAC-SEARCH] Cache miss, scanning all devices in parallel...`);
-    await buildMacCache(devices);
-
-    const results = macCache.get(searchMac) || [];
-    const sorted = [...results].sort((a, b) => {
+    const sortResults = (arr) => [...arr].sort((a, b) => {
         if (a.type === 'access' && b.type === 'trunk') return -1;
         if (a.type === 'trunk' && b.type === 'access') return 1;
         return 0;
     });
 
-    console.log(`[MAC-SEARCH] Found ${sorted.length} result(s) for ${formattedMac}`);
-    return { results: sorted, resolvedMac: formattedMac, searchedDevices: devices.length, fromCache: false };
+    // Step 2: Check cache (skip if force refresh)
+    const cacheAge = Date.now() - macCacheTimestamp;
+    if (!forceRefresh && cacheAge < MAC_CACHE_TTL && macCache.size > 0) {
+        console.log(`[MAC-SEARCH] Cache hit (age: ${Math.round(cacheAge / 1000)}s)`);
+        const cached = macCache.get(searchMac) || [];
+        return {
+            results: sortResults(cached), resolvedMac: formattedMac,
+            searchedDevices: devices.length, fromCache: true,
+            cacheAge: Math.round(cacheAge / 1000)
+        };
+    }
+
+    // Step 3: Build fresh cache
+    console.log(`[MAC-SEARCH] ${forceRefresh ? 'Force refresh' : 'Cache miss'}, scanning...`);
+    await buildMacCache(devices);
+
+    const results = macCache.get(searchMac) || [];
+    console.log(`[MAC-SEARCH] Found ${results.length} result(s) for ${formattedMac}`);
+    return {
+        results: sortResults(results), resolvedMac: formattedMac,
+        searchedDevices: devices.length, fromCache: false, cacheAge: 0
+    };
 }
 
 module.exports = { getDeviceDetails, getVendorConfig, discoverNeighbors, searchMAC };

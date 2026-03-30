@@ -309,7 +309,7 @@ router.post('/topology/auto-discover', authenticate, requireAdmin, async (req, r
 });
 
 router.post('/mac-search', authenticate, async (req, res) => {
-    const { query } = req.body;
+    const { query, force } = req.body;
     if (!query || typeof query !== 'string' || query.trim().length < 5) {
         return res.status(400).json({ error: 'Valid IP or MAC address required' });
     }
@@ -320,7 +320,7 @@ router.post('/mac-search', authenticate, async (req, res) => {
     }
 
     try {
-        const result = await searchMAC(devices, query.trim());
+        const result = await searchMAC(devices, query.trim(), !!force);
         res.json(result);
     } catch (e) {
         console.error('[MAC-SEARCH] Error:', e.message);
