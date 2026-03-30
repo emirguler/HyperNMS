@@ -152,6 +152,17 @@ export default function DeviceListPage({ onEdit }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, padding: '10px 16px', background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.3)', borderRadius: 8 }}>
           <span style={{ fontWeight: 600, color: 'var(--primary)', fontSize: '0.85rem' }}>{selectedIds.size} selected</span>
           <button className="btn btn-primary btn-sm" onClick={() => setShowBatchEdit(true)}>Batch Edit</button>
+          <button className="btn btn-danger btn-sm" onClick={async () => {
+            if (!window.confirm(`Delete ${selectedIds.size} device(s)? This cannot be undone.`)) return;
+            let deleted = 0;
+            for (const id of selectedIds) {
+              const res = await authFetch(`/switches/${id}`, { method: 'DELETE' });
+              if (res && res.ok) deleted++;
+            }
+            showToast(`${deleted} device(s) deleted`, 'success');
+            setSelectedIds(new Set());
+            fetchData();
+          }}>Delete Selected</button>
           <button className="btn btn-ghost btn-sm" onClick={() => setSelectedIds(new Set())}>Deselect All</button>
         </div>
       )}
