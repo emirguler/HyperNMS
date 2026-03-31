@@ -11,6 +11,13 @@ services:
     volumes:
       - netpulse-data:/app/backend/data
     restart: unless-stopped
+    networks:
+      - netpulse_network
 
 volumes:
   netpulse-data:
+
+networks:
+  netpulse_network:
+    external: true
+    name: webproxy_network
