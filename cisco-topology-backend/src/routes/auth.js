@@ -21,7 +21,7 @@ function validatePasswordStrength(password) {
 
 const loginLimiter = rateLimiter({ windowMs: 5 * 60 * 1000, max: 10, message: 'Too many login attempts, please try again in 5 minutes' });
 
-router.post('/login', loginLimiter, async (req, res) => {
+router.post('/login', async (req, res) => {
     const { username, password } = req.body;
 
     if (!username || !password) {
