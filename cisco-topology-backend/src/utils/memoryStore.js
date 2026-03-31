@@ -82,8 +82,10 @@ class MemoryStore {
     getSwitch(id) { return this.data.switches.find(s => s.id === id); }
 
     addSwitch(sw) {
+        if (this.data.switches.find(s => s.id === sw.id || s.ip === sw.ip)) return null;
         this.data.switches.push(sw);
         this._markDirty('switches');
+        return sw;
     }
 
     updateSwitch(id, updates) {
