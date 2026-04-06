@@ -54,12 +54,21 @@ router.post('/restore', authenticate, requireAdmin, async (req, res) => {
 
     // Restore devices — match by ID or IP, update existing or add new
     if (Array.isArray(switches)) {
+        // Deduplicate backup data first (old backups may contain dupes)
+        const seenInBackup = new Set();
+        const uniqueSwitches = switches.filter(sw => {
+            const key = sw.id || sw.ip;
+            if (seenInBackup.has(key)) return false;
+            seenInBackup.add(key);
+            if (sw.ip) seenInBackup.add(sw.ip);
+            return true;
+        });
+
         const existing = store.getSwitches();
-        for (const sw of switches) {
+        for (const sw of uniqueSwitches) {
             if (!sw.name || !sw.ip) { results.skipped++; continue; }
-            const match = existing.find(e => e.id === sw.id || e.ip === sw.ip);
+            const match = existing.find(e => String(e.id) === String(sw.id) || e.ip === sw.ip);
             if (match) {
-                // Update existing device with backup data (preserve current status/latency)
                 Object.assign(match, {
                     ...sw,
                     id: match.id,
@@ -75,9 +84,11 @@ router.post('/restore', authenticate, requireAdmin, async (req, res) => {
                     status: 'DOWN',
                     latency: 0,
                 };
-                store.addSwitch(newSw);
-                existing.push(newSw);
-                results.devices++;
+                if (store.addSwitch(newSw)) {
+                    results.devices++;
+                } else {
+                    results.skipped++;
+                }
             }
         }
         store._markDirty('switches');
@@ -186,9 +197,12 @@ router.post('/switches/bulk', authenticate, requireAdmin, async (req, res) => {
             ...payload
         };
 
-        store.addSwitch(newSwitch);
-        existing.push(newSwitch);
-        results.added++;
+        if (store.addSwitch(newSwitch)) {
+            results.added++;
+        } else {
+            results.errors.push(`${payload.ip} duplicate detected, skipped`);
+            results.skipped++;
+        }
     }
 
     await logAction(req.user, 'BULK_IMPORT', `${results.added} devices added`);
