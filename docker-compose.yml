@@ -1,8 +1,7 @@
 services:
   netpulse:
     build: .
-    ports:
-      - "4000:4000"
+    container_name: netpulse
     env_file:
       - .env.docker
     environment:
@@ -10,7 +9,16 @@ services:
       - PORT=4000
     volumes:
       - netpulse-data:/app/backend/data
+    networks:
+      - netpulse-internal
+      - webproxy_network
     restart: unless-stopped
 
 volumes:
   netpulse-data:
+
+networks:
+  netpulse-internal:
+    driver: bridge
+  webproxy_network:
+    external: true
