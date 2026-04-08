@@ -180,7 +180,7 @@ function TopologyInner({ onEdit }) {
   const [discovering, setDiscovering] = useState(false);
   const [discoveryResult, setDiscoveryResult] = useState(null);
   const [showDiscoverDialog, setShowDiscoverDialog] = useState(false);
-  const [selectedRootId, setSelectedRootId] = useState('auto');
+  const [selectedRootIds, setSelectedRootIds] = useState([]); // 0-2 backbone device IDs
 
   const handleAutoDiscover = async () => {
     const deviceIds = localNodes.map(n => n.id);
@@ -193,7 +193,8 @@ function TopologyInner({ onEdit }) {
     setDiscoveryResult(null);
     try {
       const body = { deviceIds };
-      if (selectedRootId !== 'auto') body.rootDeviceId = selectedRootId;
+      const validRoots = selectedRootIds.filter(id => id && id !== 'auto' && id !== 'none');
+      if (validRoots.length > 0) body.rootDeviceIds = validRoots;
 
       const res = await authFetch('/topology/auto-discover', {
         method: 'POST',
@@ -366,25 +367,35 @@ function TopologyInner({ onEdit }) {
       {/* Auto Topology Dialog */}
       {showDiscoverDialog && (
         <div className="modal-overlay" onClick={() => setShowDiscoverDialog(false)} onKeyDown={e => { if (e.key === 'Escape') setShowDiscoverDialog(false); }}>
-          <div className="confirm-modal-content" onClick={e => e.stopPropagation()} style={{ minWidth: 340 }}>
+          <div className="confirm-modal-content" onClick={e => e.stopPropagation()} style={{ minWidth: 380 }}>
             <h3 className="confirm-title">🔍 Auto Topology</h3>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: 16 }}>
               Discovers connections via CDP/LLDP and arranges devices in a tree layout.
+              Select up to 2 backbone devices for redundant backbone topology.
             </p>
-            <div style={{ marginBottom: 16 }}>
+
+            {/* Backbone device selection */}
+            <div style={{ marginBottom: 12 }}>
               <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>
-                Root Device (top of tree)
+                Backbone Device 1 (top of tree)
               </label>
               <select
                 className="modern-input"
-                value={selectedRootId}
-                onChange={e => setSelectedRootId(e.target.value)}
+                value={selectedRootIds[0] || 'auto'}
+                onChange={e => {
+                  const val = e.target.value;
+                  setSelectedRootIds(prev => {
+                    if (val === 'auto') return prev.length > 1 ? [prev[1]] : [];
+                    return prev.length > 1 ? [val, prev[1]] : [val];
+                  });
+                }}
                 style={{ width: '100%' }}
               >
                 <option value="auto">Auto-detect (most referenced device)</option>
                 {localNodes
                   .slice()
                   .sort((a, b) => (a.data.label || '').localeCompare(b.data.label || ''))
+                  .filter(n => n.id !== selectedRootIds[1])
                   .map(n => (
                     <option key={n.id} value={n.id}>
                       {n.data.label} ({n.data.ip})
@@ -392,6 +403,42 @@ function TopologyInner({ onEdit }) {
                   ))}
               </select>
             </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>
+                Backbone Device 2 (redundant — optional)
+              </label>
+              <select
+                className="modern-input"
+                value={selectedRootIds[1] || 'none'}
+                onChange={e => {
+                  const val = e.target.value;
+                  setSelectedRootIds(prev => {
+                    if (val === 'none') return prev.length > 0 ? [prev[0]] : [];
+                    return prev.length > 0 ? [prev[0], val] : ['auto', val];
+                  });
+                }}
+                style={{ width: '100%' }}
+              >
+                <option value="none">— None (single backbone) —</option>
+                {localNodes
+                  .slice()
+                  .sort((a, b) => (a.data.label || '').localeCompare(b.data.label || ''))
+                  .filter(n => n.id !== selectedRootIds[0])
+                  .map(n => (
+                    <option key={n.id} value={n.id}>
+                      {n.data.label} ({n.data.ip})
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            {selectedRootIds.length === 2 && (
+              <p style={{ color: 'var(--accent)', fontSize: '0.8rem', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                ⚡ Dual backbone: devices will be placed side by side and connected.
+              </p>
+            )}
+
             <div className="confirm-actions">
               <button className="btn btn-ghost" onClick={() => setShowDiscoverDialog(false)}>Cancel</button>
               <button className="btn btn-primary" onClick={handleAutoDiscover} autoFocus>

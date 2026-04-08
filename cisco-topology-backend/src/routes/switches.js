@@ -62,7 +62,7 @@ router.delete('/topology/tabs/:id', authenticate, requireAdmin, (req, res) => {
 
 // --- Auto Topology Discovery (CDP/LLDP) ---
 router.post('/topology/auto-discover', authenticate, requireAdmin, async (req, res) => {
-    const { deviceIds, rootDeviceId } = req.body;
+    const { deviceIds, rootDeviceId, rootDeviceIds } = req.body;
     if (!deviceIds || !Array.isArray(deviceIds) || deviceIds.length === 0) {
         return res.status(400).json({ error: 'deviceIds array required' });
     }
@@ -86,12 +86,10 @@ router.post('/topology/auto-discover', authenticate, requireAdmin, async (req, r
     }
 
     // Step 2: Match neighbors to known devices
-    // Multi-IP matching: try hostname first, then IP, then partial hostname
     function findMatchingDevice(neighbor) {
         const neighHostname = (neighbor.hostname || '').toLowerCase().split('.')[0];
         const neighIp = neighbor.ip;
 
-        // 1. Exact hostname match (case-insensitive, strip domain)
         if (neighHostname) {
             const byHostname = allSwitches.find(s => {
                 const sName = (s.name || '').toLowerCase().split('.')[0];
@@ -101,13 +99,11 @@ router.post('/topology/auto-discover', authenticate, requireAdmin, async (req, r
             if (byHostname) return byHostname;
         }
 
-        // 2. IP match (CDP/LLDP IP might differ from monitor IP)
         if (neighIp) {
             const byIp = allSwitches.find(s => s.ip === neighIp);
             if (byIp) return byIp;
         }
 
-        // 3. Partial hostname match (neighbor hostname contains device name or vice versa)
         if (neighHostname && neighHostname.length > 3) {
             const byPartial = allSwitches.find(s => {
                 const sName = (s.name || '').toLowerCase();
@@ -119,14 +115,13 @@ router.post('/topology/auto-discover', authenticate, requireAdmin, async (req, r
         return null;
     }
 
-    // Step 3: Collect neighbor pairs (don't create edges yet — need tree depth first)
+    // Step 3: Collect neighbor pairs
     const neighborPairs = [];
     for (const result of discoveryResults) {
         const target = findMatchingDevice(result);
         if (!target || target.id === result.sourceId) continue;
         if (!deviceIds.includes(target.id)) continue;
 
-        // Skip duplicates (either direction)
         const exists = existingEdges.some(e =>
             (e.source === result.sourceId && e.target === target.id) ||
             (e.source === target.id && e.target === result.sourceId)
@@ -140,146 +135,323 @@ router.post('/topology/auto-discover', authenticate, requireAdmin, async (req, r
         }
     }
 
-    // Step 4: Calculate tree layout
-    // Build adjacency from existing edges + new pairs
+    // Step 4: Build adjacency graph
     const adjacency = {};
-    for (const id of deviceIds) adjacency[id] = [];
+    for (const id of deviceIds) adjacency[id] = new Set();
 
     for (const e of existingEdges) {
         if (deviceIds.includes(e.source) && deviceIds.includes(e.target)) {
-            if (adjacency[e.source]) adjacency[e.source].push(e.target);
-            if (adjacency[e.target]) adjacency[e.target].push(e.source);
+            adjacency[e.source]?.add(e.target);
+            adjacency[e.target]?.add(e.source);
         }
     }
     for (const p of neighborPairs) {
-        adjacency[p.a].push(p.b);
-        adjacency[p.b].push(p.a);
+        adjacency[p.a].add(p.b);
+        adjacency[p.b].add(p.a);
     }
 
-    // Find root device — goes to TOP of tree
-    let rootId;
-    if (rootDeviceId && deviceIds.includes(rootDeviceId)) {
-        // User explicitly selected root
-        rootId = rootDeviceId;
-    } else {
-        // Auto-detect: use "in-degree" — how many page devices discovered this device as neighbor
-        // The device discovered by the MOST other page devices is likely the core/backbone
+    // Determine root device(s) — supports dual backbone
+    // rootDeviceIds: array of 1-2 backbone device IDs (new)
+    // rootDeviceId: single root (legacy compat)
+    let roots = [];
+    if (rootDeviceIds && Array.isArray(rootDeviceIds) && rootDeviceIds.length > 0) {
+        roots = rootDeviceIds.filter(id => deviceIds.includes(id));
+    } else if (rootDeviceId && deviceIds.includes(rootDeviceId)) {
+        roots = [rootDeviceId];
+    }
+
+    if (roots.length === 0) {
+        // Auto-detect: pick device with highest in-degree
         const inDegree = {};
         for (const id of deviceIds) inDegree[id] = 0;
-
         for (const result of discoveryResults) {
             const target = findMatchingDevice(result);
             if (target && target.id !== result.sourceId && deviceIds.includes(target.id)) {
                 inDegree[target.id] = (inDegree[target.id] || 0) + 1;
             }
         }
-
-        // Pick device with highest in-degree (most other devices see it as neighbor)
-        // Tie-break: prefer device with most total adjacency connections
-        rootId = deviceIds[0];
+        let rootId = deviceIds[0];
         let maxInDeg = -1;
         for (const id of deviceIds) {
             const deg = inDegree[id] || 0;
-            if (deg > maxInDeg || (deg === maxInDeg && (adjacency[id] || []).length > (adjacency[rootId] || []).length)) {
+            if (deg > maxInDeg || (deg === maxInDeg && (adjacency[id]?.size || 0) > (adjacency[rootId]?.size || 0))) {
                 maxInDeg = deg;
                 rootId = id;
             }
         }
-
+        roots = [rootId];
         const rootDevice = allSwitches.find(s => s.id === rootId);
         console.log(`[DISCOVERY] Auto-selected root: ${rootDevice?.name} (in-degree: ${maxInDeg})`);
     }
 
-    // BFS to assign depth (root=0=top, leaves=deepest=bottom)
+    const isDualBackbone = roots.length === 2;
+    console.log(`[DISCOVERY] Roots: ${roots.map(id => allSwitches.find(s => s.id === id)?.name).join(', ')} (dual: ${isDualBackbone})`);
+
+    // BFS from all roots simultaneously (all roots = depth 0)
     const nodeDepths = {};
-    const parentMap = {}; // child → parent (for edge direction)
-    const depthNodes = {};
-    const bfsQueue = [rootId];
-    const bfsVisited = new Set([rootId]);
-    nodeDepths[rootId] = 0;
+    const parentMap = {};
+    const childrenMap = {}; // parent → [children] for subtree width calc
+    const bfsQueue = [];
+    const bfsVisited = new Set();
+
+    for (const rootId of roots) {
+        nodeDepths[rootId] = 0;
+        bfsQueue.push(rootId);
+        bfsVisited.add(rootId);
+        childrenMap[rootId] = [];
+    }
 
     while (bfsQueue.length > 0) {
         const current = bfsQueue.shift();
         const depth = nodeDepths[current];
-        if (!depthNodes[depth]) depthNodes[depth] = [];
-        depthNodes[depth].push(current);
 
         for (const neighbor of (adjacency[current] || [])) {
             if (!bfsVisited.has(neighbor)) {
                 bfsVisited.add(neighbor);
                 nodeDepths[neighbor] = depth + 1;
                 parentMap[neighbor] = current;
+                if (!childrenMap[current]) childrenMap[current] = [];
+                childrenMap[current].push(neighbor);
+                if (!childrenMap[neighbor]) childrenMap[neighbor] = [];
                 bfsQueue.push(neighbor);
             }
         }
     }
 
-    // Disconnected nodes → last row
-    let maxDepth = Object.keys(depthNodes).length > 0
+    // Disconnected nodes → extra row
+    let maxDepth = Object.keys(nodeDepths).length > 0
         ? Math.max(...Object.values(nodeDepths)) : 0;
     for (const id of deviceIds) {
         if (!bfsVisited.has(id)) {
             maxDepth += 1;
             nodeDepths[id] = maxDepth;
-            if (!depthNodes[maxDepth]) depthNodes[maxDepth] = [];
-            depthNodes[maxDepth].push(id);
+            if (!childrenMap[id]) childrenMap[id] = [];
         }
     }
 
-    // Assign positions: root at top, children below, centered
+    // Step 5: Calculate proper tree positions using subtree widths
+    const NODE_WIDTH = 170;
+    const HORIZONTAL_GAP = 40;
+    const VERTICAL_SPACING = 180;
+    const MIN_NODE_SPACING = NODE_WIDTH + HORIZONTAL_GAP; // 210px
+
+    // Calculate subtree width for each node (leaf = 1 unit)
+    const subtreeWidth = {};
+    function calcSubtreeWidth(nodeId) {
+        if (subtreeWidth[nodeId] !== undefined) return subtreeWidth[nodeId];
+        const children = childrenMap[nodeId] || [];
+        if (children.length === 0) {
+            subtreeWidth[nodeId] = MIN_NODE_SPACING;
+            return MIN_NODE_SPACING;
+        }
+        let total = 0;
+        for (const child of children) {
+            total += calcSubtreeWidth(child);
+        }
+        subtreeWidth[nodeId] = Math.max(MIN_NODE_SPACING, total);
+        return subtreeWidth[nodeId];
+    }
+
+    // Calculate widths for all roots
+    for (const rootId of roots) {
+        calcSubtreeWidth(rootId);
+    }
+    // Also calc for disconnected nodes
+    for (const id of deviceIds) {
+        if (subtreeWidth[id] === undefined) calcSubtreeWidth(id);
+    }
+
+    // Assign positions recursively
     const positions = {};
-    const HORIZONTAL_SPACING = 180;
-    const VERTICAL_SPACING = 150;
 
-    for (const [depth, nodes] of Object.entries(depthNodes)) {
-        const d = parseInt(depth);
-        const totalWidth = (nodes.length - 1) * HORIZONTAL_SPACING;
-        const startX = -totalWidth / 2;
+    function assignPositions(nodeId, centerX, depth) {
+        positions[nodeId] = {
+            x: centerX - NODE_WIDTH / 2,
+            y: depth * VERTICAL_SPACING + 50
+        };
+        const children = childrenMap[nodeId] || [];
+        if (children.length === 0) return;
 
-        nodes.forEach((nodeId, idx) => {
-            positions[nodeId] = {
-                x: startX + idx * HORIZONTAL_SPACING + 400,
-                y: d * VERTICAL_SPACING + 50
-            };
+        // Distribute children centered under parent
+        let totalChildWidth = 0;
+        for (const child of children) {
+            totalChildWidth += subtreeWidth[child];
+        }
+
+        let currentX = centerX - totalChildWidth / 2;
+        for (const child of children) {
+            const childWidth = subtreeWidth[child];
+            const childCenter = currentX + childWidth / 2;
+            assignPositions(child, childCenter, depth + 1);
+            currentX += childWidth;
+        }
+    }
+
+    if (isDualBackbone) {
+        // Dual backbone: place side by side at depth 0
+        const BB_GAP = 250; // gap between the two BBs
+        const leftRoot = roots[0];
+        const rightRoot = roots[1];
+        const leftWidth = subtreeWidth[leftRoot] || MIN_NODE_SPACING;
+        const rightWidth = subtreeWidth[rightRoot] || MIN_NODE_SPACING;
+        const totalWidth = leftWidth + BB_GAP + rightWidth;
+        const startX = totalWidth / 2; // center offset
+
+        // Left BB: centered over its subtree on the left side
+        const leftCenter = startX - leftWidth / 2 - BB_GAP / 2 + NODE_WIDTH / 2;
+        // Right BB: centered over its subtree on the right side
+        const rightCenter = startX + rightWidth / 2 + BB_GAP / 2 + NODE_WIDTH / 2;
+
+        // Place BB nodes at depth 0
+        positions[leftRoot] = { x: leftCenter - NODE_WIDTH / 2, y: 50 };
+        positions[rightRoot] = { x: rightCenter - NODE_WIDTH / 2, y: 50 };
+
+        // Assign children for each BB (depth 1+)
+        const leftChildren = childrenMap[leftRoot] || [];
+        const rightChildren = childrenMap[rightRoot] || [];
+
+        // Left subtree
+        if (leftChildren.length > 0) {
+            let totalChildWidth = leftChildren.reduce((sum, c) => sum + subtreeWidth[c], 0);
+            let currentX = leftCenter - totalChildWidth / 2;
+            for (const child of leftChildren) {
+                if (child === rightRoot) continue; // skip the other BB
+                const childWidth = subtreeWidth[child];
+                assignPositions(child, currentX + childWidth / 2, 1);
+                currentX += childWidth;
+            }
+        }
+
+        // Right subtree
+        if (rightChildren.length > 0) {
+            let totalChildWidth = rightChildren.reduce((sum, c) => sum + subtreeWidth[c], 0);
+            let currentX = rightCenter - totalChildWidth / 2;
+            for (const child of rightChildren) {
+                if (child === leftRoot) continue; // skip the other BB
+                const childWidth = subtreeWidth[child];
+                assignPositions(child, currentX + childWidth / 2, 1);
+                currentX += childWidth;
+            }
+        }
+    } else {
+        // Single root: center the whole tree
+        const rootId = roots[0];
+        const totalWidth = subtreeWidth[rootId] || MIN_NODE_SPACING;
+        assignPositions(rootId, totalWidth / 2 + 200, 0);
+    }
+
+    // Position disconnected nodes in a row at the bottom
+    const disconnected = deviceIds.filter(id => !roots.includes(id) && !parentMap[id] && !bfsVisited.has(id));
+    if (disconnected.length > 0) {
+        const disconnectedY = (maxDepth + 1) * VERTICAL_SPACING + 50;
+        const totalW = (disconnected.length - 1) * MIN_NODE_SPACING;
+        const startX = -totalW / 2 + 400;
+        disconnected.forEach((id, idx) => {
+            positions[id] = { x: startX + idx * MIN_NODE_SPACING, y: disconnectedY };
         });
     }
 
-    // Step 5: Create edges with correct direction (parent→child, bottom→top)
+    // Step 6: Create edges with correct direction
     const newEdges = [];
+
+    // If dual backbone, create edge between the two BBs via side handles
+    if (isDualBackbone) {
+        const bbEdgeExists = existingEdges.some(e =>
+            (e.source === roots[0] && e.target === roots[1]) ||
+            (e.source === roots[1] && e.target === roots[0])
+        ) || neighborPairs.some(p =>
+            (p.a === roots[0] && p.b === roots[1]) ||
+            (p.a === roots[1] && p.b === roots[0])
+        );
+
+        if (!bbEdgeExists) {
+            const bbEdge = {
+                id: `e-${roots[0]}-${roots[1]}-${Date.now()}`,
+                source: roots[0],
+                target: roots[1],
+                sourceHandle: 'right',
+                targetHandle: 'left'
+            };
+            newEdges.push(bbEdge);
+            store.addEdge(bbEdge);
+        }
+    }
+
     for (const pair of neighborPairs) {
-        // Determine which is parent (shallower depth) and which is child
+        // Skip BB-to-BB pair (already handled above)
+        if (isDualBackbone &&
+            ((pair.a === roots[0] && pair.b === roots[1]) ||
+             (pair.a === roots[1] && pair.b === roots[0]))) {
+            continue;
+        }
+
         const depthA = nodeDepths[pair.a] ?? 999;
         const depthB = nodeDepths[pair.b] ?? 999;
         const parentId = depthA <= depthB ? pair.a : pair.b;
         const childId = depthA <= depthB ? pair.b : pair.a;
 
+        // Same-depth connection (e.g. cross-links) → use side handles
+        let sourceHandle = 'bottom';
+        let targetHandle = 'top';
+        if (depthA === depthB) {
+            const posA = positions[pair.a];
+            const posB = positions[pair.b];
+            if (posA && posB) {
+                if (posA.x < posB.x) {
+                    sourceHandle = 'right';
+                    targetHandle = 'left';
+                } else {
+                    sourceHandle = 'left';
+                    targetHandle = 'right';
+                }
+            }
+        }
+
         const edge = {
             id: `e-${parentId}-${childId}-${Date.now() + newEdges.length}`,
-            source: parentId,
-            target: childId,
-            sourceHandle: 'bottom',
-            targetHandle: 'top'
+            source: depthA === depthB ? pair.a : parentId,
+            target: depthA === depthB ? pair.b : childId,
+            sourceHandle,
+            targetHandle
         };
         newEdges.push(edge);
         store.addEdge(edge);
     }
 
-    // Also fix existing edges: set handles based on tree depth
+    // Fix existing edges: set handles based on tree depth
     const updatedEdges = [];
     for (const e of existingEdges) {
         if (!deviceIds.includes(e.source) || !deviceIds.includes(e.target)) continue;
         const depthS = nodeDepths[e.source] ?? 999;
         const depthT = nodeDepths[e.target] ?? 999;
 
-        if (depthS <= depthT) {
-            // source is parent → bottom to top (correct)
+        // Dual backbone edge — set side handles
+        if (isDualBackbone &&
+            ((e.source === roots[0] && e.target === roots[1]) ||
+             (e.source === roots[1] && e.target === roots[0]))) {
+            const leftId = positions[roots[0]]?.x <= positions[roots[1]]?.x ? roots[0] : roots[1];
+            const rightId = leftId === roots[0] ? roots[1] : roots[0];
+            store.updateEdge(e.id, { source: leftId, target: rightId, sourceHandle: 'right', targetHandle: 'left' });
+            updatedEdges.push(e.id);
+            continue;
+        }
+
+        if (depthS === depthT) {
+            // Same depth — side handles
+            const posS = positions[e.source];
+            const posT = positions[e.target];
+            if (posS && posT) {
+                const sh = posS.x < posT.x ? 'right' : 'left';
+                const th = posS.x < posT.x ? 'left' : 'right';
+                store.updateEdge(e.id, { sourceHandle: sh, targetHandle: th });
+                updatedEdges.push(e.id);
+            }
+        } else if (depthS <= depthT) {
             if (e.sourceHandle !== 'bottom' || e.targetHandle !== 'top') {
                 store.updateEdge(e.id, { sourceHandle: 'bottom', targetHandle: 'top' });
                 updatedEdges.push(e.id);
             }
         } else {
-            // source is actually child → swap direction in handles
-            // Keep source/target IDs but flip handles
             store.updateEdge(e.id, {
                 source: e.target, target: e.source,
                 sourceHandle: 'bottom', targetHandle: 'top'
@@ -288,7 +460,7 @@ router.post('/topology/auto-discover', authenticate, requireAdmin, async (req, r
         }
     }
 
-    // Step 6: Update device positions
+    // Step 7: Update device positions
     for (const [id, pos] of Object.entries(positions)) {
         store.updateSwitch(id, { position: pos });
     }
