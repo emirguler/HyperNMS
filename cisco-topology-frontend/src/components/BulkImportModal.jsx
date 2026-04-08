@@ -15,7 +15,7 @@ function parseCSV(text) {
   // Header mapping
   const map = {};
   headers.forEach((h, i) => {
-    if (h.includes('name') || h.includes('hostname') || h === 'ad') map.name = i;
+    if (h === 'name' || h === 'hostname' || h === 'ad' || h === 'cihaz' || h === 'device name' || h === 'device_name' || h === 'cihaz adı' || (h.includes('name') && !h.includes('user') && !h.includes('host') && !h.includes('account'))) map.name = i;
     else if (h.includes('ip') || h.includes('address') || h.includes('adres')) map.ip = i;
     else if (h.includes('type') || h.includes('tip')) map.type = i;
     else if (h.includes('model')) map.model = i;
