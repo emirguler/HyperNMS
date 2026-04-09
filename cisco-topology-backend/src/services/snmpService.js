@@ -164,7 +164,10 @@ async function getDeviceDetails(device) {
                 const sysDescr = baseData[2].value.toString();
                 vendorConfig = getVendorConfig(sysDescr);
                 responseData.detectedVendor = vendorConfig.vendor;
+                console.log(`[SNMP] ${device.ip} sysDescr: "${sysDescr.substring(0, 80)}" → vendor: ${vendorConfig.vendor}`);
             }
+        } else {
+            console.log(`[SNMP] ${device.ip} base SNMP query returned null — community or connectivity issue`);
         }
 
         // 2. CPU (try primary OID, then fallback)
@@ -351,44 +354,59 @@ async function getDeviceDetails(device) {
             }
         }
 
+        // Helper: populate interfacesMap entry for a given index
+        const ensureInterface = (index) => {
+            if (interfacesMap[index]) return;
+            const vlanStr = vlanMap[index] || '-';
+            const vlanNameStr = vlanStr.split(',').map(v => {
+                const id = v.trim().replace(/\s*\([TDB]\)/, '');
+                return vlanNameMap[id] || '-';
+            }).join(', ');
+            const activeVlanIds = new Set(Object.keys(vlanNameMap));
+            let trunkVlans = null;
+            if (trunkAllowedMap[index]) {
+                trunkVlans = trunkAllowedMap[index]
+                    .filter(v => activeVlanIds.has(v.toString()))
+                    .map(v => v.toString());
+            }
+            interfacesMap[index] = {
+                index, name: '', status: statusMap[index] || 'down',
+                vlan: vlanStr, vlanName: vlanNameStr, trunkVlans,
+                speedMbps: 0, rawIn: BigInt(0), rawOut: BigInt(0)
+            };
+        };
+
+        // ifXTable (64-bit counters, interface names)
         newTableData.forEach(vb => {
             if (snmp.isVarbindError(vb)) return;
             const oidParts = vb.oid.split('.');
             const index = oidParts.pop();
             const column = oidParts.pop();
-
-            if (!interfacesMap[index]) {
-                const vlanStr = vlanMap[index] || '-';
-                const vlanId = vlanStr.replace(/\s*\([TDB]\)/, '');
-                // Birden fazla VLAN olabilir (multi-auth): "179 (D), 201 (D)"
-                const vlanNameStr = vlanStr.split(',').map(v => {
-                    const id = v.trim().replace(/\s*\([TDB]\)/, '');
-                    return vlanNameMap[id] || '-';
-                }).join(', ');
-                // Trunk portlarda geçen VLAN'lar (sadece cihazda tanımlı olanlar)
-                const activeVlanIds = new Set(Object.keys(vlanNameMap));
-                let trunkVlans = null;
-                if (trunkAllowedMap[index]) {
-                    trunkVlans = trunkAllowedMap[index]
-                        .filter(v => activeVlanIds.has(v.toString()))
-                        .map(v => v.toString());
-                }
-
-                interfacesMap[index] = {
-                    index, name: '', status: statusMap[index] || 'down',
-                    vlan: vlanStr,
-                    vlanName: vlanNameStr,
-                    trunkVlans,
-                    speedMbps: 0,
-                    rawIn: BigInt(0), rawOut: BigInt(0)
-                };
-            }
+            ensureInterface(index);
 
             if (column === '1') interfacesMap[index].name = vb.value.toString();
             else if (column === '15') interfacesMap[index].speedMbps = vb.value;
             else if (column === '6') interfacesMap[index].rawIn = bufferToBigInt(vb.value);
             else if (column === '10') interfacesMap[index].rawOut = bufferToBigInt(vb.value);
         });
+
+        // Fallback: if ifXTable returned nothing, use ifTable (32-bit counters)
+        if (Object.keys(interfacesMap).length === 0 && Object.keys(statusMap).length > 0) {
+            console.log(`[SNMP] ${device.ip} ifXTable empty, falling back to ifTable`);
+            const ifTableData = await getSubtree('1.3.6.1.2.1.2.2.1');
+            ifTableData.forEach(vb => {
+                if (snmp.isVarbindError(vb)) return;
+                const oidParts = vb.oid.split('.');
+                const index = oidParts.pop();
+                const column = oidParts.pop();
+                ensureInterface(index);
+
+                if (column === '2') interfacesMap[index].name = vb.value.toString(); // ifDescr
+                else if (column === '5') interfacesMap[index].speedMbps = Math.round(parseSnmpInt(vb.value) / 1000000); // ifSpeed (bps→Mbps)
+                else if (column === '10') interfacesMap[index].rawIn = BigInt(parseSnmpInt(vb.value)); // ifInOctets (32-bit)
+                else if (column === '16') interfacesMap[index].rawOut = BigInt(parseSnmpInt(vb.value)); // ifOutOctets (32-bit)
+            });
+        }
 
         session.close();
 
