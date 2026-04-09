@@ -15,11 +15,20 @@ function bufferToBigInt(buffer) {
 
 function getVendorConfig(sysDescr) {
     const desc = sysDescr.toLowerCase();
-    let config = { vendor: 'Generic', cpuOid: null };
+    let config = { vendor: 'Generic', cpuOid: null, cpuOidFallback: null, isNexus: false };
 
     if (desc.includes('cisco')) {
         config.vendor = 'Cisco';
-        config.cpuOid = '1.3.6.1.4.1.9.2.1.58.0';
+        if (desc.includes('nx-os') || desc.includes('nexus')) {
+            // Nexus uses CISCO-PROCESS-MIB (cpmCPUTotal5minRev)
+            config.cpuOid = '1.3.6.1.4.1.9.9.109.1.1.1.1.8.1';
+            config.cpuOidFallback = '1.3.6.1.4.1.9.9.109.1.1.1.1.5.1'; // cpmCPUTotal5min (older)
+            config.isNexus = true;
+        } else {
+            // Catalyst / IOS — OLD-CISCO-CPU-MIB, fallback to CISCO-PROCESS-MIB
+            config.cpuOid = '1.3.6.1.4.1.9.2.1.58.0';
+            config.cpuOidFallback = '1.3.6.1.4.1.9.9.109.1.1.1.1.8.1';
+        }
     } else if (desc.includes('huawei')) {
         config.vendor = 'Huawei';
         config.cpuOid = '1.3.6.1.4.1.2011.5.25.31.1.1.1.1.5.1';
@@ -150,11 +159,16 @@ async function getDeviceDetails(device) {
             }
         }
 
-        // 2. CPU
+        // 2. CPU (try primary OID, then fallback)
         if (vendorConfig.cpuOid) {
             const cpuData = await getScalar([vendorConfig.cpuOid]);
             if (cpuData && !snmp.isVarbindError(cpuData[0])) {
-                responseData.cpu = cpuData[0].value;
+                responseData.cpu = parseSnmpInt(cpuData[0].value);
+            } else if (vendorConfig.cpuOidFallback) {
+                const cpuFallback = await getScalar([vendorConfig.cpuOidFallback]);
+                if (cpuFallback && !snmp.isVarbindError(cpuFallback[0])) {
+                    responseData.cpu = parseSnmpInt(cpuFallback[0].value);
+                }
             }
         }
 
@@ -403,19 +417,53 @@ async function getDeviceDetails(device) {
             if (totalRam > 0) {
                 responseData.ram = Math.round((usedRam / totalRam) * 100);
             } else if (responseData.detectedVendor === 'Cisco') {
-                const ciscoMemSession = createSnmpSession(device.ip, device.snmpCommunity, device.snmpPort, device.snmpVersion);
-                const memOids = ['1.3.6.1.4.1.9.9.48.1.1.1.5.1', '1.3.6.1.4.1.9.9.48.1.1.1.6.1'];
-                const memData = await new Promise((resolve) => {
-                    ciscoMemSession.get(memOids, (err, varbinds) => {
-                        if (err) resolve(null); else resolve(varbinds);
+                // Try CISCO-ENHANCED-MEMPOOL-MIB first (works on Nexus + newer IOS)
+                let gotCiscoRam = false;
+                try {
+                    const cempSession = createSnmpSession(device.ip, device.snmpCommunity, device.snmpPort, device.snmpVersion);
+                    const cempUsedOid = '1.3.6.1.4.1.9.9.221.1.1.1.1.18'; // cempMemPoolHCUsed
+                    const cempFreeOid = '1.3.6.1.4.1.9.9.221.1.1.1.1.20'; // cempMemPoolHCFree
+                    const cempData = await new Promise((resolve) => {
+                        const results = [];
+                        cempSession.subtree(cempUsedOid, 20, (varbinds) => {
+                            for (const vb of varbinds) results.push({ type: 'used', vb });
+                        }, () => {
+                            cempSession.subtree(cempFreeOid, 20, (varbinds) => {
+                                for (const vb of varbinds) results.push({ type: 'free', vb });
+                            }, () => resolve(results));
+                        });
                     });
-                });
-                if (memData && !snmp.isVarbindError(memData[0]) && !snmp.isVarbindError(memData[1])) {
-                    const used = parseInt(memData[0].value);
-                    const free = parseInt(memData[1].value);
-                    if (used + free > 0) responseData.ram = Math.round((used / (used + free)) * 100);
+                    if (cempData.length > 0) {
+                        let totalUsed = 0, totalFree = 0;
+                        cempData.forEach(r => {
+                            const val = parseSnmpInt(r.vb.value);
+                            if (r.type === 'used') totalUsed += val;
+                            else totalFree += val;
+                        });
+                        if (totalUsed + totalFree > 0) {
+                            responseData.ram = Math.round((totalUsed / (totalUsed + totalFree)) * 100);
+                            gotCiscoRam = true;
+                        }
+                    }
+                    cempSession.close();
+                } catch {}
+
+                // Fallback: CISCO-MEMORY-POOL-MIB (Catalyst / older IOS)
+                if (!gotCiscoRam) {
+                    const ciscoMemSession = createSnmpSession(device.ip, device.snmpCommunity, device.snmpPort, device.snmpVersion);
+                    const memOids = ['1.3.6.1.4.1.9.9.48.1.1.1.5.1', '1.3.6.1.4.1.9.9.48.1.1.1.6.1'];
+                    const memData = await new Promise((resolve) => {
+                        ciscoMemSession.get(memOids, (err, varbinds) => {
+                            if (err) resolve(null); else resolve(varbinds);
+                        });
+                    });
+                    if (memData && !snmp.isVarbindError(memData[0]) && !snmp.isVarbindError(memData[1])) {
+                        const used = parseInt(memData[0].value);
+                        const free = parseInt(memData[1].value);
+                        if (used + free > 0) responseData.ram = Math.round((used / (used + free)) * 100);
+                    }
+                    ciscoMemSession.close();
                 }
-                ciscoMemSession.close();
             }
             ramSession.close();
         } catch (ramErr) {
