@@ -169,14 +169,18 @@ async function getDeviceDetails(device) {
 
         // 2. CPU (try primary OID, then fallback)
         if (vendorConfig.cpuOid) {
-            const cpuData = await getScalar([vendorConfig.cpuOid]);
-            if (cpuData && !snmp.isVarbindError(cpuData[0])) {
-                responseData.cpu = parseSnmpInt(cpuData[0].value);
-            } else if (vendorConfig.cpuOidFallback) {
-                const cpuFallback = await getScalar([vendorConfig.cpuOidFallback]);
-                if (cpuFallback && !snmp.isVarbindError(cpuFallback[0])) {
-                    responseData.cpu = parseSnmpInt(cpuFallback[0].value);
+            try {
+                const cpuData = await getScalar([vendorConfig.cpuOid]);
+                if (cpuData && !snmp.isVarbindError(cpuData[0])) {
+                    responseData.cpu = parseSnmpInt(cpuData[0].value);
+                } else if (vendorConfig.cpuOidFallback) {
+                    const cpuFallback = await getScalar([vendorConfig.cpuOidFallback]);
+                    if (cpuFallback && !snmp.isVarbindError(cpuFallback[0])) {
+                        responseData.cpu = parseSnmpInt(cpuFallback[0].value);
+                    }
                 }
+            } catch (cpuErr) {
+                console.log(`[SNMP] ${device.ip} CPU query failed: ${cpuErr.message}`);
             }
         }
 
@@ -185,7 +189,7 @@ async function getDeviceDetails(device) {
         const statusMap = {};
         oldTableData.forEach(vb => {
             const index = vb.oid.split('.').pop();
-            statusMap[index] = vb.value === 1 ? 'up' : 'down';
+            statusMap[index] = parseSnmpInt(vb.value) === 1 ? 'up' : 'down';
         });
 
         // 4. ifXTable (64-bit counters)
@@ -199,7 +203,47 @@ async function getDeviceDetails(device) {
         let trunkPorts = new Set();
         // parseSnmpInt is now a module-level function
 
-        if (responseData.detectedVendor === 'Cisco') {
+        if (responseData.detectedVendor === 'HP/Aruba' || vendorConfig.isArubaCX) {
+            // HP/Aruba VLAN detection using IEEE 802.1Q MIB (dot1qVlanStaticUntaggedPorts + dot1qPvid)
+            try {
+                // dot1qPvid — untagged/access VLAN per port
+                const pvidData = await getSubtree('1.3.6.1.2.1.17.7.1.4.5.1.1');
+                pvidData.forEach(vb => {
+                    const portIdx = vb.oid.split('.').pop();
+                    const vlanId = parseSnmpInt(vb.value);
+                    if (vlanId > 0) vlanMap[portIdx] = vlanId.toString();
+                });
+
+                // dot1qVlanStaticName — VLAN names
+                const vlanNameData = await getSubtree('1.3.6.1.2.1.17.7.1.4.3.1.1');
+                vlanNameData.forEach(vb => {
+                    const vlanId = vb.oid.split('.').pop();
+                    const name = vb.value.toString();
+                    if (name) vlanNameMap[vlanId] = name;
+                });
+
+                // Bridge port → ifIndex mapping
+                const bridgePortMap = {};
+                const dot1dData = await getSubtree('1.3.6.1.2.1.17.1.4.1.2');
+                dot1dData.forEach(vb => {
+                    const bridgePort = vb.oid.split('.').pop();
+                    const ifIdx = parseSnmpInt(vb.value).toString();
+                    bridgePortMap[bridgePort] = ifIdx;
+                });
+
+                // Re-map vlanMap from bridge port index to ifIndex
+                const remappedVlan = {};
+                for (const [portIdx, vlan] of Object.entries(vlanMap)) {
+                    const ifIdx = bridgePortMap[portIdx] || portIdx;
+                    remappedVlan[ifIdx] = vlan;
+                }
+                Object.assign(vlanMap, remappedVlan);
+
+                console.log(`[VLAN-HP] ${device.ip}: vlans found=${Object.keys(vlanNameMap).length}, ports=${Object.keys(vlanMap).length}`);
+            } catch (err) {
+                console.log("[VLAN-HP] Error:", err.message);
+            }
+        } else if (responseData.detectedVendor === 'Cisco') {
             try {
                 // 1. Trunk portları tespit et
                 const trunkModeData = await getSubtree('1.3.6.1.4.1.9.9.46.1.6.1.1.14');
