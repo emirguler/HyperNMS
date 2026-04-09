@@ -32,9 +32,17 @@ function getVendorConfig(sysDescr) {
     } else if (desc.includes('huawei')) {
         config.vendor = 'Huawei';
         config.cpuOid = '1.3.6.1.4.1.2011.5.25.31.1.1.1.1.5.1';
+    } else if (desc.includes('arubaos-cx') || desc.includes('aruba cx')) {
+        // ArubaOS-CX (newer CX series: 6x00, 83xx, etc.)
+        config.vendor = 'Aruba';
+        config.cpuOid = '1.3.6.1.4.1.47196.4.1.1.3.11.2.1.1.6.0'; // arubaWiredSystemCPUUtil
+        config.cpuOidFallback = '1.3.6.1.4.1.47196.4.1.1.3.11.2.1.1.6.1';
+        config.isArubaCX = true;
     } else if (desc.includes('procurve') || desc.includes('hp') || desc.includes('aruba')) {
+        // ArubaOS-Switch / ProCurve (older: 2530, 2930, 3810, etc.)
         config.vendor = 'HP/Aruba';
-        config.cpuOid = '1.3.6.1.4.1.11.2.14.11.5.1.9.6.1.0';
+        config.cpuOid = '1.3.6.1.4.1.11.2.14.11.5.1.9.6.1.0'; // hpSwitchCpuStat
+        config.cpuOidFallback = '1.3.6.1.4.1.11.2.14.11.5.1.9.6.2.0';
     } else if (desc.includes('juniper')) {
         config.vendor = 'Juniper';
         config.cpuOid = '1.3.6.1.4.1.2636.3.1.13.1.8.9.1.0.0';
@@ -416,6 +424,46 @@ async function getDeviceDetails(device) {
 
             if (totalRam > 0) {
                 responseData.ram = Math.round((usedRam / totalRam) * 100);
+            } else if (vendorConfig.isArubaCX) {
+                // ArubaOS-CX: use vendor-specific memory OIDs
+                try {
+                    const arubaMemSession = createSnmpSession(device.ip, device.snmpCommunity, device.snmpPort, device.snmpVersion);
+                    const arubaMemOids = [
+                        '1.3.6.1.4.1.47196.4.1.1.3.11.2.1.1.10.0', // arubaWiredSystemMemoryTotal
+                        '1.3.6.1.4.1.47196.4.1.1.3.11.2.1.1.11.0'  // arubaWiredSystemMemoryFree
+                    ];
+                    const arubaMemData = await new Promise((resolve) => {
+                        arubaMemSession.get(arubaMemOids, (err, varbinds) => {
+                            if (err) resolve(null); else resolve(varbinds);
+                        });
+                    });
+                    if (arubaMemData && !snmp.isVarbindError(arubaMemData[0]) && !snmp.isVarbindError(arubaMemData[1])) {
+                        const total = parseSnmpInt(arubaMemData[0].value);
+                        const free = parseSnmpInt(arubaMemData[1].value);
+                        if (total > 0) responseData.ram = Math.round(((total - free) / total) * 100);
+                    }
+                    arubaMemSession.close();
+                } catch {}
+            } else if (responseData.detectedVendor === 'HP/Aruba') {
+                // ArubaOS-Switch / ProCurve: use HP memory OIDs
+                try {
+                    const hpMemSession = createSnmpSession(device.ip, device.snmpCommunity, device.snmpPort, device.snmpVersion);
+                    const hpMemOids = [
+                        '1.3.6.1.4.1.11.2.14.11.5.1.1.2.1.1.1.6.1', // hpLocalMemTotalBytes
+                        '1.3.6.1.4.1.11.2.14.11.5.1.1.2.1.1.1.7.1'  // hpLocalMemFreeBytes
+                    ];
+                    const hpMemData = await new Promise((resolve) => {
+                        hpMemSession.get(hpMemOids, (err, varbinds) => {
+                            if (err) resolve(null); else resolve(varbinds);
+                        });
+                    });
+                    if (hpMemData && !snmp.isVarbindError(hpMemData[0]) && !snmp.isVarbindError(hpMemData[1])) {
+                        const total = parseSnmpInt(hpMemData[0].value);
+                        const free = parseSnmpInt(hpMemData[1].value);
+                        if (total > 0) responseData.ram = Math.round(((total - free) / total) * 100);
+                    }
+                    hpMemSession.close();
+                } catch {}
             } else if (responseData.detectedVendor === 'Cisco') {
                 // Try CISCO-ENHANCED-MEMPOOL-MIB first (works on Nexus + newer IOS)
                 let gotCiscoRam = false;
