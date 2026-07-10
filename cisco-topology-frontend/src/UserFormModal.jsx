@@ -9,6 +9,7 @@ function UserFormModal({ mode, initialValues, onCancel, onSave }) {
     username: '',
     password: '',
     role: 'User',
+    allowedCommands: '', // textarea: her satıra bir komut
   });
 
   useEffect(() => {
@@ -17,6 +18,7 @@ function UserFormModal({ mode, initialValues, onCancel, onSave }) {
         username: initialValues.username || '',
         password: '',
         role: initialValues.role || 'User',
+        allowedCommands: (initialValues.allowedCommands || []).join('\n'),
       });
     }
   }, [initialValues, isEdit]);
@@ -28,7 +30,11 @@ function UserFormModal({ mode, initialValues, onCancel, onSave }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSave(values);
+    // Komut metnini diziye çevir; Administrator için gönderme (tam kontrol)
+    const allowedCommands = values.role === 'User'
+      ? values.allowedCommands.split('\n').map(s => s.trim()).filter(Boolean)
+      : [];
+    onSave({ ...values, allowedCommands });
   };
 
   return (
@@ -85,6 +91,22 @@ function UserFormModal({ mode, initialValues, onCancel, onSave }) {
                 <option value="Administrator">{t('roleAdmin')}</option>
               </select>
             </div>
+
+            {values.role === 'User' && (
+              <div>
+                <label className="input-label" style={{display:'block', marginBottom:8, color:'#94a3b8'}}>{t('allowedCommandsLabel')}</label>
+                <textarea
+                  className="modern-input"
+                  name="allowedCommands"
+                  value={values.allowedCommands}
+                  onChange={handleChange}
+                  rows={5}
+                  placeholder={"show version\nshow ip interface brief\nshow running-config"}
+                  style={{ fontFamily: 'monospace', fontSize: '0.85rem', resize: 'vertical' }}
+                />
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 6 }}>{t('allowedCommandsHint')}</div>
+              </div>
+            )}
 
           </div>
 

@@ -23,7 +23,7 @@ router.post('/users', authenticate, requireAdmin, async (req, res) => {
     }
 
     const hashedPw = await bcrypt.hash(data.password, BCRYPT_ROUNDS);
-    const newUser = { id: Date.now(), username: data.username, password: hashedPw, role: data.role || 'User' };
+    const newUser = { id: Date.now(), username: data.username, password: hashedPw, role: data.role || 'User', allowedCommands: data.allowedCommands || [] };
     store.addUser(newUser);
 
     await logAction(req.user, 'USER_CREATE', newUser.username);
@@ -42,6 +42,7 @@ router.put('/users/:id', authenticate, requireAdmin, async (req, res) => {
     const updates = {};
     if (data.role) updates.role = data.role;
     if (data.username) updates.username = data.username;
+    if (data.allowedCommands !== undefined) updates.allowedCommands = data.allowedCommands;
     if (data.password && data.password.length > 0) {
         updates.password = await bcrypt.hash(data.password, BCRYPT_ROUNDS);
     }

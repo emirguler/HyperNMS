@@ -1,17 +1,36 @@
 import { memo, useState } from 'react';
 import { Handle, Position } from 'reactflow';
 
+// Cihaz tipine göre şekil rengi (r, g, b)
+const TYPE_COLOR = {
+  switch: '56, 189, 248',   // mavi
+  router: '56, 189, 248',   // mavi
+  firewall: '239, 68, 68',  // kırmızı
+  server: '168, 85, 247',   // mor
+  pc: '100, 116, 139',      // gri
+  cloud: '14, 165, 233',    // açık mavi
+  antenna: '245, 158, 11',  // turuncu
+};
+
+// Cihaz tipine göre şekil: antenna yuvarlak, cloud elips, kalanı dikdörtgen
+const TYPE_SHAPE = {
+  antenna: 'circle',
+  cloud: 'ellipse',
+};
+
+const ICON_SIZE = 20;
+
 // --- Professional SVG Icons ---
-const RouterIcon = () => (
-  <svg width="32" height="32" viewBox="0 0 40 40" fill="none">
+const RouterIcon = ({ size = ICON_SIZE }) => (
+  <svg width={size} height={size} viewBox="0 0 40 40" fill="none">
     <circle cx="20" cy="20" r="16" stroke="var(--primary)" strokeWidth="2" fill="rgba(56,189,248,0.08)" />
     <path d="M12 20h16M20 12v16M14 14l12 12M26 14L14 26" stroke="var(--primary)" strokeWidth="1.5" strokeLinecap="round" opacity="0.7" />
     <circle cx="20" cy="20" r="4" fill="var(--primary)" />
   </svg>
 );
 
-const FirewallIcon = () => (
-  <svg width="32" height="32" viewBox="0 0 40 40" fill="none">
+const FirewallIcon = ({ size = ICON_SIZE }) => (
+  <svg width={size} height={size} viewBox="0 0 40 40" fill="none">
     <rect x="6" y="8" width="28" height="24" rx="3" stroke="#ef4444" strokeWidth="2" fill="rgba(239,68,68,0.08)" />
     <rect x="6" y="8" width="28" height="8" rx="3" fill="rgba(239,68,68,0.15)" />
     <line x1="6" y1="20" x2="34" y2="20" stroke="#ef4444" strokeWidth="1.5" />
@@ -19,8 +38,8 @@ const FirewallIcon = () => (
   </svg>
 );
 
-const ServerIcon = () => (
-  <svg width="32" height="32" viewBox="0 0 40 40" fill="none">
+const ServerIcon = ({ size = ICON_SIZE }) => (
+  <svg width={size} height={size} viewBox="0 0 40 40" fill="none">
     <rect x="8" y="6" width="24" height="10" rx="2" stroke="#a855f7" strokeWidth="1.5" fill="rgba(168,85,247,0.08)" />
     <rect x="8" y="18" width="24" height="10" rx="2" stroke="#a855f7" strokeWidth="1.5" fill="rgba(168,85,247,0.08)" />
     <circle cx="13" cy="11" r="1.5" fill="#34d399" />
@@ -32,8 +51,8 @@ const ServerIcon = () => (
   </svg>
 );
 
-const SwitchSvgIcon = ({ status }) => (
-  <svg width="42" height="14" viewBox="0 0 50 14" fill="none">
+const SwitchSvgIcon = ({ status, size = ICON_SIZE }) => (
+  <svg width={size * 2.2} height={size * 0.62} viewBox="0 0 50 14" fill="none">
     <rect width="50" height="14" rx="2" fill="var(--bg-dark)" stroke="var(--primary)" strokeWidth="1.5" />
     <circle cx="8" cy="7" r="1.5" fill={status === 'UP' ? 'var(--success)' : '#64748b'} />
     <circle cx="15" cy="7" r="1.5" fill={status === 'UP' ? 'var(--success)' : '#64748b'} />
@@ -44,8 +63,8 @@ const SwitchSvgIcon = ({ status }) => (
   </svg>
 );
 
-const PcIcon = () => (
-  <svg width="28" height="28" viewBox="0 0 36 36" fill="none">
+const PcIcon = ({ size = ICON_SIZE }) => (
+  <svg width={size} height={size} viewBox="0 0 36 36" fill="none">
     <rect x="4" y="4" width="28" height="20" rx="2" stroke="#64748b" strokeWidth="1.5" fill="rgba(100,116,139,0.08)" />
     <rect x="7" y="7" width="22" height="14" rx="1" fill="rgba(56,189,248,0.1)" />
     <line x1="18" y1="24" x2="18" y2="30" stroke="#64748b" strokeWidth="1.5" />
@@ -53,9 +72,19 @@ const PcIcon = () => (
   </svg>
 );
 
-const CloudIcon = () => (
-  <svg width="36" height="26" viewBox="0 0 44 32" fill="none">
+const CloudIcon = ({ size = ICON_SIZE }) => (
+  <svg width={size * 1.3} height={size} viewBox="0 0 44 32" fill="none">
     <path d="M12 26c-3.3 0-6-2.7-6-6 0-2.8 1.9-5.1 4.5-5.8C11.3 10.3 14.8 8 19 8c4.8 0 8.8 3.2 10 7.5 3.2.5 5.5 3.2 5.5 6.5 0 3.6-2.9 6.5-6.5 6.5H12z" stroke="#0ea5e9" strokeWidth="1.5" fill="rgba(14,165,233,0.08)" />
+  </svg>
+);
+
+const AntennaIcon = ({ size = ICON_SIZE }) => (
+  <svg width={size} height={size} viewBox="0 0 40 40" fill="none">
+    <path d="M20 16v18" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round" />
+    <path d="M13 34h14" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round" />
+    <circle cx="20" cy="15" r="3" fill="#f59e0b" />
+    <path d="M12 12a11 11 0 0 1 16 0" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" opacity="0.85" />
+    <path d="M7 7a18 18 0 0 1 26 0" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" opacity="0.5" />
   </svg>
 );
 
@@ -66,6 +95,7 @@ const ICON_MAP = {
   server: ServerIcon,
   pc: PcIcon,
   cloud: CloudIcon,
+  antenna: AntennaIcon,
 };
 
 function latencyColor(latency) {
@@ -75,82 +105,65 @@ function latencyColor(latency) {
   return 'var(--danger)';
 }
 
+const handleStyle = (rgb) => ({ background: `rgb(${rgb})`, width: 6, height: 6, border: '1px solid var(--bg-dark)' });
+
 function SwitchNode({ data }) {
   const [hovered, setHovered] = useState(false);
   const IconComponent = ICON_MAP[data.type] || ICON_MAP.switch;
+  const rgb = TYPE_COLOR[data.type] || TYPE_COLOR.switch;
+  const shape = TYPE_SHAPE[data.type] || 'rect';
+  const isDown = data.status !== 'UP';
 
   return (
     <div
-      className={`topology-node ${data.status === 'UP' ? 'up' : 'down'}`}
+      className="topology-node"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      <Handle type="source" position={Position.Top} id="top" style={{ background: 'var(--primary)', width: 6, height: 6 }} />
-      <Handle type="source" position={Position.Left} id="left" style={{ background: 'var(--primary)', width: 6, height: 6 }} />
-      <Handle type="source" position={Position.Right} id="right" style={{ background: 'var(--primary)', width: 6, height: 6 }} />
+      {/* Cihaz şekli: tip rengine göre dikdörtgen / yuvarlak / elips */}
+      <div
+        className={`node-shape ${shape}`}
+        style={{
+          borderColor: isDown ? 'var(--danger)' : `rgba(${rgb}, 0.9)`,
+          background: `linear-gradient(160deg, rgba(${rgb}, ${isDown ? 0.06 : 0.18}), rgba(${rgb}, 0.04)), var(--node-bg)`,
+          boxShadow: isDown
+            ? '0 0 10px rgba(239,68,68,0.35), 0 4px 12px rgba(0,0,0,0.3)'
+            : `0 0 10px rgba(${rgb}, 0.22), 0 4px 12px rgba(0,0,0,0.3)`,
+          opacity: isDown ? 0.75 : 1
+        }}
+      >
+        <Handle type="source" position={Position.Top} id="top" style={handleStyle(rgb)} />
+        <Handle type="source" position={Position.Left} id="left" style={handleStyle(rgb)} />
+        <Handle type="source" position={Position.Right} id="right" style={handleStyle(rgb)} />
+        <Handle type="source" position={Position.Bottom} id="bottom" style={handleStyle(rgb)} />
 
-      {/* Latency badge */}
-      {data.latency != null && data.latency > 0 && (
-        <div className="node-latency" style={{
-          position: 'absolute', top: -6, right: -6,
-          background: latencyColor(data.latency), color: '#0f172a',
-          fontSize: '0.5rem', fontWeight: 700, padding: '1px 5px',
-          borderRadius: 8, boxShadow: '0 2px 6px rgba(0,0,0,0.3)', zIndex: 10
-        }}>
-          {data.latency}ms
-        </div>
-      )}
+        {/* Latency rozeti — dikdörtgende sağ üst köşe; dairede saat 1:30 yönü (çemberin KD noktası) */}
+        {data.latency != null && data.latency > 0 && (
+          <div className="node-latency" style={{
+            position: 'absolute',
+            ...(shape === 'circle'
+              ? { top: 2, right: 2, transform: 'translate(50%, -50%)' }
+              : { top: -7, right: -7 }),
+            background: latencyColor(data.latency), color: '#0f172a',
+            fontSize: '0.5rem', fontWeight: 700, padding: '1px 5px',
+            borderRadius: 8, boxShadow: '0 2px 6px rgba(0,0,0,0.3)', zIndex: 10
+          }}>
+            {data.latency}ms
+          </div>
+        )}
 
-      {/* Icon */}
-      <div className="node-icon" style={{ lineHeight: 0, display: 'flex', justifyContent: 'center' }}>
-        <IconComponent status={data.status} />
+        <span className="node-icon">
+          <IconComponent status={data.status} />
+        </span>
       </div>
 
-      {/* Name and IP */}
+      {/* Hostname — şeklin dışında, altında */}
       <div className="node-label">{data.label}</div>
-      <div className="node-ip">{data.ip}</div>
 
-      {/* Mini CPU/RAM bar */}
-      {data.cpu != null && data.cpu > 0 && (
-        <div className="node-stats" style={{ display: 'flex', gap: 3, marginTop: 3, padding: '0 6px' }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: '0.48rem', color: 'var(--text-muted)', marginBottom: 1 }}>CPU</div>
-            <div style={{ height: 2, background: 'rgba(255,255,255,0.1)', borderRadius: 1, overflow: 'hidden' }}>
-              <div style={{ width: `${data.cpu}%`, height: '100%', background: data.cpu > 80 ? '#ef4444' : 'var(--primary)', borderRadius: 1, transition: 'width 1s' }} />
-            </div>
-          </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: '0.48rem', color: 'var(--text-muted)', marginBottom: 1 }}>RAM</div>
-            <div style={{ height: 2, background: 'rgba(255,255,255,0.1)', borderRadius: 1, overflow: 'hidden' }}>
-              <div style={{ width: `${data.ram || 0}%`, height: '100%', background: (data.ram || 0) > 80 ? '#ef4444' : '#8b5cf6', borderRadius: 1, transition: 'width 1s' }} />
-            </div>
-          </div>
-        </div>
+      {/* Hover: IP — kutusuz, ismin altında zarifçe belirir */}
+      {hovered && (
+        <div className="node-ip-hover" style={{ color: `rgb(${rgb})` }}>{data.ip}</div>
       )}
-
-      {/* Tag chips */}
-      {data.tags && data.tags.length > 0 && (
-        <div className="node-tags" style={{ display: 'flex', flexWrap: 'wrap', gap: 2, marginTop: 3, justifyContent: 'center', padding: '0 4px' }}>
-          {data.tags.slice(0, 3).map(tag => (
-            <span key={tag} style={{
-              background: 'rgba(99,102,241,0.2)', color: 'var(--primary)',
-              padding: '0px 4px', borderRadius: 4, fontSize: '0.45rem', fontWeight: 600
-            }}>{tag}</span>
-          ))}
-        </div>
-      )}
-
-      {/* Hover Tooltip */}
-      {hovered && data.uptime && (
-        <div className="node-tooltip">
-          <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>Vendor: <strong style={{ color: 'var(--text-main)' }}>{data.vendor || 'Unknown'}</strong></div>
-          <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>Uptime: <strong style={{ color: 'var(--text-main)' }}>{data.uptime}</strong></div>
-          {data.cpu > 0 && <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>CPU: <strong style={{ color: data.cpu > 80 ? 'var(--danger)' : 'var(--text-main)' }}>{data.cpu}%</strong></div>}
-          {data.ram > 0 && <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>RAM: <strong style={{ color: data.ram > 80 ? 'var(--danger)' : 'var(--text-main)' }}>{data.ram}%</strong></div>}
-        </div>
-      )}
-
-      <Handle type="source" position={Position.Bottom} id="bottom" style={{ background: 'var(--primary)', width: 6, height: 6 }} />
     </div>
   );
 }

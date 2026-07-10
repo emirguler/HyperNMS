@@ -34,7 +34,7 @@ function validateSwitch(data) {
         errors.push('This IP address is not allowed (loopback, link-local, or reserved)');
     }
 
-    const validTypes = ['switch', 'router', 'firewall', 'server', 'pc', 'cloud'];
+    const validTypes = ['switch', 'router', 'firewall', 'server', 'pc', 'cloud', 'antenna'];
     if (data.type && !validTypes.includes(data.type)) {
         errors.push('Invalid device type');
     }
@@ -136,6 +136,17 @@ function sanitizeUser(data) {
         if (data[key] !== undefined) {
             clean[key] = typeof data[key] === 'string' ? data[key].trim() : data[key];
         }
+    }
+    // allowedCommands: User rolündeki kısıtlı SSH oturumları için komut whitelist'i
+    if (data.allowedCommands !== undefined) {
+        clean.allowedCommands = Array.isArray(data.allowedCommands)
+            ? data.allowedCommands
+                .filter(c => typeof c === 'string')
+                .map(c => c.trim())
+                .filter(c => c.length > 0)
+                .slice(0, 100)
+                .map(c => c.slice(0, 200))
+            : [];
     }
     return clean;
 }

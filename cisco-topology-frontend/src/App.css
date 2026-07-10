@@ -316,85 +316,105 @@ body {
 /* ============================================
    TOPOLOGY NODE
    ============================================ */
+/* Sarmalayıcı: görünmez — görsel olan içteki .node-shape */
 .topology-node {
-  width: 120px;
-  height: auto;
-  min-height: 72px;
-  padding: 8px 6px 6px;
-  background: var(--node-bg);
-  border: 2px solid var(--border-light);
-  border-radius: var(--radius-lg);
   display: flex;
   flex-direction: column;
-  justify-content: center;
   align-items: center;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   color: var(--text-main);
   position: relative;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
-
-.topology-node:hover {
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
-  z-index: 10;
-  border-color: var(--primary);
-  cursor: grab;
-}
-
+.topology-node:hover { z-index: 10; cursor: grab; }
 .topology-node:active { cursor: grabbing; }
-.topology-node.up { border-color: var(--success); }
-.topology-node.down { border-color: var(--danger); }
 
-.node-icon { margin-bottom: 4px; pointer-events: none; }
+/* Cihaz şekli — renk/kenarlık tipe göre inline verilir */
+.node-shape {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease, opacity 0.3s ease;
+}
+.node-shape.rect {
+  width: 88px;
+  height: 40px;
+  border-radius: 10px;
+}
+.node-shape.circle {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+}
+.node-shape.ellipse {
+  width: 84px;
+  height: 46px;
+  border-radius: 50%;
+}
+.topology-node:hover .node-shape { filter: brightness(1.15); }
+
+.node-icon { line-height: 0; pointer-events: none; }
+
+/* Hostname — şeklin dışında, altında */
 .node-label {
   font-weight: 600;
-  font-size: 0.7rem;
-  max-width: 90%;
+  font-size: 0.5rem;
+  letter-spacing: 0.01em;
+  margin-top: 5px;
+  max-width: 110px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   text-align: center;
   pointer-events: none;
+  /* Çok katmanlı koyu hale: arkasından kenar çizgisi geçse de okunur */
+  text-shadow: 0 0 3px #000, 0 0 6px #000, 0 1px 2px rgba(0, 0, 0, 0.9);
 }
-.node-ip {
-  font-size: 0.65rem;
-  color: var(--text-muted);
-  margin-top: 2px;
+
+/* Hover'da IP — kutusuz düz metin; absolute olduğu için hiçbir şeyi kaydırmaz */
+.node-ip-hover {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 1px;
+  font-size: 0.48rem;
+  font-weight: 600;
+  font-family: 'JetBrains Mono', 'Consolas', monospace;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
   pointer-events: none;
+  text-shadow: 0 0 3px #000, 0 0 6px #000, 0 1px 3px rgba(0, 0, 0, 0.9);
+  animation: ipFadeIn 0.18s ease-out;
+  z-index: 20;
+}
+
+@keyframes ipFadeIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(-3px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 
 /* --- Zoom-Adaptive Labels --- */
-/* Compact mode (zoom 0.45-0.7): hide details, show only name + icon */
-.zoom-compact .node-ip,
+/* Compact mode (zoom 0.45-0.7): hide details, show only shape + name */
 .zoom-compact .node-tooltip,
-.zoom-compact .node-stats,
-.zoom-compact .node-tags,
+.zoom-compact .node-ip-hover,
 .zoom-compact .node-latency { display: none !important; }
 
-.zoom-compact .topology-node {
-  min-height: 48px;
-  padding: 5px 4px 4px;
-}
-
-/* Minimal mode (zoom < 0.45): only border color + tiny label */
-.zoom-minimal .node-ip,
+/* Minimal mode (zoom < 0.45): tiny shape + label */
 .zoom-minimal .node-icon,
 .zoom-minimal .node-tooltip,
-.zoom-minimal .node-stats,
-.zoom-minimal .node-tags,
+.zoom-minimal .node-ip-hover,
 .zoom-minimal .node-latency { display: none !important; }
 
-.zoom-minimal .topology-node {
-  width: 64px;
-  min-height: 22px;
-  padding: 3px 2px;
-  border-radius: var(--radius-sm);
-}
+.zoom-minimal .node-shape.rect { width: 44px; height: 20px; border-radius: 5px; }
+.zoom-minimal .node-shape.circle { width: 24px; height: 24px; }
+.zoom-minimal .node-shape.ellipse { width: 40px; height: 22px; }
 
 .zoom-minimal .node-label {
   font-size: 0.5rem;
   font-weight: 700;
-  max-width: 100%;
+  max-width: 80px;
+  margin-top: 3px;
 }
 
 .zoom-minimal .react-flow__handle { width: 3px !important; height: 3px !important; }
@@ -563,25 +583,32 @@ body {
   background: var(--bg-panel);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
-  padding: 4px;
-  min-width: 180px;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+  padding: 5px;
+  min-width: 150px;
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(8px);
+  animation: fadeIn 0.12s ease-out;
 }
 
 .context-menu-item {
-  padding: 8px 12px;
-  color: var(--text-main);
+  padding: 6px 10px;
+  color: var(--text-muted);
   cursor: pointer;
   border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 0.85rem;
-  transition: background 0.1s;
+  gap: 9px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.015em;
+  line-height: 1.35;
+  white-space: nowrap;
+  transition: background 0.12s ease, color 0.12s ease, transform 0.12s ease;
 }
 .context-menu-item:hover {
   background: var(--primary-light);
   color: var(--primary);
+  transform: translateX(2px);
 }
 
 @keyframes fadeIn {
@@ -609,16 +636,49 @@ select.modern-input option {
 }
 
 /* ============================================
-   EDGE ANIMATION
+   EDGE STYLES
    ============================================ */
 @keyframes biDirectionalFlow {
   from { stroke-dashoffset: 10; }
   to { stroke-dashoffset: -10; }
 }
 
-.bi-flow-edge path {
-  stroke-dasharray: 5 5;
+/* Kablosuz (anten-anten): akan kesikli çizgi — radyo dalgası hissi */
+.wireless-edge path {
+  stroke-dasharray: 4 6;
+  stroke-linecap: round;
   animation: biDirectionalFlow 0.8s infinite linear alternate !important;
+}
+.wireless-edge-idle path {
+  stroke-dasharray: 4 6;
+  stroke-linecap: round;
+}
+
+/* Kablolu: düz çizgi + koyu "kılıf" gölgesi — fiziksel kablo görünümü */
+
+/* Aktif kablo: kesiksiz düz çizgi, yumuşak bir nabızla parlayıp söner —
+   hattın canlı/veri taşıdığını kesik çizgi kullanmadan hissettirir */
+@keyframes cablePulse {
+  0%, 100% {
+    stroke-opacity: 0.5;
+    filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.75));
+  }
+  50% {
+    stroke-opacity: 1;
+    filter: drop-shadow(0 0 4px currentColor) drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.75));
+  }
+}
+
+.cable-edge path {
+  stroke-linecap: round;
+  color: rgba(250, 204, 21, 0.6); /* glow rengi — currentColor ile drop-shadow'a taşınır */
+  animation: cablePulse 2.2s ease-in-out infinite;
+}
+
+/* Pasif/DOWN kablo: sabit düz çizgi, animasyon yok */
+.cable-edge-idle path {
+  stroke-linecap: round;
+  filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.75));
 }
 
 /* ============================================

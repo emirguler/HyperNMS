@@ -17,6 +17,16 @@ class MemoryStore {
         this.dirty = new Set(); // Hangi koleksiyonlar değişti
         this.writeTimer = null;
         this.WRITE_DEBOUNCE = 2000; // 2 saniye debounce
+
+        // Ping geçmişi — cihaz başına bellekte tampon (lazy-load), toplu yazılır.
+        // Eski yöntem her ping'te (5sn) her cihazın dosyasını baştan okuyup yazıyordu;
+        // bu, cihaz sayısıyla doğru orantılı disk I/O demekti. Artık bellekten okunur,
+        // diske periyodik/toplu (batched) yazılır.
+        this.history = {};            // switchId -> kayıt dizisi (disk önbelleği)
+        this.historyDirty = new Set();// Diske yazılması gereken switchId'ler
+        this.historyTimer = null;
+        this.HISTORY_DEBOUNCE = 10000; // 10sn pencere — birden çok ping döngüsünü tek yazıma toplar
+        this.MAX_HISTORY_PER_DEVICE = 5000;
     }
 
     init() {
@@ -101,6 +111,9 @@ class MemoryStore {
         this.data.switches = this.data.switches.filter(s => s.id !== id);
         if (this.data.switches.length !== len) {
             this._markDirty('switches');
+            // Geçmiş bellek tamponunu da temizle (disk dosyası korunur)
+            delete this.history[id];
+            this.historyDirty.delete(id);
             return true;
         }
         return false;
@@ -139,7 +152,7 @@ class MemoryStore {
         const idx = this.data.users.findIndex(u => String(u.id) === String(id));
         if (idx === -1) return null;
         // Whitelist allowed user fields to prevent prototype pollution
-        const allowed = ['password', 'role', 'mustChangePassword'];
+        const allowed = ['password', 'role', 'mustChangePassword', 'allowedCommands'];
         for (const key of allowed) {
             if (updates[key] !== undefined) this.data.users[idx][key] = updates[key];
         }
@@ -222,24 +235,61 @@ class MemoryStore {
         return false;
     }
 
-    // --- Ping History (cihaz başına dosya) ---
+    // --- Ping History (cihaz başına dosya, bellekte tamponlu) ---
+    // Bir cihazın geçmişini diskten belleğe yükler (yalnızca ilk erişimde).
+    _loadHistory(switchId) {
+        if (this.history[switchId]) return this.history[switchId];
+        const file = path.join(config.DATA_DIR, 'history', `${switchId}.json`);
+        this.history[switchId] = this._readFile(file);
+        return this.history[switchId];
+    }
+
     getHistory(switchId, since) {
         if (!/^[a-zA-Z0-9_-]+$/.test(switchId)) return [];
-        const file = path.join(config.DATA_DIR, 'history', `${switchId}.json`);
-        const records = this._readFile(file);
+        const records = this._loadHistory(switchId);
         if (since) return records.filter(h => h.timestamp > since);
         return records;
     }
 
     appendHistory(switchId, record) {
         if (!/^[a-zA-Z0-9_-]+$/.test(switchId)) return;
-        const file = path.join(config.DATA_DIR, 'history', `${switchId}.json`);
-        let records = this._readFile(file);
+        const records = this._loadHistory(switchId);
         records.push(record);
-        // Cihaz başına max 5000 kayıt
-        if (records.length > 5000) records = records.slice(-5000);
-        // Async yaz (non-blocking)
-        fs.writeFile(file, JSON.stringify(records), () => {});
+        // Cihaz başına max kayıt — başından kırp (in-place)
+        if (records.length > this.MAX_HISTORY_PER_DEVICE) {
+            records.splice(0, records.length - this.MAX_HISTORY_PER_DEVICE);
+        }
+        this._markHistoryDirty(switchId);
+    }
+
+    // Geçmişi diske yazılmak üzere işaretle. Debounce timer'ı her çağrıda
+    // SIFIRLANMAZ — böylece sürekli append akışında dahi en geç DEBOUNCE içinde flush olur.
+    _markHistoryDirty(switchId) {
+        this.historyDirty.add(switchId);
+        if (!this.historyTimer) {
+            this.historyTimer = setTimeout(() => {
+                this.historyTimer = null;
+                this._flushHistory();
+            }, this.HISTORY_DEBOUNCE);
+        }
+    }
+
+    _flushHistory() {
+        if (this.historyDirty.size === 0) return;
+        const historyDir = path.join(config.DATA_DIR, 'history');
+        for (const switchId of this.historyDirty) {
+            const records = this.history[switchId];
+            if (!records) continue;
+            const file = path.join(historyDir, `${switchId}.json`);
+            try {
+                const tmpFile = file + '.tmp';
+                fs.writeFileSync(tmpFile, JSON.stringify(records));
+                fs.renameSync(tmpFile, file);
+            } catch (e) {
+                console.error(`[STORE] history ${switchId} yazılamadı:`, e.message);
+            }
+        }
+        this.historyDirty.clear();
     }
 
     // --- Dirty tracking & debounced write ---
@@ -274,7 +324,9 @@ class MemoryStore {
     // Uygulama kapanırken flush
     flushSync() {
         if (this.writeTimer) clearTimeout(this.writeTimer);
+        if (this.historyTimer) { clearTimeout(this.historyTimer); this.historyTimer = null; }
         this._flush();
+        this._flushHistory();
     }
 }
 

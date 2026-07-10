@@ -57,7 +57,8 @@ router.post('/login', async (req, res) => {
     res.json({
         role: user.role,
         username: user.username,
-        mustChangePassword: user.mustChangePassword || false
+        mustChangePassword: user.mustChangePassword || false,
+        allowedCommands: user.allowedCommands || []
     });
 });
 
@@ -75,7 +76,8 @@ router.get('/me', authenticate, (req, res) => {
         id: user.id,
         username: user.username,
         role: user.role,
-        mustChangePassword: user.mustChangePassword || false
+        mustChangePassword: user.mustChangePassword || false,
+        allowedCommands: user.allowedCommands || []
     });
 });
 

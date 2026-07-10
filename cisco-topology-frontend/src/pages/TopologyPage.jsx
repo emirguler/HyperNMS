@@ -17,8 +17,8 @@ import { useTopologyTabs } from '../hooks/useTopologyTabs';
 const nodeTypes = { switchNode: SwitchNode };
 
 function TopologyInner({ onEdit }) {
-  const { rawDevices, edges, setEdges, fetchData, sshSessions, openSshSession } = useApp();
-  const { isAdmin, authFetch, csrfToken } = useAuth();
+  const { rawDevices, edges, setEdges, fetchData, openSshSession } = useApp();
+  const { isAdmin, authFetch, csrfToken, allowedCommands } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { tabId } = useParams();
@@ -110,9 +110,29 @@ function TopologyInner({ onEdit }) {
       const src = rawDevices.find(s => s.id === e.source);
       const tgt = rawDevices.find(s => s.id === e.target);
       const active = src?.status === 'UP' && tgt?.status === 'UP';
+
+      // Anten-anten arası: kablosuz bağlantı — akan kesikli animasyon (radyo dalgası hissi)
+      const wireless = src?.type === 'antenna' && tgt?.type === 'antenna';
+      if (wireless) {
+        return {
+          ...e, animated: false,
+          className: active ? 'wireless-edge' : 'wireless-edge-idle',
+          style: {
+            stroke: active ? 'rgba(245, 158, 11, 0.7)' : 'rgba(148, 163, 184, 0.35)',
+            strokeWidth: 2, opacity: 1
+          }
+        };
+      }
+
+      // Diğer tüm bağlantılar: kablo görünümü — düz, yumuşak renkli, koyu kılıf gölgeli.
+      // Renkler bilinçli olarak soluk: node altındaki hostname/IP yazıları okunabilsin.
+      // Aktif kabloda sade bir gidiş-geliş veri nabzı animasyonu oynar.
       return {
-        ...e, animated: false, className: active ? 'bi-flow-edge' : '',
-        style: { stroke: active ? 'var(--success)' : 'var(--text-muted)', strokeWidth: active ? 3 : 2, opacity: active ? 1 : 0.4 }
+        ...e, animated: false, className: active ? 'cable-edge' : 'cable-edge-idle',
+        style: {
+          stroke: active ? 'rgba(250, 204, 21, 0.45)' : 'rgba(148, 163, 184, 0.28)',
+          strokeWidth: 2.2, opacity: 1
+        }
       };
     });
   }, [edges, rawDevices]);
@@ -177,6 +197,9 @@ function TopologyInner({ onEdit }) {
     });
   }, [renameValue, renameTab]);
 
+  // Cihaz web arayüzü popup'ı (backend reverse proxy üzerinden)
+  const [webModal, setWebModal] = useState(null); // { id, label, ip, scheme }
+
   const [discovering, setDiscovering] = useState(false);
   const [discoveryResult, setDiscoveryResult] = useState(null);
   const [showDiscoverDialog, setShowDiscoverDialog] = useState(false);
@@ -225,7 +248,7 @@ function TopologyInner({ onEdit }) {
   };
 
   return (
-    <div style={{ width: '100%', height: sshSessions.length > 0 ? '60%' : '100%', position: 'relative', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ width: '100%', height: '100%', position: 'relative', display: 'flex', flexDirection: 'column' }}>
 
       {/* Tab Bar */}
       <div className="topology-tabs">
@@ -328,7 +351,8 @@ function TopologyInner({ onEdit }) {
           <div className="context-menu" style={{ top: menu.top, left: menu.left }}>
             <div className="context-menu-item" onClick={() => { navigate(`/devices/${menu.id}`); setMenu(null); }}>📊 Details</div>
             {isAdmin && <div className="context-menu-item" onClick={() => { onEdit(rawDevices.find(d => d.id === menu.id)); setMenu(null); }}>✏️ Edit</div>}
-            {isAdmin && <div className="context-menu-item" onClick={() => { openSshSession(menu.id, menu.label); setMenu(null); }}>💻 SSH Terminal</div>}
+            {(isAdmin || allowedCommands.length > 0) && <div className="context-menu-item" onClick={() => { openSshSession(menu.id, menu.label); setMenu(null); }}>💻 SSH Terminal</div>}
+            {menu.data?.type === 'antenna' && <div className="context-menu-item" onClick={() => { setWebModal({ id: menu.id, label: menu.label, ip: menu.data.ip, scheme: 'http' }); setMenu(null); }}>🌐 Web</div>}
             <div className="context-menu-item" onClick={() => {
               const pos = localNodes.find(n => n.id === menu.id)?.position;
               if (pos) setCenter(pos.x + 65, pos.y + 40, { zoom: 2, duration: 500 });
@@ -363,6 +387,48 @@ function TopologyInner({ onEdit }) {
           </div>
         )}
       </div>
+
+      {/* Cihaz Web Arayüzü — backend proxy üzerinden iframe */}
+      {webModal && (
+        <div className="modal-overlay" onClick={() => setWebModal(null)} onKeyDown={e => { if (e.key === 'Escape') setWebModal(null); }}>
+          <div onClick={e => e.stopPropagation()} style={{
+            width: '85vw', height: '85vh', background: 'var(--bg-panel)',
+            border: '1px solid var(--border-color)', borderRadius: 12,
+            display: 'flex', flexDirection: 'column', overflow: 'hidden',
+            boxShadow: '0 24px 60px rgba(0,0,0,0.6)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', borderBottom: '1px solid var(--border-color)', flexShrink: 0 }}>
+              <strong style={{ fontSize: '0.9rem' }}>🌐 {webModal.label}</strong>
+              <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem', fontFamily: 'monospace' }}>{webModal.ip}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 12 }}>
+                {['http', 'https'].map(s => (
+                  <button key={s} onClick={() => setWebModal(w => ({ ...w, scheme: s }))}
+                    style={{
+                      padding: '3px 10px', fontSize: '0.7rem', borderRadius: 6, cursor: 'pointer',
+                      border: '1px solid var(--border-color)', fontWeight: 600,
+                      background: webModal.scheme === s ? 'var(--primary)' : 'transparent',
+                      color: webModal.scheme === s ? '#0f172a' : 'var(--text-muted)'
+                    }}>{s.toUpperCase()}</button>
+                ))}
+                {/* reloadKey artışı iframe'i remount ederek sayfayı yeniler */}
+                <button onClick={() => setWebModal(w => ({ ...w, reloadKey: (w.reloadKey || 0) + 1 }))}
+                  title={t('refresh')}
+                  style={{
+                    padding: '3px 9px', fontSize: '0.85rem', lineHeight: 1, borderRadius: 6, cursor: 'pointer',
+                    border: '1px solid var(--border-color)', background: 'transparent', color: 'var(--text-muted)'
+                  }}>⟳</button>
+              </div>
+              <button onClick={() => setWebModal(null)} className="btn btn-ghost" style={{ marginLeft: 'auto', fontSize: '1.3rem', lineHeight: 1, padding: '0 8px' }}>&times;</button>
+            </div>
+            <iframe
+              key={`${webModal.id}-${webModal.scheme}-${webModal.reloadKey || 0}`}
+              src={`${API_BASE}/webproxy/${webModal.id}/${webModal.scheme}/`}
+              title={`${webModal.label} Web UI`}
+              style={{ flex: 1, border: 'none', background: '#fff' }}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Auto Topology Dialog */}
       {showDiscoverDialog && (

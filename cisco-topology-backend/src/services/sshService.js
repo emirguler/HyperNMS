@@ -24,8 +24,15 @@ function setupWebSocket(server) {
             return;
         }
 
-        if (user.role !== 'Administrator') {
-            ws.send(JSON.stringify({ type: 'error', message: 'Admin access required' }));
+        // Administrator = tam kontrol (raw giriş). User = salt-izle: sadece kendisine
+        // atanmış whitelist komutlarını butonla çalıştırabilir; klavye girişi sunucuda yok sayılır.
+        const isAdmin = user.role === 'Administrator';
+        const account = store.getUser(user.id) || {};
+        const allowedCommands = isAdmin ? null : (Array.isArray(account.allowedCommands) ? account.allowedCommands : []);
+
+        // Komut atanmamış User rolüne SSH tamamen kapalı
+        if (!isAdmin && allowedCommands.length === 0) {
+            ws.send(JSON.stringify({ type: 'error', message: 'No SSH commands assigned to your account. Access denied.' }));
             ws.close();
             return;
         }
@@ -51,16 +58,34 @@ function setupWebSocket(server) {
 
         const conn = new ssh2();
         conn.on('ready', () => {
-            console.log(`[SSH] Connected to ${device.name} (${device.ip})`);
+            console.log(`[SSH] Connected to ${device.name} (${device.ip}) as ${user.username} [${isAdmin ? 'full' : 'restricted'}]`);
             safeSend(JSON.stringify({ type: 'info', message: 'SSH Connection Established.\r\n' }));
+            // İstemciye modunu bildir: admin = tam kontrol, user = sadece komut butonları
+            safeSend(JSON.stringify({ type: 'mode', readOnly: !isAdmin, commands: allowedCommands || [] }));
             conn.shell((err, stream) => {
                 if (err) { safeSend(JSON.stringify({ type: 'error', message: err.message })); return; }
                 stream.on('data', (data) => safeSend(JSON.stringify({ type: 'data', data: data.toString() })));
                 stream.on('close', () => { conn.end(); try { ws.close(); } catch (e) {} });
+
+                // Kısıtlı (User) oturum: sayfalamayı kapat — buton çıktıları --More-- ile durmasın
+                if (!isAdmin) stream.write('terminal length 0\n');
                 ws.on('message', (msg) => {
                     try {
                         const parsed = JSON.parse(msg);
-                        if (parsed.type === 'data') stream.write(parsed.data);
+                        if (isAdmin) {
+                            // Tam kontrol: raw klavye girişi
+                            if (parsed.type === 'data') stream.write(parsed.data);
+                        } else {
+                            // Kısıtlı kullanıcı: klavye girişi (data) yok sayılır.
+                            // Sadece whitelist'te BİREBİR eşleşen komut çalıştırılır.
+                            if (parsed.type === 'command' && typeof parsed.cmd === 'string') {
+                                if (allowedCommands.includes(parsed.cmd)) {
+                                    stream.write(parsed.cmd + '\n');
+                                } else {
+                                    safeSend(JSON.stringify({ type: 'error', message: `Command not allowed: ${parsed.cmd}` }));
+                                }
+                            }
+                        }
                     } catch (e) { /* ignore */ }
                 });
             });

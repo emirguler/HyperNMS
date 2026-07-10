@@ -10,6 +10,7 @@ export function AuthProvider({ children }) {
   const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem('userRole'));
   const [mustChangePassword, setMustChangePassword] = useState(false);
   const [csrfToken, setCsrfToken] = useState('');
+  const [allowedCommands, setAllowedCommands] = useState([]);
 
   // Fetch CSRF token on mount
   const fetchCsrfToken = useCallback(async () => {
@@ -36,6 +37,7 @@ export function AuthProvider({ children }) {
           setUserRole(data.role);
           setUsername(data.username);
           setMustChangePassword(data.mustChangePassword || false);
+          setAllowedCommands(data.allowedCommands || []);
           fetchCsrfToken();
         })
         .catch(() => {
@@ -62,6 +64,7 @@ export function AuthProvider({ children }) {
       setUserRole(data.role);
       setUsername(data.username);
       setMustChangePassword(data.mustChangePassword || false);
+      setAllowedCommands(data.allowedCommands || []);
       localStorage.setItem('userRole', data.role);
       localStorage.setItem('username', data.username);
       showToast('Login successful', 'success');
@@ -85,6 +88,7 @@ export function AuthProvider({ children }) {
     setUsername('');
     setMustChangePassword(false);
     setCsrfToken('');
+    setAllowedCommands([]);
     localStorage.removeItem('userRole');
     localStorage.removeItem('username');
   }, [csrfToken]);
@@ -135,7 +139,8 @@ export function AuthProvider({ children }) {
     <AuthContext.Provider value={{
       isAuthenticated, userRole, username, login, logout, authFetch,
       isAdmin: userRole === 'Administrator',
-      mustChangePassword, clearMustChangePassword, csrfToken
+      mustChangePassword, clearMustChangePassword, csrfToken,
+      allowedCommands
     }}>
       {children}
     </AuthContext.Provider>

@@ -91,6 +91,7 @@ function SwitchFormModal({ mode, initialValues, onCancel, onSave, topologyTabs }
                 <option value="firewall">Firewall</option>
                 <option value="server">Server</option>
                 <option value="pc">PC</option>
+                <option value="antenna">Antenna</option>
                 <option value="cloud">Cloud / Internet</option>
               </select>
             </div>

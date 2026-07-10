@@ -7,7 +7,9 @@
       "Bash(node -e \":*)",
       "Bash(curl -s -X POST http://localhost:4000/login -H \"Content-Type: application/json\" -d '{\"\"username\"\":\"\"admin\"\",\"\"password\"\":\"\"p123456**\"\"}')",
       "Bash(node -e \"const jwt=require\\(''jsonwebtoken''\\);const c=require\\(''./src/config''\\);const t=jwt.sign\\({id:1,username:''admin'',role:''Administrator''},c.SECRET_KEY,{expiresIn:''1h''}\\);console.log\\(t\\);\")",
-      "Bash(curl -v http://localhost:4000/topology/pages -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJhZG1pbiIsInJvbGUiOiJBZG1pbmlzdHJhdG9yIiwiaWF0IjoxNzc0MjcwMTA5LCJleHAiOjE3NzQyNzM3MDl9.9EMoRzTaJI2FsBDU-Gj8ppXpjN55D9nFMtfmb9-ZS9o\")"
+      "Bash(curl -v http://localhost:4000/topology/pages -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJhZG1pbiIsInJvbGUiOiJBZG1pbmlzdHJhdG9yIiwiaWF0IjoxNzc0MjcwMTA5LCJleHAiOjE3NzQyNzM3MDl9.9EMoRzTaJI2FsBDU-Gj8ppXpjN55D9nFMtfmb9-ZS9o\")",
+      "Read(//c/Users/EMIR-PT/Desktop/cisco-topology-frontend/**)",
+      "Read(//c/Users/EMIR-PT/Desktop/**)"
     ]
   }
 }

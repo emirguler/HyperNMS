@@ -22,6 +22,7 @@ const edgeRoutes = require('./routes/edges');
 const userRoutes = require('./routes/users');
 const auditRoutes = require('./routes/audit');
 const settingsRoutes = require('./routes/settings');
+const webproxyRoutes = require('./routes/webproxy');
 
 const app = express();
 
@@ -66,6 +67,10 @@ app.use((req, res, next) => {
     if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
     if (req.path === '/login' || req.path === '/api/login') return next();
 
+    // Web proxy: cihaz arayüzü formları CSRF token'ımızı bilemez — muaf tut
+    if (req.path.includes('/webproxy/')) return next();
+    if ((req.headers.referer || '').includes('/webproxy/')) return next();
+
     // Dev mode: skip CSRF (cross-origin cookie won't work 5173→4000)
     if (config.NODE_ENV !== 'production') return next();
 
@@ -80,7 +85,12 @@ app.use((req, res, next) => {
 });
 
 // --- H6: Global Rate Limiting (all API endpoints) ---
-app.use(rateLimiter({ windowMs: 60000, max: 100, message: 'Too many requests, please slow down' }));
+// Web proxy muaf: cihaz arayüzleri onlarca asset isteği yapar, limite takılmasın
+const globalLimiter = rateLimiter({ windowMs: 60000, max: 100, message: 'Too many requests, please slow down' });
+app.use((req, res, next) => {
+    if (req.path.includes('/webproxy/') || (req.headers.referer || '').includes('/webproxy/')) return next();
+    return globalLimiter(req, res, next);
+});
 
 // --- Routes ---
 // API routes — mounted at /api for production, root for dev
@@ -91,6 +101,7 @@ app.use(apiPrefix, edgeRoutes);
 app.use(apiPrefix, userRoutes);
 app.use(apiPrefix, auditRoutes);
 app.use(apiPrefix, settingsRoutes);
+app.use(apiPrefix, webproxyRoutes);
 
 app.get('/notifications', authenticate, (req, res) => {
     res.json(getNotifications(parseInt(req.query.limit) || 50));
@@ -118,6 +129,19 @@ const csrfHandler = (req, res) => {
 };
 app.get('/csrf-token', csrfHandler);
 app.get('/api/csrf-token', csrfHandler);
+
+// Web proxy fallback: cihaz sayfaları asset'leri mutlak yolla ister (/style.css gibi).
+// Referer'ı webproxy olan bu istekleri 307 ile proxy prefix'ine geri yönlendir.
+app.use((req, res, next) => {
+    if (req.originalUrl.includes('/webproxy/')) return next();
+    const ref = req.headers.referer || '';
+    const m = ref.match(/\/webproxy\/([^/]+)\/(https?)/);
+    if (m) {
+        const prefix = (config.NODE_ENV === 'production' ? '/api' : '') + `/webproxy/${m[1]}/${m[2]}`;
+        return res.redirect(307, prefix + req.originalUrl);
+    }
+    next();
+});
 
 if (config.NODE_ENV === 'production') {
     const publicPath = path.resolve(__dirname, '../public');

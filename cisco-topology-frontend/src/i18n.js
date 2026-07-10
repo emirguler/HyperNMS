@@ -107,6 +107,12 @@ const translations = {
 
     // Terminal
     closeAll: 'Close All',
+    minimize: 'Minimize',
+    restore: 'Restore',
+    noCommandsAssigned: 'No commands assigned to you',
+    refresh: 'Refresh',
+    allowedCommandsLabel: 'Allowed SSH Commands',
+    allowedCommandsHint: 'One command per line. Only for the User role — these appear as buttons in the SSH terminal and are the only commands this user can run.',
 
     // Edge context menu
     deleteConnection: 'Delete Connection',
@@ -220,6 +226,12 @@ const translations = {
 
     // Terminal
     closeAll: 'T\u00fcm\u00fcn\u00fc Kapat',
+    minimize: 'K\u00fc\u00e7\u00fclt',
+    restore: 'Geri A\u00e7',
+    noCommandsAssigned: 'Size atanm\u0131\u015f komut yok',
+    refresh: 'Yenile',
+    allowedCommandsLabel: '\u0130zinli SSH Komutlar\u0131',
+    allowedCommandsHint: 'Her sat\u0131ra bir komut. Sadece User rol\u00fc i\u00e7in \u2014 SSH terminalinde buton olarak g\u00f6r\u00fcn\u00fcr ve bu kullan\u0131c\u0131 yaln\u0131zca bu komutlar\u0131 \u00e7al\u0131\u015ft\u0131rabilir.',
 
     // Edge context menu
     deleteConnection: 'Ba\u011flant\u0131y\u0131 Sil',
