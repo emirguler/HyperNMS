@@ -18,7 +18,7 @@ const TYPE_SHAPE = {
   cloud: 'ellipse',
 };
 
-const ICON_SIZE = 20;
+const ICON_SIZE = 16;
 
 // --- Professional SVG Icons ---
 const RouterIcon = ({ size = ICON_SIZE }) => (
@@ -153,12 +153,12 @@ function SwitchNode({ data }) {
         )}
 
         <span className="node-icon">
-          <IconComponent status={data.status} size={data.type === 'antenna' ? 14 : ICON_SIZE} />
+          <IconComponent status={data.status} size={data.type === 'antenna' ? 12 : ICON_SIZE} />
         </span>
       </div>
 
-      {/* Hostname — şeklin dışında, altında */}
-      <div className="node-label">{data.label}</div>
+      {/* Hostname — şeklin dışında, altında (antende gizli) */}
+      {data.type !== 'antenna' && <div className="node-label">{data.label}</div>}
 
       {/* Hover: IP — kutusuz, ismin altında zarifçe belirir */}
       {hovered && (

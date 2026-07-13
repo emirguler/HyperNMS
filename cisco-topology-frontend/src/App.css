@@ -337,18 +337,18 @@ body {
   transition: box-shadow 0.2s ease, border-color 0.2s ease, opacity 0.3s ease;
 }
 .node-shape.rect {
-  width: 88px;
-  height: 40px;
-  border-radius: 10px;
+  width: 72px;
+  height: 32px;
+  border-radius: 8px;
 }
 .node-shape.circle {
-  width: 30px;
-  height: 30px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
 }
 .node-shape.ellipse {
-  width: 84px;
-  height: 46px;
+  width: 70px;
+  height: 38px;
   border-radius: 50%;
 }
 .topology-node:hover .node-shape { filter: brightness(1.15); }
