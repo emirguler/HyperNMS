@@ -330,7 +330,7 @@ function TopologyInner({ onEdit }) {
             <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 5, display: 'flex', gap: 6 }}>
               <button
                 className="btn btn-primary btn-sm"
-                onClick={() => { setSelectedRootId('auto'); setShowDiscoverDialog(true); }}
+                onClick={() => { setSelectedRootIds([]); setShowDiscoverDialog(true); }}
                 disabled={discovering}
                 style={{ fontSize: '0.75rem', padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 4 }}
               >
