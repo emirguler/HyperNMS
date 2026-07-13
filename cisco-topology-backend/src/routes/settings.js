@@ -155,6 +155,12 @@ router.post('/switches/bulk', authenticate, requireAdmin, async (req, res) => {
     const existing = store.getSwitches();
 
     for (const raw of devices) {
+        // CSV'den tags virgüllü string gelir; sanitizeSwitch dizi beklediğinden
+        // dönüşümü sanitize ÖNCESİNDE yap (yoksa tag'ler kaybolur).
+        if (raw && typeof raw.tags === 'string') {
+            raw.tags = raw.tags.split(',').map(t => t.trim()).filter(Boolean);
+        }
+
         const payload = sanitizeSwitch(raw);
 
         if (!payload.name || !payload.ip) {
@@ -181,11 +187,6 @@ router.post('/switches/bulk', authenticate, requireAdmin, async (req, res) => {
         // Encrypt SSH password
         if (payload.sshPassword) {
             payload.sshPassword = encryptPassword(payload.sshPassword);
-        }
-
-        // Tags string → array
-        if (typeof payload.tags === 'string') {
-            payload.tags = payload.tags.split(',').map(t => t.trim()).filter(Boolean);
         }
 
         const newSwitch = {

@@ -79,6 +79,23 @@ export default function BulkImportModal({ onClose }) {
     setResult(null);
   };
 
+  // İçe aktarılabilir tüm sütun başlıkları + 1 örnek satır içeren CSV indir
+  const downloadExampleCsv = () => {
+    const csv = [
+      'Name,IP,Type,Model,SSH Username,SSH Password,SNMP Community,Tags,Topology Page',
+      'Switch-01,192.168.1.10,switch,Cisco C9200,admin,MyP@ssw0rd,public,core,main'
+    ].join('\r\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'netpulse-example.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   const handleImport = async () => {
     if (devices.length === 0) return;
     setLoading(true);
@@ -110,8 +127,17 @@ export default function BulkImportModal({ onClose }) {
 
         {/* Instructions */}
         <div style={{ background: 'rgba(56,189,248,0.08)', border: '1px solid rgba(56,189,248,0.2)', borderRadius: 8, padding: 12, marginBottom: 16, fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-          Upload a CSV/Excel file or paste data. Required columns: <strong>Name</strong> and <strong>IP</strong>.
-          Optional: Type, Model, SSH Username, SSH Password, SNMP Community, Tags, Topology Page
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+            <div>
+              Upload a CSV/Excel file or paste data. Required columns: <strong>Name</strong> and <strong>IP</strong>.
+              Optional: Type, Model, SSH Username, SSH Password, SNMP Community, Tags, Topology Page
+            </div>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={downloadExampleCsv}
+              title="Download a sample CSV with all columns"
+              style={{ flexShrink: 0, whiteSpace: 'nowrap', color: 'var(--primary)', fontWeight: 600 }}>
+              ⬇ Example CSV
+            </button>
+          </div>
         </div>
 
         {/* File upload */}
