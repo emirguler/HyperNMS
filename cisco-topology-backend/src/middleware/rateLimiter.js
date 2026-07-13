@@ -3,7 +3,10 @@ const attempts = new Map();
 
 function rateLimiter({ windowMs = 60000, max = 10, message = 'Too many requests, please wait' } = {}) {
     return (req, res, next) => {
-        const key = req.ip || req.connection.remoteAddress;
+        // Kimliği doğrulanmış istekleri kullanıcıya (token) göre anahtarla — Docker/proxy
+        // arkasında tüm istemciler aynı IP'den görünüp tek kovayı paylaşmasın.
+        // Doğrulanmamış istekler (login vb.) IP bazında kalır (brute-force koruması sürer).
+        const key = req.cookies?.token || req.ip || req.connection.remoteAddress;
         const now = Date.now();
 
         if (!attempts.has(key)) {

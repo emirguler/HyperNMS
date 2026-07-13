@@ -27,6 +27,9 @@ const webproxyRoutes = require('./routes/webproxy');
 
 const app = express();
 
+// Reverse proxy arkasında gerçek istemci IP'si için X-Forwarded-For'a güven
+app.set('trust proxy', true);
+
 // --- Core Middleware ---
 app.use(compression()); // JSON/statik yanıtları gzip'le (poll yükünü küçültür)
 app.use(cors({
@@ -86,11 +89,14 @@ app.use((req, res, next) => {
     next();
 });
 
-// --- H6: Global Rate Limiting (all API endpoints) ---
-// Web proxy muaf: cihaz arayüzleri onlarca asset isteği yapar, limite takılmasın
-const globalLimiter = rateLimiter({ windowMs: 60000, max: 100, message: 'Too many requests, please slow down' });
+// --- H6: Global Rate Limiting ---
+// Kullanıcı-bazlı anahtarlandığı için (rateLimiter) limit artık kullanıcı başına.
+const globalLimiter = rateLimiter({ windowMs: 60000, max: 300, message: 'Too many requests, please slow down' });
 app.use((req, res, next) => {
+    // Web proxy muaf: cihaz arayüzleri onlarca asset isteği yapar
     if (req.path.includes('/webproxy/') || (req.headers.referer || '').includes('/webproxy/')) return next();
+    // Production'da statik varlıklar (JS/CSS chunk'ları, index.html) API limitini tüketmesin
+    if (config.NODE_ENV === 'production' && !req.path.startsWith('/api')) return next();
     return globalLimiter(req, res, next);
 });
 
