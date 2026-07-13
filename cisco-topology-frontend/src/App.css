@@ -654,31 +654,24 @@ select.modern-input option {
   stroke-linecap: round;
 }
 
-/* Kablolu: düz çizgi + koyu "kılıf" gölgesi — fiziksel kablo görünümü */
-
-/* Aktif kablo: kesiksiz düz çizgi, yumuşak bir nabızla parlayıp söner —
-   hattın canlı/veri taşıdığını kesik çizgi kullanmadan hissettirir */
+/* Kablolu: düz çizgi, yumuşak nabız.
+   NOT: Animasyonlu SVG `filter: drop-shadow` her karede yeniden rasterize
+   olduğu için çok kenarda kasmaya yol açıyordu. Glow'u filtreyle değil,
+   sadece stroke-opacity + stroke-width nabzıyla veriyoruz (repaint dostu). */
 @keyframes cablePulse {
-  0%, 100% {
-    stroke-opacity: 0.5;
-    filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.75));
-  }
-  50% {
-    stroke-opacity: 1;
-    filter: drop-shadow(0 0 4px currentColor) drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.75));
-  }
+  0%, 100% { stroke-opacity: 0.35; stroke-width: 2; }
+  50%      { stroke-opacity: 0.95; stroke-width: 2.6; }
 }
 
 .cable-edge path {
   stroke-linecap: round;
-  color: rgba(250, 204, 21, 0.6); /* glow rengi — currentColor ile drop-shadow'a taşınır */
-  animation: cablePulse 2.2s ease-in-out infinite;
+  animation: cablePulse 2.4s ease-in-out infinite;
 }
 
-/* Pasif/DOWN kablo: sabit düz çizgi, animasyon yok */
+/* Pasif/DOWN kablo: sabit düz çizgi, animasyon/filtre yok */
 .cable-edge-idle path {
   stroke-linecap: round;
-  filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.75));
+  stroke-opacity: 0.5;
 }
 
 /* ============================================
