@@ -151,8 +151,39 @@ router.post('/switches/bulk', authenticate, requireAdmin, async (req, res) => {
         return res.status(400).json({ error: 'Maximum 500 devices per import' });
     }
 
-    const results = { added: 0, skipped: 0, errors: [] };
+    const results = { added: 0, skipped: 0, errors: [], pagesCreated: 0 };
     const existing = store.getSwitches();
+
+    // CSV'deki tip değerini normalize et: büyük/küçük harf, kısaltma ve
+    // görünen etiketleri (ör. "Network Switch") kanonik değere eşle.
+    const TYPE_ALIASES = {
+        'switch': 'switch', 'network switch': 'switch', 'sw': 'switch', 'l2': 'switch', 'l3': 'switch', 'l3 switch': 'switch', 'l2 switch': 'switch',
+        'router': 'router', 'rtr': 'router', 'gateway': 'router', 'gw': 'router',
+        'firewall': 'firewall', 'fw': 'firewall', 'guvenlik duvari': 'firewall',
+        'server': 'server', 'srv': 'server', 'sunucu': 'server', 'linux server': 'server', 'linux': 'server',
+        'pc': 'pc', 'workstation': 'pc', 'client': 'pc', 'istemci': 'pc', 'bilgisayar': 'pc',
+        'antenna': 'antenna', 'anten': 'antenna', 'ap': 'antenna', 'access point': 'antenna', 'wireless': 'antenna', 'radio': 'antenna', 'link': 'antenna',
+        'cloud': 'cloud', 'cloud / internet': 'cloud', 'internet': 'cloud', 'wan': 'cloud', 'bulut': 'cloud',
+    };
+    const normalizeType = (val) => {
+        const key = String(val || '').trim().toLowerCase();
+        if (!key) return 'switch';
+        return TYPE_ALIASES[key] || key; // tanınmazsa olduğu gibi bırak → validateSwitch yakalar
+    };
+
+    // Topoloji sayfaları id ile tutulur; CSV'de kullanıcı sayfa ADINI yazar.
+    // Ada göre (veya id'ye göre) eşleştir; yoksa o adda yeni sayfa oluştur.
+    const resolveTopologyPage = (value) => {
+        const v = (value || '').trim();
+        if (!v || v.toLowerCase() === 'main') return 'main';
+        const tabs = store.getTopoTabs();
+        const match = tabs.find(t => t.id === v || t.name.toLowerCase() === v.toLowerCase());
+        if (match) return match.id;
+        // Yeni sayfa oluştur (bulk'ta çakışmasın diye rastgele son ek)
+        const tab = store.addTopoTab({ id: 'tab-' + Date.now() + crypto.randomBytes(3).toString('hex'), name: v });
+        results.pagesCreated++;
+        return tab.id;
+    };
 
     for (const raw of devices) {
         // CSV'den tags virgüllü string gelir; sanitizeSwitch dizi beklediğinden
@@ -169,6 +200,9 @@ router.post('/switches/bulk', authenticate, requireAdmin, async (req, res) => {
             continue;
         }
 
+        // Tip değerini kanonik hale getir (Switch / SWITCH / "Network Switch" → switch)
+        if (payload.type !== undefined) payload.type = normalizeType(payload.type);
+
         // Validate
         const errors = validateSwitch(payload);
         if (errors.length > 0) {
@@ -183,6 +217,9 @@ router.post('/switches/bulk', authenticate, requireAdmin, async (req, res) => {
             results.skipped++;
             continue;
         }
+
+        // Topoloji sayfası: CSV'deki ad/id → geçerli sayfa id'si (yoksa oluştur)
+        payload.topologyPage = resolveTopologyPage(payload.topologyPage);
 
         // Encrypt SSH password
         if (payload.sshPassword) {

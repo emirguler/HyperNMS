@@ -63,13 +63,19 @@ export default function BulkImportModal({ onClose }) {
 
     const reader = new FileReader();
     reader.onload = (ev) => {
-      const text = ev.target.result;
+      const buf = ev.target.result; // ArrayBuffer
+      // Önce UTF-8 dene; Türkçe karakterler bozulup replacement (�) çıkarsa
+      // dosya büyük olasılıkla Windows Türkçe (windows-1254) kodlamasındadır.
+      let text = new TextDecoder('utf-8', { fatal: false }).decode(buf);
+      if (text.includes('�')) {
+        try { text = new TextDecoder('windows-1254').decode(buf); } catch { /* ignore */ }
+      }
       setRawText(text);
       const parsed = parseCSV(text);
       setDevices(parsed);
       setResult(null);
     };
-    reader.readAsText(file);
+    reader.readAsArrayBuffer(file);
   };
 
   const handlePaste = (text) => {
@@ -81,9 +87,16 @@ export default function BulkImportModal({ onClose }) {
 
   // İçe aktarılabilir tüm sütun başlıkları + 1 örnek satır içeren CSV indir
   const downloadExampleCsv = () => {
+    // Geçerli type değerleri: switch, router, firewall, server, pc, antenna, cloud
     const csv = [
       'Name,IP,Type,Model,SSH Username,SSH Password,SNMP Community,Tags,Topology Page',
-      'Switch-01,192.168.1.10,switch,Cisco C9200,admin,MyP@ssw0rd,public,core,main'
+      'Switch-01,192.168.1.10,switch,Cisco C9200,admin,MyP@ssw0rd,public,core,main',
+      'Router-01,192.168.1.1,router,Cisco ISR4331,admin,MyP@ssw0rd,public,edge,main',
+      'Firewall-01,192.168.1.2,firewall,Fortinet FG-60F,admin,MyP@ssw0rd,public,security,main',
+      'Server-01,192.168.1.20,server,Dell R740,root,MyP@ssw0rd,public,datacenter,main',
+      'PC-01,192.168.1.50,pc,Dell OptiPlex,,,public,office,main',
+      'Antenna-01,192.168.1.30,antenna,Ubiquiti LiteBeam,admin,MyP@ssw0rd,public,wireless,main',
+      'Internet,8.8.8.8,cloud,,,,,,main'
     ].join('\r\n');
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -194,6 +207,7 @@ export default function BulkImportModal({ onClose }) {
           <div style={{ padding: 12, borderRadius: 8, marginBottom: 16, background: result.added > 0 ? 'rgba(52,211,153,0.1)' : 'rgba(248,113,113,0.1)', border: `1px solid ${result.added > 0 ? 'rgba(52,211,153,0.2)' : 'rgba(248,113,113,0.2)'}` }}>
             <div style={{ fontSize: '0.85rem', fontWeight: 600, color: result.added > 0 ? 'var(--success)' : 'var(--danger)' }}>
               Added: {result.added} | Skipped: {result.skipped}
+              {result.pagesCreated > 0 && ` | New pages: ${result.pagesCreated}`}
             </div>
             {result.errors.length > 0 && (
               <div style={{ marginTop: 8, fontSize: '0.75rem', color: 'var(--text-muted)' }}>
