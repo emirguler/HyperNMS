@@ -142,7 +142,7 @@ function SwitchNode({ data }) {
           <div className="node-latency" style={{
             position: 'absolute',
             ...(shape === 'circle'
-              ? { top: 2, right: 2, transform: 'translate(50%, -50%)' }
+              ? { top: 3, right: -7, transform: 'translate(50%, -50%)' }
               : { top: -7, right: -7 }),
             background: latencyColor(data.latency), color: '#0f172a',
             fontSize: '0.5rem', fontWeight: 700, padding: '1px 5px',
@@ -153,7 +153,7 @@ function SwitchNode({ data }) {
         )}
 
         <span className="node-icon">
-          <IconComponent status={data.status} />
+          <IconComponent status={data.status} size={data.type === 'antenna' ? 14 : ICON_SIZE} />
         </span>
       </div>
 
