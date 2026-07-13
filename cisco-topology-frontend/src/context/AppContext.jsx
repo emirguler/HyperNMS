@@ -1,10 +1,10 @@
-import { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react';
 import { useAuth } from './AuthContext';
 
 const AppContext = createContext(null);
 
 export function AppProvider({ children }) {
-  const { authFetch } = useAuth();
+  const { authFetch, isAdmin } = useAuth();
   const [rawDevices, setRawDevices] = useState([]);
   const [users, setUsers] = useState([]);
   const [edges, setEdges] = useState([]);
@@ -46,16 +46,34 @@ export function AppProvider({ children }) {
           targetHandle: e.targetHandle || localHandleMap[e.id]?.targetHandle || 'top',
         }));
       });
-
-      const resU = await authFetch('/users');
-      if (resU && resU.ok) setUsers(await resU.json());
     } catch (e) { /* ignore */ }
   }, [authFetch]);
 
+  // Kullanıcı listesi ayrı ve talebe göre çekilir — 4sn'lik topoloji poll'ünden çıkarıldı
+  // (nadiren değişir; ayrıca admin olmayanda /users 403 döner)
+  const fetchUsers = useCallback(async () => {
+    if (!isAdmin) return;
+    try {
+      const res = await authFetch('/users');
+      if (res && res.ok) setUsers(await res.json());
+    } catch (e) { /* ignore */ }
+  }, [authFetch, isAdmin]);
+
+  useEffect(() => { fetchUsers(); }, [fetchUsers]);
+
+  // Topoloji poll'ü: sekme gizliyken duraklat (arka planda gereksiz istek/render yok)
   useEffect(() => {
+    let timer = null;
+    const start = () => { if (!timer) timer = setInterval(fetchData, 4000); };
+    const stop = () => { if (timer) { clearInterval(timer); timer = null; } };
     fetchData();
-    const i = setInterval(fetchData, 4000);
-    return () => clearInterval(i);
+    start();
+    const onVis = () => {
+      if (document.hidden) stop();
+      else { fetchData(); start(); }
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => { stop(); document.removeEventListener('visibilitychange', onVis); };
   }, [fetchData]);
 
   // SSH helpers
@@ -83,15 +101,23 @@ export function AppProvider({ children }) {
     setActiveSshTabId(null);
   }, []);
 
+  // Context value'yu memoize et — alakasız provider render'ları (theme/ssh) value
+  // kimliğini değiştirip tüm tüketicileri yeniden render etmesin
+  const value = useMemo(() => ({
+    rawDevices, users, edges, setEdges,
+    topoTabs, setTopoTabs,
+    theme, toggleTheme,
+    fetchData, fetchUsers,
+    sshSessions, activeSshTabId, setActiveSshTabId, terminalHeight, setTerminalHeight,
+    openSshSession, closeSshSession, closeAllSessions
+  }), [
+    rawDevices, users, edges, setEdges, topoTabs, setTopoTabs, theme, toggleTheme,
+    fetchData, fetchUsers, sshSessions, activeSshTabId, setActiveSshTabId,
+    terminalHeight, setTerminalHeight, openSshSession, closeSshSession, closeAllSessions
+  ]);
+
   return (
-    <AppContext.Provider value={{
-      rawDevices, users, edges, setEdges,
-      topoTabs, setTopoTabs,
-      theme, toggleTheme,
-      fetchData,
-      sshSessions, activeSshTabId, setActiveSshTabId, terminalHeight, setTerminalHeight,
-      openSshSession, closeSshSession, closeAllSessions
-    }}>
+    <AppContext.Provider value={value}>
       {children}
     </AppContext.Provider>
   );

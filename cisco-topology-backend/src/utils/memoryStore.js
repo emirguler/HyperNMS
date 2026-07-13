@@ -125,9 +125,9 @@ class MemoryStore {
         for (const [id, result] of Object.entries(results)) {
             const sw = this.data.switches.find(s => s.id === id);
             if (sw) {
-                if (sw.status !== result.status || Math.abs((sw.latency || 0) - result.latency) > 3) {
-                    changed = true;
-                }
+                // Sadece status değişimi diske yazımı tetikler; latency canlı veri,
+                // bellekte tutulur + history'ye gider — her titremede switches.json yazma.
+                if (sw.status !== result.status) changed = true;
                 sw.status = result.status;
                 sw.latency = result.latency;
                 sw.lastLatency = result.latency;
@@ -274,22 +274,32 @@ class MemoryStore {
         }
     }
 
-    _flushHistory() {
+    _flushHistory(sync = false) {
         if (this.historyDirty.size === 0) return;
         const historyDir = path.join(config.DATA_DIR, 'history');
-        for (const switchId of this.historyDirty) {
+        const ids = [...this.historyDirty];
+        this.historyDirty.clear();
+        for (const switchId of ids) {
             const records = this.history[switchId];
             if (!records) continue;
             const file = path.join(historyDir, `${switchId}.json`);
+            const tmpFile = file + '.tmp';
+            const json = JSON.stringify(records); // senkron snapshot
             try {
-                const tmpFile = file + '.tmp';
-                fs.writeFileSync(tmpFile, JSON.stringify(records));
-                fs.renameSync(tmpFile, file);
+                if (sync) {
+                    fs.writeFileSync(tmpFile, json);
+                    fs.renameSync(tmpFile, file);
+                } else {
+                    // Non-blocking: ping döngüsü sırasında event loop'u bloklamaz
+                    fs.writeFile(tmpFile, json, (err) => {
+                        if (err) return console.error(`[STORE] history ${switchId} yazılamadı:`, err.message);
+                        fs.rename(tmpFile, file, (e2) => { if (e2) console.error(`[STORE] history rename ${switchId}:`, e2.message); });
+                    });
+                }
             } catch (e) {
                 console.error(`[STORE] history ${switchId} yazılamadı:`, e.message);
             }
         }
-        this.historyDirty.clear();
     }
 
     // --- Dirty tracking & debounced write ---
@@ -326,7 +336,7 @@ class MemoryStore {
         if (this.writeTimer) clearTimeout(this.writeTimer);
         if (this.historyTimer) { clearTimeout(this.historyTimer); this.historyTimer = null; }
         this._flush();
-        this._flushHistory();
+        this._flushHistory(true); // kapanışta senkron (süreç bitmeden yazılsın)
     }
 }
 

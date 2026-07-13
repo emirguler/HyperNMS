@@ -654,24 +654,19 @@ select.modern-input option {
   stroke-linecap: round;
 }
 
-/* Kablolu: düz çizgi, yumuşak nabız.
-   NOT: Animasyonlu SVG `filter: drop-shadow` her karede yeniden rasterize
-   olduğu için çok kenarda kasmaya yol açıyordu. Glow'u filtreyle değil,
-   sadece stroke-opacity + stroke-width nabzıyla veriyoruz (repaint dostu). */
-@keyframes cablePulse {
-  0%, 100% { stroke-opacity: 0.35; stroke-width: 2; }
-  50%      { stroke-opacity: 0.95; stroke-width: 2.6; }
+/* Kablolu (CableEdge): düz kablo üzerinde kayan kısa parlak "ışık" segmenti (comet).
+   stroke-dashoffset animasyonu — SVG filter yok, sadece çizgi repaint → akıcı.
+   Kısa parlak segment (26) + uzun boşluk (800) bir arada; offset toplam kadar
+   kayınca segment kablo boyunca uçtan uca akar. */
+@keyframes cometFlow {
+  to { stroke-dashoffset: -812; }
 }
 
-.cable-edge path {
+.cable-comet {
   stroke-linecap: round;
-  animation: cablePulse 2.4s ease-in-out infinite;
-}
-
-/* Pasif/DOWN kablo: sabit düz çizgi, animasyon/filtre yok */
-.cable-edge-idle path {
-  stroke-linecap: round;
-  stroke-opacity: 0.5;
+  stroke-dasharray: 12 800;
+  animation: cometFlow 1.8s linear infinite;
+  pointer-events: none;
 }
 
 /* ============================================

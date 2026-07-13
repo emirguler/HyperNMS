@@ -7,7 +7,7 @@ import { showToast } from '../Toast';
 import { t } from '../i18n';
 
 export default function UsersPage() {
-  const { users, fetchData } = useApp();
+  const { users, fetchUsers } = useApp();
   const { isAdmin, authFetch } = useAuth();
 
   if (!isAdmin) return <Navigate to="/dashboard" replace />;
@@ -21,7 +21,7 @@ export default function UsersPage() {
     if (res.ok) showToast(`"${deleteTarget.username}" ${t('deleted')}`, 'success');
     else { const d = await res.json().catch(() => ({})); showToast(d.error || t('deleteFailed'), 'error'); }
     setDeleteTarget(null);
-    fetchData();
+    fetchUsers();
   };
 
   return (
@@ -68,7 +68,7 @@ export default function UsersPage() {
         if (res.ok) showToast(editingUser ? t('userUpdated') : t('userCreated'), 'success');
         else { const d = await res.json().catch(() => ({})); showToast(d.error || t('operationFailed'), 'error'); }
         setIsModalOpen(false);
-        fetchData();
+        fetchUsers();
       }} />}
     </div>
   );

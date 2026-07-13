@@ -168,4 +168,9 @@ function SwitchNode({ data }) {
   );
 }
 
-export default memo(SwitchNode);
+// Yalnızca gerçekten render edilen alanlar değişince yeniden çiz (data kimliği değişse bile)
+export default memo(SwitchNode, (p, n) => {
+  const a = p.data, b = n.data;
+  return a.label === b.label && a.ip === b.ip && a.status === b.status
+    && a.type === b.type && a.latency === b.latency;
+});

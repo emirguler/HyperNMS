@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const compression = require('compression');
 const fs = require('fs');
 const http = require('http');
 const path = require('path');
@@ -27,6 +28,7 @@ const webproxyRoutes = require('./routes/webproxy');
 const app = express();
 
 // --- Core Middleware ---
+app.use(compression()); // JSON/statik yanıtları gzip'le (poll yükünü küçültür)
 app.use(cors({
     origin: config.CORS_ORIGIN,
     credentials: true  // Required for httpOnly cookies

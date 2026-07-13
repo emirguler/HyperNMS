@@ -7,6 +7,7 @@ import ReactFlow, {
 import 'reactflow/dist/style.css';
 import { toPng } from 'html-to-image';
 import SwitchNode from '../components/SwitchNode';
+import CableEdge from '../components/CableEdge';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { API_BASE } from '../config';
@@ -15,6 +16,11 @@ import { showToast } from '../Toast';
 import { useTopologyTabs } from '../hooks/useTopologyTabs';
 
 const nodeTypes = { switchNode: SwitchNode };
+const edgeTypes = { cable: CableEdge };
+
+// MiniMap'in her render'da yeniden çizilmemesi için modül seviyesinde sabit
+const minimapNodeColor = (node) =>
+  node.data?.status === 'DOWN' ? '#ef4444' : node.data?.status === 'UP' ? '#34d399' : '#64748b';
 
 function TopologyInner({ onEdit }) {
   const { rawDevices, edges, setEdges, fetchData, openSshSession } = useApp();
@@ -57,32 +63,31 @@ function TopologyInner({ onEdit }) {
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
-  // Node'ları sync — main tab tüm cihazları gösterir, diğer tab'lar kendi cihazlarını
+  // Node'ları sync — main tab tüm cihazları gösterir, diğer tab'lar kendi cihazlarını.
+  // Perf: değişmeyen node'ların kimliğini KORU (aynı obje) → memo(SwitchNode) kısa devre
+  // yapar, her poll'de tüm node'lar yeniden çizilmez. Hiçbir şey değişmediyse prev döner.
   useEffect(() => {
     setLocalNodes(prev => {
+      const prevById = new Map(prev.map(n => [n.id, n]));
       const devices = activeTabId === 'main'
         ? rawDevices.filter(s => !s.topologyPage || s.topologyPage === 'main')
         : rawDevices.filter(s => s.topologyPage === activeTabId);
-      let updated = [];
-      devices.forEach(s => {
-        const existing = prev.find(n => n.id === s.id);
-        const nodeData = {
-          label: s.name, ip: s.ip, status: s.status,
-          type: s.type || 'switch', latency: s.latency,
-          tags: s.tags || [], cpu: s.cpu, ram: s.ram,
-          uptime: s.uptime, vendor: s.detectedVendor
-        };
-        if (existing) {
-          updated.push({ ...existing, data: nodeData });
-        } else {
-          updated.push({
-            id: s.id, type: 'switchNode',
-            position: s.position || { x: Math.random() * 600, y: Math.random() * 400 },
-            data: nodeData
-          });
-        }
+      let changed = devices.length !== prev.length;
+      const updated = devices.map(s => {
+        const existing = prevById.get(s.id);
+        const d = existing?.data;
+        const type = s.type || 'switch';
+        // SwitchNode yalnızca bu 5 alanı okur — sadece bunlar değişince yeni data üret
+        const same = d && d.label === s.name && d.ip === s.ip && d.status === s.status
+          && d.type === type && d.latency === s.latency;
+        if (existing && same) return existing;
+        changed = true;
+        const data = { label: s.name, ip: s.ip, status: s.status, type, latency: s.latency };
+        return existing
+          ? { ...existing, data }
+          : { id: s.id, type: 'switchNode', position: s.position || { x: Math.random() * 600, y: Math.random() * 400 }, data };
       });
-      return updated;
+      return changed ? updated : prev;
     });
   }, [rawDevices, activeTabId]);
 
@@ -105,37 +110,38 @@ function TopologyInner({ onEdit }) {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  // Cihaz kimliğe göre O(1) lookup — styledEdges'teki O(E×D) find'ı önler
+  const deviceById = useMemo(() => new Map(rawDevices.map(d => [d.id, d])), [rawDevices]);
+
+  // Değişmeyen edge'lerin stillenmiş objesini önbellekle → aynı referans kalınca
+  // ReactFlow edge'i yeniden çizmez (edges her poll'de yeni dizi olsa bile).
+  const edgeCacheRef = useRef(new Map());
   const styledEdges = useMemo(() => {
-    return edges.map(e => {
-      const src = rawDevices.find(s => s.id === e.source);
-      const tgt = rawDevices.find(s => s.id === e.target);
+    const cache = edgeCacheRef.current;
+    const liveIds = new Set();
+    const next = edges.map(e => {
+      liveIds.add(e.id);
+      const src = deviceById.get(e.source);
+      const tgt = deviceById.get(e.target);
       const active = src?.status === 'UP' && tgt?.status === 'UP';
-
-      // Anten-anten arası: kablosuz bağlantı — akan kesikli animasyon (radyo dalgası hissi)
       const wireless = src?.type === 'antenna' && tgt?.type === 'antenna';
-      if (wireless) {
-        return {
-          ...e, animated: false,
-          className: active ? 'wireless-edge' : 'wireless-edge-idle',
-          style: {
-            stroke: active ? 'rgba(245, 158, 11, 0.7)' : 'rgba(148, 163, 184, 0.35)',
-            strokeWidth: 2, opacity: 1
-          }
-        };
-      }
+      // İmza yalnızca görsel/yapısal alanlardan; edge obje kimliğinden bağımsız
+      const sig = `${active}|${wireless}|${e.source}|${e.target}|${e.sourceHandle || ''}|${e.targetHandle || ''}`;
+      const cached = cache.get(e.id);
+      if (cached && cached.sig === sig) return cached.styled;
 
-      // Diğer tüm bağlantılar: kablo görünümü — düz, yumuşak renkli, koyu kılıf gölgeli.
-      // Renkler bilinçli olarak soluk: node altındaki hostname/IP yazıları okunabilsin.
-      // Aktif kabloda sade bir gidiş-geliş veri nabzı animasyonu oynar.
-      return {
-        ...e, animated: false, className: active ? 'cable-edge' : 'cable-edge-idle',
-        style: {
-          stroke: active ? 'rgba(250, 204, 21, 0.45)' : 'rgba(148, 163, 184, 0.28)',
-          strokeWidth: 2.2, opacity: 1
-        }
-      };
+      const styled = wireless
+        ? { ...e, animated: false, className: active ? 'wireless-edge' : 'wireless-edge-idle',
+            style: { stroke: active ? 'rgba(245, 158, 11, 0.7)' : 'rgba(148, 163, 184, 0.35)', strokeWidth: 2, opacity: 1 } }
+        : { ...e, type: 'cable', animated: false, data: { ...(e.data || {}), active },
+            style: { stroke: active ? 'rgba(250, 204, 21, 0.5)' : 'rgba(148, 163, 184, 0.28)', strokeWidth: 2.2, opacity: 1 } };
+      cache.set(e.id, { sig, styled });
+      return styled;
     });
-  }, [edges, rawDevices]);
+    // Silinen edge'leri önbellekten temizle (sınırsız büyümesin)
+    for (const id of cache.keys()) if (!liveIds.has(id)) cache.delete(id);
+    return next;
+  }, [edges, deviceById]);
 
   const onNodeDragStop = useCallback((_, node) => {
     authFetch(`/switches/${node.id}`, {
@@ -164,11 +170,9 @@ function TopologyInner({ onEdit }) {
     setEdges(eds => eds.filter(e => !edgesToDelete.some(del => del.id === e.id)));
   }, [authFetch, setEdges]);
 
-  const minimapNodeColor = (node) => {
-    if (node.data?.status === 'DOWN') return '#ef4444';
-    if (node.data?.status === 'UP') return '#34d399';
-    return '#64748b';
-  };
+  // Node/edge değişimleri: fonksiyonel updater (bayat closure yerine) — kararlı referans
+  const onNodesChange = useCallback((changes) => setLocalNodes(nds => applyNodeChanges(changes, nds)), []);
+  const onEdgesChange = useCallback((changes) => setEdges(eds => applyEdgeChanges(changes, eds)), [setEdges]);
 
   const handleAddTab = async () => {
     const name = `Sub Page ${tabs.length}`;
@@ -305,8 +309,9 @@ function TopologyInner({ onEdit }) {
           nodes={localNodes}
           edges={styledEdges}
           nodeTypes={nodeTypes}
-          onNodesChange={n => setLocalNodes(applyNodeChanges(n, localNodes))}
-          onEdgesChange={isAdmin ? (e => setEdges(applyEdgeChanges(e, edges))) : undefined}
+          edgeTypes={edgeTypes}
+          onNodesChange={onNodesChange}
+          onEdgesChange={isAdmin ? onEdgesChange : undefined}
           onConnect={isAdmin ? onConnect : undefined}
           onEdgesDelete={isAdmin ? onEdgesDelete : undefined}
           onEdgeContextMenu={isAdmin ? ((e, edge) => { e.preventDefault(); setEdgeMenu({ id: edge.id, top: e.clientY, left: e.clientX }); setMenu(null); }) : undefined}
