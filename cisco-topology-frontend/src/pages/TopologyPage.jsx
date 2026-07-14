@@ -146,17 +146,6 @@ function TopologyInner({ onEdit, onClone }) {
     return next;
   }, [edges, deviceById]);
 
-  const onNodeDragStop = useCallback((_, node, nodes) => {
-    // Çoklu seçim sürüklenince ReactFlow tüm sürüklenen node'ları verir — hepsini kaydet
-    const dragged = (nodes && nodes.length) ? nodes : [node];
-    dragged.forEach(n => {
-      authFetch(`/switches/${n.id}`, {
-        method: 'PUT',
-        body: JSON.stringify({ position: n.position })
-      }).catch(() => {});
-    });
-  }, [authFetch]);
-
   const onConnect = useCallback((params) => {
     const newEdge = {
       ...params,
@@ -177,8 +166,20 @@ function TopologyInner({ onEdit, onClone }) {
     setEdges(eds => eds.filter(e => !edgesToDelete.some(del => del.id === e.id)));
   }, [authFetch, setEdges]);
 
-  // Node/edge değişimleri: fonksiyonel updater (bayat closure yerine) — kararlı referans
-  const onNodesChange = useCallback((changes) => setLocalNodes(nds => applyNodeChanges(changes, nds)), []);
+  // Node değişimleri: uygula + sürüklemesi BİTEN node'ların (dragging===false) konumunu
+  // backend'e kaydet. ReactFlow multi-drag'de her node için ayrı position change gönderir,
+  // bu yüzden tek/çoklu sürüklemede tüm taşınan node'lar güvenle kalıcılaşır.
+  const onNodesChange = useCallback((changes) => {
+    const stopped = changes.filter(c => c.type === 'position' && c.dragging === false).map(c => c.id);
+    setLocalNodes(nds => {
+      const next = applyNodeChanges(changes, nds);
+      for (const id of stopped) {
+        const n = next.find(nn => nn.id === id);
+        if (n) authFetch(`/switches/${id}`, { method: 'PUT', body: JSON.stringify({ position: n.position }) }).catch(() => {});
+      }
+      return next;
+    });
+  }, [authFetch]);
   const onEdgesChange = useCallback((changes) => setEdges(eds => applyEdgeChanges(changes, eds)), [setEdges]);
 
   const handleAddTab = async () => {
@@ -325,7 +326,6 @@ function TopologyInner({ onEdit, onClone }) {
           onNodeContextMenu={(e, n) => { e.preventDefault(); setMenu({ id: n.id, label: n.data.label, top: e.clientY, left: e.clientX, data: n.data }); setEdgeMenu(null); }}
           onSelectionContextMenu={isAdmin ? ((e, nodes) => { e.preventDefault(); if (nodes.length >= 2) { setSelMenu({ ids: nodes.map(n => n.id), top: e.clientY, left: e.clientX }); setMenu(null); setEdgeMenu(null); } }) : undefined}
           onPaneClick={() => { setMenu(null); setEdgeMenu(null); setTabMenu(null); setSelMenu(null); }}
-          onNodeDragStop={isAdmin ? onNodeDragStop : undefined}
           onMoveEnd={(_, viewport) => setZoomLevel(viewport.zoom)}
           nodesDraggable={isAdmin}
           nodesConnectable={isAdmin}
