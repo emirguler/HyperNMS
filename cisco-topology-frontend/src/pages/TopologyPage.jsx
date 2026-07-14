@@ -8,6 +8,7 @@ import 'reactflow/dist/style.css';
 import { toPng } from 'html-to-image';
 import SwitchNode from '../components/SwitchNode';
 import CableEdge from '../components/CableEdge';
+import BatchEditModal from '../components/BatchEditModal';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { API_BASE } from '../config';
@@ -22,7 +23,7 @@ const edgeTypes = { cable: CableEdge };
 const minimapNodeColor = (node) =>
   node.data?.status === 'DOWN' ? '#ef4444' : node.data?.status === 'UP' ? '#34d399' : '#64748b';
 
-function TopologyInner({ onEdit }) {
+function TopologyInner({ onEdit, onClone }) {
   const { rawDevices, edges, setEdges, fetchData, openSshSession } = useApp();
   const { isAdmin, authFetch, csrfToken, allowedCommands } = useAuth();
   const navigate = useNavigate();
@@ -36,6 +37,8 @@ function TopologyInner({ onEdit }) {
   const [menu, setMenu] = useState(null);
   const [edgeMenu, setEdgeMenu] = useState(null);
   const [tabMenu, setTabMenu] = useState(null);
+  const [batchEditIds, setBatchEditIds] = useState(null); // çoklu seçim toplu düzenleme
+  const [selMenu, setSelMenu] = useState(null); // çoklu seçim sağ-tık menüsü {ids, top, left}
   const [localNodes, setLocalNodes] = useState([]);
   const [renamingTab, setRenamingTab] = useState(null);
   const [renameValue, setRenameValue] = useState('');
@@ -57,6 +60,7 @@ function TopologyInner({ onEdit }) {
         setMenu(null);
         setEdgeMenu(null);
         setTabMenu(null);
+        setSelMenu(null);
       }
     };
     document.addEventListener('mousedown', handleClick);
@@ -103,7 +107,7 @@ function TopologyInner({ onEdit }) {
 
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.key === 'Escape') { setMenu(null); setEdgeMenu(null); setTabMenu(null); }
+      if (e.key === 'Escape') { setMenu(null); setEdgeMenu(null); setTabMenu(null); setSelMenu(null); }
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
@@ -142,11 +146,15 @@ function TopologyInner({ onEdit }) {
     return next;
   }, [edges, deviceById]);
 
-  const onNodeDragStop = useCallback((_, node) => {
-    authFetch(`/switches/${node.id}`, {
-      method: 'PUT',
-      body: JSON.stringify({ position: node.position })
-    }).catch(() => {});
+  const onNodeDragStop = useCallback((_, node, nodes) => {
+    // Çoklu seçim sürüklenince ReactFlow tüm sürüklenen node'ları verir — hepsini kaydet
+    const dragged = (nodes && nodes.length) ? nodes : [node];
+    dragged.forEach(n => {
+      authFetch(`/switches/${n.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ position: n.position })
+      }).catch(() => {});
+    });
   }, [authFetch]);
 
   const onConnect = useCallback((params) => {
@@ -315,7 +323,8 @@ function TopologyInner({ onEdit }) {
           onEdgesDelete={isAdmin ? onEdgesDelete : undefined}
           onEdgeContextMenu={isAdmin ? ((e, edge) => { e.preventDefault(); setEdgeMenu({ id: edge.id, top: e.clientY, left: e.clientX }); setMenu(null); }) : undefined}
           onNodeContextMenu={(e, n) => { e.preventDefault(); setMenu({ id: n.id, label: n.data.label, top: e.clientY, left: e.clientX, data: n.data }); setEdgeMenu(null); }}
-          onPaneClick={() => { setMenu(null); setEdgeMenu(null); setTabMenu(null); }}
+          onSelectionContextMenu={isAdmin ? ((e, nodes) => { e.preventDefault(); if (nodes.length >= 2) { setSelMenu({ ids: nodes.map(n => n.id), top: e.clientY, left: e.clientX }); setMenu(null); setEdgeMenu(null); } }) : undefined}
+          onPaneClick={() => { setMenu(null); setEdgeMenu(null); setTabMenu(null); setSelMenu(null); }}
           onNodeDragStop={isAdmin ? onNodeDragStop : undefined}
           onMoveEnd={(_, viewport) => setZoomLevel(viewport.zoom)}
           nodesDraggable={isAdmin}
@@ -355,6 +364,7 @@ function TopologyInner({ onEdit }) {
           <div className="context-menu" style={{ top: menu.top, left: menu.left }}>
             <div className="context-menu-item" onClick={() => { navigate(`/devices/${menu.id}`); setMenu(null); }}>📊 Details</div>
             {isAdmin && <div className="context-menu-item" onClick={() => { onEdit(rawDevices.find(d => d.id === menu.id)); setMenu(null); }}>✏️ Edit</div>}
+            {isAdmin && <div className="context-menu-item" onClick={() => { onClone(rawDevices.find(d => d.id === menu.id)); setMenu(null); }}>⧉ Clone</div>}
             {(isAdmin || allowedCommands.length > 0) && <div className="context-menu-item" onClick={() => { openSshSession(menu.id, menu.label); setMenu(null); }}>💻 SSH Terminal</div>}
             {menu.data?.type === 'antenna' && <div className="context-menu-item" onClick={() => { setWebModal({ id: menu.id, label: menu.label, ip: menu.data.ip, scheme: 'http' }); setMenu(null); }}>🌐 Web</div>}
             <div className="context-menu-item" onClick={() => {
@@ -378,6 +388,25 @@ function TopologyInner({ onEdit }) {
                 }
               } catch { showToast('Delete failed', 'error'); }
             }}>🗑️ Delete Device</div>}
+          </div>
+        )}
+
+        {/* Çoklu seçim sağ-tık menüsü */}
+        {isAdmin && selMenu && (
+          <div className="context-menu" style={{ top: selMenu.top, left: selMenu.left }}>
+            <div style={{ padding: '4px 10px', fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>{selMenu.ids.length} selected</div>
+            <div className="context-menu-item" onClick={() => { setBatchEditIds(selMenu.ids); setSelMenu(null); }}>✏️ Batch Edit</div>
+            <div className="context-menu-item" style={{ color: 'var(--danger)' }} onClick={async () => {
+              const ids = selMenu.ids;
+              setSelMenu(null);
+              if (!window.confirm(`Delete ${ids.length} device(s)? This action cannot be undone.`)) return;
+              let deleted = 0;
+              for (const id of ids) {
+                try { const res = await authFetch('/switches/' + id, { method: 'DELETE' }); if (res && res.ok) deleted++; } catch { /* ignore */ }
+              }
+              showToast(`${deleted} device(s) deleted`, 'success');
+              fetchData();
+            }}>🗑️ Delete Selected</div>
           </div>
         )}
 
@@ -432,6 +461,17 @@ function TopologyInner({ onEdit }) {
             />
           </div>
         </div>
+      )}
+
+      {/* Çoklu seçim toplu düzenleme */}
+      {isAdmin && batchEditIds && (
+        <BatchEditModal
+          deviceIds={batchEditIds}
+          topoTabs={tabs}
+          authFetch={authFetch}
+          onClose={() => setBatchEditIds(null)}
+          onDone={fetchData}
+        />
       )}
 
       {/* Auto Topology Dialog */}

@@ -25,6 +25,26 @@ import { t, getLang, setLang, onLangChange } from './i18n';
 import { API_BASE } from './config';
 // topology tabs now come from AppContext
 
+// Klon için benzersiz adres üret: IPv4 ise son okteti ilk boşa kadar artır,
+// değilse (hostname) sonek ekle. taken = mevcut tüm cihaz IP'leri.
+function freeAddress(ip, taken) {
+  const m = /^(\d+\.\d+\.\d+)\.(\d+)$/.exec(ip || '');
+  if (m) {
+    const prefix = m[1];
+    let last = parseInt(m[2], 10);
+    for (let i = 0; i < 254; i++) {
+      last = last >= 254 ? 1 : last + 1;
+      const cand = `${prefix}.${last}`;
+      if (!taken.has(cand)) return cand;
+    }
+    return ip; // hepsi dolu → aynısını dön (backend reddederse toast bilgilendirir)
+  }
+  const base = ip || 'device';
+  let cand = `${base}-copy`, n = 2;
+  while (taken.has(cand)) cand = `${base}-copy${n++}`;
+  return cand;
+}
+
 function ProtectedRoute({ children }) {
   const { isAuthenticated } = useAuth();
   if (!isAuthenticated) return <Navigate to="/login" replace />;
@@ -33,7 +53,7 @@ function ProtectedRoute({ children }) {
 
 function AppLayout() {
   const { isAuthenticated, isAdmin, mustChangePassword, clearMustChangePassword, authFetch, csrfToken } = useAuth();
-  const { fetchData, topoTabs } = useApp();
+  const { fetchData, topoTabs, rawDevices } = useApp();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState('add');
   const [editingNode, setEditingNode] = useState(null);
@@ -56,6 +76,31 @@ function AppLayout() {
     setIsModalOpen(true);
   };
 
+  // Klonla: modal açmadan doğrudan yeni cihaz oluştur — benzersiz IP + kaynağın sağı
+  const handleCloneDevice = async (device) => {
+    if (!device) return;
+    const taken = new Set((rawDevices || []).map(d => d.ip));
+    const pos = device.position || { x: 0, y: 0 };
+    const payload = {
+      name: `${device.name || device.label || 'Device'} - Copy`,
+      ip: freeAddress(device.ip, taken),
+      model: device.model,
+      type: device.type,
+      sshUsername: device.sshUsername,
+      snmpCommunity: device.snmpCommunity,
+      snmpPort: device.snmpPort,
+      snmpVersion: device.snmpVersion,
+      healthIntervalSec: device.healthIntervalSec,
+      tags: device.tags || [],
+      topologyPage: device.topologyPage || 'main',
+      position: { x: (pos.x || 0) + 100, y: pos.y || 0 } // hemen sağ tarafı
+    };
+    const res = await authFetch('/switches', { method: 'POST', body: JSON.stringify(payload) });
+    if (res && res.ok) showToast(t('deviceAdded'), 'success');
+    else { const d = await res?.json().catch(() => ({})); showToast(d?.error || t('operationFailed'), 'error'); }
+    fetchData();
+  };
+
   return (
     <div className="app-container">
       <Navbar onAddDevice={isAdmin ? handleAddDevice : undefined} />
@@ -65,8 +110,8 @@ function AppLayout() {
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/devices" element={<DeviceListPage onEdit={isAdmin ? handleEditDevice : undefined} />} />
             <Route path="/devices/:id" element={<DeviceDetailPage />} />
-            <Route path="/topology" element={<TopologyPage onEdit={isAdmin ? handleEditDevice : undefined} />} />
-            <Route path="/topology/:tabId" element={<TopologyPage onEdit={isAdmin ? handleEditDevice : undefined} />} />
+            <Route path="/topology" element={<TopologyPage onEdit={isAdmin ? handleEditDevice : undefined} onClone={isAdmin ? handleCloneDevice : undefined} />} />
+            <Route path="/topology/:tabId" element={<TopologyPage onEdit={isAdmin ? handleEditDevice : undefined} onClone={isAdmin ? handleCloneDevice : undefined} />} />
             <Route path="/users" element={<UsersPage />} />
             <Route path="/audit" element={<AuditPage />} />
             <Route path="/geomap" element={<GeoMapPage />} />
