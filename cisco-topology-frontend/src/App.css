@@ -665,7 +665,7 @@ select.modern-input option {
 .cable-comet {
   stroke-linecap: round;
   stroke-dasharray: 12 800;
-  animation: cometFlow 1.8s linear infinite;
+  animation: cometFlow 0.8s linear infinite;
   pointer-events: none;
 }
 

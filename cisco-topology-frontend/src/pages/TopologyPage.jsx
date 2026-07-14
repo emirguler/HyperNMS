@@ -77,12 +77,11 @@ function TopologyInner({ onEdit }) {
         const existing = prevById.get(s.id);
         const d = existing?.data;
         const type = s.type || 'switch';
-        // SwitchNode yalnızca bu 5 alanı okur — sadece bunlar değişince yeni data üret
-        const same = d && d.label === s.name && d.ip === s.ip && d.status === s.status
-          && d.type === type && d.latency === s.latency;
+        // SwitchNode yalnızca bu alanları okur — latency artık gösterilmiyor, dahil değil
+        const same = d && d.label === s.name && d.ip === s.ip && d.status === s.status && d.type === type;
         if (existing && same) return existing;
         changed = true;
-        const data = { label: s.name, ip: s.ip, status: s.status, type, latency: s.latency };
+        const data = { label: s.name, ip: s.ip, status: s.status, type };
         return existing
           ? { ...existing, data }
           : { id: s.id, type: 'switchNode', position: s.position || { x: Math.random() * 600, y: Math.random() * 400 }, data };

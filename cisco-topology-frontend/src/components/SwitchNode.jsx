@@ -98,13 +98,6 @@ const ICON_MAP = {
   antenna: AntennaIcon,
 };
 
-function latencyColor(latency) {
-  if (!latency || latency < 0) return 'var(--text-muted)';
-  if (latency <= 20) return 'var(--success)';
-  if (latency <= 80) return 'var(--warning)';
-  return 'var(--danger)';
-}
-
 const handleStyle = (rgb) => ({ background: `rgb(${rgb})`, width: 6, height: 6, border: '1px solid var(--bg-dark)' });
 
 function SwitchNode({ data }) {
@@ -137,21 +130,6 @@ function SwitchNode({ data }) {
         <Handle type="source" position={Position.Right} id="right" style={handleStyle(rgb)} />
         <Handle type="source" position={Position.Bottom} id="bottom" style={handleStyle(rgb)} />
 
-        {/* Latency rozeti — dikdörtgende sağ üst köşe; dairede saat 1:30 yönü (çemberin KD noktası) */}
-        {data.latency != null && data.latency > 0 && (
-          <div className="node-latency" style={{
-            position: 'absolute',
-            ...(shape === 'circle'
-              ? { top: 3, right: -7, transform: 'translate(50%, -50%)' }
-              : { top: -7, right: -7 }),
-            background: latencyColor(data.latency), color: '#0f172a',
-            fontSize: '0.5rem', fontWeight: 700, padding: '1px 5px',
-            borderRadius: 8, boxShadow: '0 2px 6px rgba(0,0,0,0.3)', zIndex: 10
-          }}>
-            {data.latency}ms
-          </div>
-        )}
-
         <span className="node-icon">
           <IconComponent status={data.status} size={data.type === 'antenna' ? 12 : ICON_SIZE} />
         </span>
@@ -171,6 +149,5 @@ function SwitchNode({ data }) {
 // Yalnızca gerçekten render edilen alanlar değişince yeniden çiz (data kimliği değişse bile)
 export default memo(SwitchNode, (p, n) => {
   const a = p.data, b = n.data;
-  return a.label === b.label && a.ip === b.ip && a.status === b.status
-    && a.type === b.type && a.latency === b.latency;
+  return a.label === b.label && a.ip === b.ip && a.status === b.status && a.type === b.type;
 });
