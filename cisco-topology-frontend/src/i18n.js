@@ -108,7 +108,8 @@ const translations = {
     // Find Device
     findDevice: 'Find Device',
     findDeviceTitle: 'Discover devices by IP',
-    findDeviceHint: 'Connects to each IP over SSH and reads the device identity (name, model, type). Produces a CSV ready for Import List. The SSH password is never written to the CSV — set it after import with Batch Edit.',
+    findDeviceHint: 'Connects to each IP over SSH and reads the device identity (name, model, type). Produces a CSV ready for Import List. SNMP community and type cannot be read over SSH, so they are taken from the fields below.',
+    findTypeAuto: 'Auto (detected)',
     findIpsLabel: 'IP Addresses',
     findIpsHint: 'One IP per line or comma-separated. CIDR blocks and ranges are not supported.',
     findRun: 'Start Discovery',
@@ -245,7 +246,8 @@ const translations = {
     // Find Device
     findDevice: 'Cihaz Bul',
     findDeviceTitle: 'IP ile cihaz ke\u015ffi',
-    findDeviceHint: 'Her IP\'ye SSH ile ba\u011flan\u0131p cihaz kimli\u011fini (ad, model, tip) okur. Import List\'e haz\u0131r CSV \u00fcretir. SSH parolas\u0131 CSV\'ye yaz\u0131lmaz \u2014 import sonras\u0131 Batch Edit ile girin.',
+    findDeviceHint: 'Her IP\'ye SSH ile ba\u011flan\u0131p cihaz kimli\u011fini (ad, model, tip) okur. Import List\'e haz\u0131r CSV \u00fcretir. SNMP community ve tip SSH ile okunamaz; a\u015fa\u011f\u0131daki alanlardan al\u0131n\u0131r.',
+    findTypeAuto: 'Otomatik (tespit edilen)',
     findIpsLabel: 'IP Adresleri',
     findIpsHint: 'Her sat\u0131ra bir IP veya virg\u00fclle ayr\u0131lm\u0131\u015f. CIDR blok ve aral\u0131k desteklenmez.',
     findRun: 'Ke\u015ffi Ba\u015flat',

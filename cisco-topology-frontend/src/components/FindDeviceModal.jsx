@@ -30,6 +30,8 @@ export default function FindDeviceModal({ onClose }) {
   const [ipText, setIpText] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [snmpCommunity, setSnmpCommunity] = useState('');
+  const [typeOverride, setTypeOverride] = useState('auto'); // 'auto' = keşifte tespit edilen
   const [running, setRunning] = useState(false);
   const [results, setResults] = useState([]);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
@@ -37,6 +39,9 @@ export default function FindDeviceModal({ onClose }) {
 
   const parsed = useMemo(() => parseIps(ipText), [ipText]);
   const foundCount = results.filter(r => r.status === 'ok').length;
+
+  // Tabloda ve CSV'de aynı değer görünsün: 'auto' ise keşfin bulduğu tip, değilse seçilen
+  const effectiveType = (r) => (typeOverride === 'auto' ? (r.type || 'switch') : typeOverride);
 
   const handleRun = async () => {
     const { ips } = parsed;
@@ -84,11 +89,11 @@ export default function FindDeviceModal({ onClose }) {
     const rows = found.map(r => [
       csvCell(r.name || r.ip),   // Name (import zorunlu) — boşsa IP'ye düş
       csvCell(r.ip),
-      csvCell(r.type || 'switch'),
+      csvCell(effectiveType(r)),
       csvCell(r.model || ''),
       csvCell(username),         // keşifte çalışan SSH kullanıcısı
-      '',                        // SSH Password — bilinçli BOŞ (import sonrası Batch Edit ile gir)
-      '',                        // SNMP Community — SSH ile keşfedilemez
+      csvCell(password),         // SSH Password
+      csvCell(snmpCommunity),    // SNMP Community (SSH ile keşfedilemez → kullanıcı girer)
       '',                        // Tags
       'main'                     // Topology Page
     ].join(','));
@@ -137,6 +142,25 @@ export default function FindDeviceModal({ onClose }) {
               <input className="modern-input" type="password" value={password} onChange={e => setPassword(e.target.value)} autoComplete="new-password" />
             </div>
           </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            <div>
+              <label className="input-label" style={{ display: 'block', marginBottom: 6, color: 'var(--text-muted)' }}>{t('snmpCommunity')}</label>
+              <input className="modern-input" value={snmpCommunity} onChange={e => setSnmpCommunity(e.target.value)} autoComplete="off" placeholder="public" />
+            </div>
+            <div>
+              <label className="input-label" style={{ display: 'block', marginBottom: 6, color: 'var(--text-muted)' }}>{t('deviceType')}</label>
+              <select className="modern-input" value={typeOverride} onChange={e => setTypeOverride(e.target.value)} style={{ cursor: 'pointer' }}>
+                <option value="auto">{t('findTypeAuto')}</option>
+                <option value="switch">Network Switch</option>
+                <option value="router">Router</option>
+                <option value="firewall">Firewall</option>
+                <option value="server">Server</option>
+                <option value="pc">PC</option>
+                <option value="antenna">Antenna</option>
+                <option value="cloud">Cloud / Internet</option>
+              </select>
+            </div>
+          </div>
         </div>
 
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 16 }}>
@@ -172,7 +196,7 @@ export default function FindDeviceModal({ onClose }) {
                     </td>
                     <td style={{ padding: '4px 10px', fontFamily: 'monospace' }}>{r.ip}</td>
                     <td style={{ padding: '4px 10px' }}>{r.name || '-'}</td>
-                    <td style={{ padding: '4px 10px' }}>{r.type || '-'}</td>
+                    <td style={{ padding: '4px 10px' }}>{r.status === 'ok' ? effectiveType(r) : '-'}</td>
                     <td style={{ padding: '4px 10px' }}>{r.model || '-'}</td>
                     <td style={{ padding: '4px 10px', color: 'var(--text-muted)' }}>{r.error || r.vendor || ''}</td>
                   </tr>
