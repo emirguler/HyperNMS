@@ -75,8 +75,16 @@ export default function NotificationBell() {
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: '0.85rem', fontWeight: 600, color: severityColor(n.severity) }}>{n.title}</div>
                   <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 2 }}>{n.message}</div>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 4 }}>
-                    {new Date(n.timestamp).toLocaleString()}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                    {n.topologyPage && (
+                      <span style={{
+                        background: 'rgba(56,189,248,0.15)', color: 'var(--primary)',
+                        padding: '1px 6px', borderRadius: 10, fontSize: '0.65rem', fontWeight: 600
+                      }}>🗺️ {n.topologyPage}</span>
+                    )}
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                      {new Date(n.timestamp).toLocaleString()}
+                    </span>
                   </div>
                 </div>
               </div>

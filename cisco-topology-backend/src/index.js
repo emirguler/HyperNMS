@@ -219,14 +219,19 @@ async function initDB() {
 // --- Status change → notification ---
 onStatusChange((change) => {
     const emoji = change.newStatus === 'UP' ? '🟢' : '🔴';
-    console.log(`${emoji} [STATUS] ${change.deviceName} (${change.deviceIp}): ${change.previousStatus} → ${change.newStatus}`);
+    // Topoloji sayfası id ile tutulur → bildirimde okunur adı göster
+    const pageId = change.topologyPage || 'main';
+    const pageName = store.getTopoTabs().find(t => t.id === pageId)?.name || pageId;
+
+    console.log(`${emoji} [STATUS] ${change.deviceName} (${change.deviceIp}) [${pageName}]: ${change.previousStatus} → ${change.newStatus}`);
 
     addNotification({
         type: change.newStatus === 'DOWN' ? 'alert' : 'info',
         severity: change.newStatus === 'DOWN' ? 'critical' : 'resolved',
         title: change.newStatus === 'DOWN' ? `${change.deviceName} is DOWN` : `${change.deviceName} is back UP`,
         message: `${change.deviceName} (${change.deviceIp}) ${change.previousStatus} → ${change.newStatus}`,
-        deviceId: change.deviceId, deviceName: change.deviceName, deviceIp: change.deviceIp
+        deviceId: change.deviceId, deviceName: change.deviceName, deviceIp: change.deviceIp,
+        topologyPage: pageName
     });
 });
 

@@ -57,6 +57,7 @@ async function pingCycle() {
             if (s.status !== status) {
                 statusChanges.push({
                     deviceId: s.id, deviceName: s.name, deviceIp: s.ip,
+                    topologyPage: s.topologyPage || 'main', // bildirimde sayfa adı için
                     previousStatus: s.status, newStatus: status,
                     timestamp: new Date().toISOString()
                 });
