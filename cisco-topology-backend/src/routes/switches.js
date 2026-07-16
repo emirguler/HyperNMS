@@ -1,11 +1,14 @@
 const express = require('express');
 const store = require('../utils/memoryStore');
 const { authenticate, requireAdmin } = require('../middleware/auth');
-const { validateSwitch, sanitizeSwitch, isBlockedIP } = require('../utils/validation');
+const { validateSwitch, sanitizeSwitch, isBlockedIP, isValidIPv4 } = require('../utils/validation');
 const { encryptPassword, decryptPassword } = require('../utils/crypto');
 const { getDeviceDetails, discoverNeighbors, searchMAC } = require('../services/snmpService');
+const { probeDevice } = require('../services/sshService');
+const { identifyFromSsh } = require('../utils/sshIdentify');
 const { logAction } = require('../services/auditLog');
 const { snmpCache } = require('../utils/cache');
+const rateLimiter = require('../middleware/rateLimiter');
 const ssh2 = require('ssh2').Client;
 
 const router = express.Router();
@@ -524,6 +527,71 @@ router.put('/switches/batch', authenticate, requireAdmin, async (req, res) => {
 
     await logAction(req.user, 'DEVICE_BATCH_UPDATE', `${count} devices updated`, { fields: Object.keys(safeUpdates) });
     res.json({ success: true, updated: count });
+});
+
+// --- Find Device: verilen IP'lere SSH ile bağlanıp cihaz kimliğini keşfet ---
+// Güvenlik notları:
+//  * admin-only; limiter ROUTE seviyesinde (global limiter Referer ile atlatılabiliyor)
+//  * her IP strict IPv4 + isBlockedIP → SSRF ("localhost", "127.1", "2130706433" gibi
+//    formlar isValidHost'u geçtiği için hostname ASLA kabul edilmez)
+//  * port sabit 22 (gövdeden port alınsa dahili port tarayıcısına dönerdi)
+//  * sınırlı eşzamanlılık; parola asla loglanmaz/yankılanmaz; ham hata mesajı dönmez
+const MAX_PROBE_TARGETS = 64;
+const PROBE_CONCURRENCY = 8;
+const discoverLimiter = rateLimiter({ windowMs: 5 * 60 * 1000, max: 20, message: 'Too many discovery requests, please wait' });
+
+async function probePool(items, limit, worker) {
+    const results = new Array(items.length);
+    let cursor = 0;
+    const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
+        for (;;) {
+            const i = cursor++;
+            if (i >= items.length) return;
+            results[i] = await worker(items[i]); // worker ASLA reject etmemeli
+        }
+    });
+    await Promise.all(runners);
+    return results;
+}
+
+router.post('/switches/discover', authenticate, requireAdmin, discoverLimiter, async (req, res) => {
+    try {
+        const { ips, username, password } = req.body || {};
+        // Uzunluk kontrolü İLK: devasa dizi per-item işten önce reddedilsin
+        if (!Array.isArray(ips) || ips.length === 0) return res.status(400).json({ error: 'ips array required' });
+        if (ips.length > MAX_PROBE_TARGETS) return res.status(400).json({ error: `Maximum ${MAX_PROBE_TARGETS} IPs per request` });
+        if (typeof username !== 'string' || !username || username.length > 64) return res.status(400).json({ error: 'Valid username required (max 64)' });
+        if (typeof password !== 'string' || !password || password.length > 256) return res.status(400).json({ error: 'Valid password required (max 256)' });
+
+        const targets = [];
+        for (const raw of ips) {
+            const ip = String(raw || '').trim();
+            if (!isValidIPv4(ip) || isBlockedIP(ip)) {
+                return res.status(400).json({ error: `Invalid or not allowed IP: ${ip.slice(0, 45)}` });
+            }
+            if (!targets.includes(ip)) targets.push(ip);
+        }
+
+        const results = await probePool(targets, PROBE_CONCURRENCY, async (ip) => {
+            const r = await probeDevice(ip, username, password);
+            if (r.status !== 'ok' || !r.output) {
+                return { ip, status: r.status === 'ok' ? 'error' : r.status };
+            }
+            const info = identifyFromSsh(r.output, { ip });
+            return { ip, status: 'ok', name: info.name, model: info.model, type: info.type, vendor: info.vendor, confidence: info.confidence };
+        });
+
+        const found = results.filter(r => r.status === 'ok').length;
+        // Parola ASLA loglanmaz — audit_log.json düz metin ve GET /audit ile okunabilir
+        await logAction(req.user, 'DEVICE_DISCOVER', `${targets.length} host(s)`, {
+            targets, username, found, failed: targets.length - found
+        });
+
+        res.json({ results });
+    } catch (e) {
+        console.error('[DISCOVER] Hata:', e.message);
+        res.status(500).json({ error: 'Discovery failed' });
+    }
 });
 
 router.post('/switches', authenticate, requireAdmin, async (req, res) => {

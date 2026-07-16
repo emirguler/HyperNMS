@@ -166,6 +166,15 @@ if (config.NODE_ENV === 'production') {
     }
 }
 
+// --- Error handler (son) ---
+// Express, async handler'daki reject'i yakalamaz → Node 20'de fatal olur ve tüm NMS
+// (ping, WS terminaller, bildirimler) düşerdi. Bu ağ, süreci ayakta tutar.
+app.use((err, req, res, next) => {
+    if (res.headersSent) return next(err);
+    console.error(`[ERROR] ${req.method} ${req.path}:`, err && err.message);
+    res.status(err?.status || err?.statusCode || 500).json({ error: 'Internal server error' });
+});
+
 // --- DB Initialization ---
 async function initDB() {
     store.init();

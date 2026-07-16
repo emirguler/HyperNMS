@@ -157,8 +157,10 @@ function isBlockedIP(ip) {
     if (trimmed === '0.0.0.0' || trimmed === '::1' || trimmed.startsWith('fe80:')) return true;
     if (isValidIPv4(trimmed)) {
         const parts = trimmed.split('.').map(Number);
-        if (parts[0] === 127) return true;
-        if (parts[0] === 169 && parts[1] === 254) return true;
+        if (parts[0] === 0) return true;                        // 0.0.0.0/8 "this network"
+        if (parts[0] === 127) return true;                      // loopback
+        if (parts[0] === 169 && parts[1] === 254) return true;  // link-local + bulut metadata
+        if (parts[0] >= 224) return true;                       // multicast 224/4, ayrılmış 240/4, broadcast
     }
     return false;
 }

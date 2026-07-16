@@ -5,6 +5,81 @@ const { decryptPassword } = require('../utils/crypto');
 const { authenticateWs } = require('../middleware/auth');
 const { isBlockedIP } = require('../utils/validation');
 
+// --- Cihaz keşfi için SSH probe (Find Device) ---
+// Not: ssh2 gerçekleri (ampirik doğrulandı):
+//  * conn.destroy() DEVAM EDEN bir bağlantıyı iptal etmez → asıl bütçe readyTimeout'tur.
+//  * ssh2, teardown'dan SONRA da 'error' yayar; dinleyicisiz 'error' process'i ÇÖKERTİR
+//    → dinleyici hep bağlı kalır, settle-once bayrağıyla korunur.
+//  * connect()/shell() SENKRON throw edebilir → try/catch şart.
+//  * Dizi veren algorithms ssh2 varsayılanlarını EZER → append ile legacy eklenir.
+const PROBE_ALGORITHMS = {
+    kex: { append: ['diffie-hellman-group-exchange-sha256', 'diffie-hellman-group14-sha1', 'diffie-hellman-group1-sha1'] },
+    cipher: { append: ['aes128-cbc', '3des-cbc'] },
+    serverHostKey: { append: ['ssh-rsa', 'ssh-dss'] },
+};
+
+function classifyErr(err) {
+    if (err && err.level === 'client-authentication') return 'auth_failed';
+    const code = err && err.code;
+    if (code === 'ECONNREFUSED' || code === 'EHOSTUNREACH' || code === 'ENETUNREACH' || code === 'ENOTFOUND') return 'unreachable';
+    if (code === 'ETIMEDOUT' || /timed?\s*out|timeout/i.test(String((err && err.message) || ''))) return 'timeout';
+    return 'error';
+}
+
+// Tek cihaza bağlanıp "show version" çıktısını al. ASLA reject etmez (havuz için güvenli).
+function probeDevice(ip, username, password) {
+    return new Promise((resolve) => {
+        const conn = new ssh2();
+        let settled = false;
+        let output = '';
+        let idleTimer = null;
+
+        const finish = (result) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(hardTimer);
+            if (idleTimer) clearTimeout(idleTimer);
+            try { conn.destroy(); } catch (e) { /* ignore */ }
+            resolve(result);
+        };
+
+        const hardTimer = setTimeout(() => finish({ status: 'timeout' }), 12000);
+
+        conn.on('error', (err) => finish({ status: classifyErr(err) }));
+        conn.on('timeout', () => { try { conn.destroy(); } catch (e) { /* ignore */ } });
+        conn.on('close', () => finish({ status: output ? 'ok' : 'unreachable' }));
+
+        conn.on('ready', () => {
+            try {
+                // Cisco IOS exec kanalını desteklemez; ayrıca paging'i kapatmak için
+                // önce "terminal length 0" gönderilmeli → shell şart.
+                conn.shell((err, stream) => {
+                    if (err) return finish({ status: 'error' });
+                    stream.on('data', (d) => {
+                        output += d.toString();
+                        if (output.length > 256 * 1024) return finish({ status: 'ok', output }); // taşma koruması
+                        if (idleTimer) clearTimeout(idleTimer);
+                        idleTimer = setTimeout(() => finish({ status: 'ok', output }), 1500); // çıktı durdu
+                    });
+                    stream.on('close', () => finish({ status: 'ok', output }));
+                    try {
+                        stream.write('terminal length 0\n');
+                        setTimeout(() => { try { stream.write('show version\n'); } catch (e) { /* ignore */ } }, 500);
+                    } catch (e) { finish({ status: 'error' }); }
+                });
+            } catch (e) { finish({ status: 'error' }); } // shell() senkron throw edebilir
+        });
+
+        try {
+            conn.connect({
+                host: ip, port: 22, username, password,
+                readyTimeout: 6000,   // gerçek bağlantı bütçesi
+                algorithms: PROBE_ALGORITHMS,
+            });
+        } catch (e) { finish({ status: 'error' }); } // connect() senkron throw edebilir
+    });
+}
+
 function setupWebSocket(server) {
     const wss = new WebSocket.Server({ noServer: true, perMessageDeflate: false });
 
@@ -117,4 +192,4 @@ function setupWebSocket(server) {
     return wss;
 }
 
-module.exports = { setupWebSocket };
+module.exports = { setupWebSocket, probeDevice };

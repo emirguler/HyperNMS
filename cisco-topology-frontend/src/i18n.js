@@ -105,6 +105,24 @@ const translations = {
     geoMap: 'Geographic Map',
     geoMapWip: 'This feature is under development.',
 
+    // Find Device
+    findDevice: 'Find Device',
+    findDeviceTitle: 'Discover devices by IP',
+    findDeviceHint: 'Connects to each IP over SSH and reads the device identity (name, model, type). Produces a CSV ready for Import List. The SSH password is never written to the CSV — set it after import with Batch Edit.',
+    findIpsLabel: 'IP Addresses',
+    findIpsHint: 'One IP per line or comma-separated. CIDR blocks and ranges are not supported.',
+    findRun: 'Start Discovery',
+    findRunning: 'Discovering...',
+    findProgress: 'Probed',
+    findFound: 'found',
+    findFailed: 'failed',
+    findDownload: 'Download Found Devices',
+    findNoValidIp: 'No valid IPv4 address entered',
+    findRangeUnsupported: 'CIDR/range not supported',
+    findInvalidIp: 'invalid',
+    findProbeFailed: 'Probe failed',
+    findCredsRequired: 'Username and password are required',
+
     // Terminal
     closeAll: 'Close All',
     minimize: 'Minimize',
@@ -223,6 +241,24 @@ const translations = {
     // Geomap
     geoMap: 'Co\u011frafi Harita',
     geoMapWip: 'Bu \u00f6zellik hen\u00fcz geli\u015ftirme a\u015famas\u0131nda.',
+
+    // Find Device
+    findDevice: 'Cihaz Bul',
+    findDeviceTitle: 'IP ile cihaz ke\u015ffi',
+    findDeviceHint: 'Her IP\'ye SSH ile ba\u011flan\u0131p cihaz kimli\u011fini (ad, model, tip) okur. Import List\'e haz\u0131r CSV \u00fcretir. SSH parolas\u0131 CSV\'ye yaz\u0131lmaz \u2014 import sonras\u0131 Batch Edit ile girin.',
+    findIpsLabel: 'IP Adresleri',
+    findIpsHint: 'Her sat\u0131ra bir IP veya virg\u00fclle ayr\u0131lm\u0131\u015f. CIDR blok ve aral\u0131k desteklenmez.',
+    findRun: 'Ke\u015ffi Ba\u015flat',
+    findRunning: 'Ke\u015ffediliyor...',
+    findProgress: 'Denenen',
+    findFound: 'bulundu',
+    findFailed: 'ba\u015far\u0131s\u0131z',
+    findDownload: 'Bulunan Cihazlar\u0131 \u0130ndir',
+    findNoValidIp: 'Ge\u00e7erli IPv4 adresi girilmedi',
+    findRangeUnsupported: 'CIDR/aral\u0131k desteklenmiyor',
+    findInvalidIp: 'ge\u00e7ersiz',
+    findProbeFailed: 'Ke\u015fif ba\u015far\u0131s\u0131z',
+    findCredsRequired: 'Kullan\u0131c\u0131 ad\u0131 ve parola gerekli',
 
     // Terminal
     closeAll: 'T\u00fcm\u00fcn\u00fc Kapat',

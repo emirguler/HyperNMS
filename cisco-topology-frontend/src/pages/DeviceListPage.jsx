@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import BulkImportModal from '../components/BulkImportModal';
+import FindDeviceModal from '../components/FindDeviceModal';
 import { showToast } from '../Toast';
 import { t } from '../i18n';
 import { API_BASE } from '../config';
@@ -17,6 +18,7 @@ export default function DeviceListPage({ onEdit }) {
   const [topoFilter, setTopoFilter] = useState('all');
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [showBulkImport, setShowBulkImport] = useState(false);
+  const [showFindDevice, setShowFindDevice] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [showBatchEdit, setShowBatchEdit] = useState(false);
   const [batchForm, setBatchForm] = useState({ sshUsername: '', sshPassword: '', snmpCommunity: '', tags: '', topologyPage: '' });
@@ -151,6 +153,7 @@ export default function DeviceListPage({ onEdit }) {
             <option key={tab.id} value={tab.id}>{tab.name}</option>
           ))}
         </select>
+        {isAdmin && <button className="btn btn-ghost btn-sm" onClick={() => setShowFindDevice(true)} title={t('findDeviceTitle')}>🔍 {t('findDevice')}</button>}
         {isAdmin && <button className="btn btn-ghost btn-sm" onClick={() => setShowBulkImport(true)} title="Bulk Import">📤 Import List</button>}
         {isAdmin && <button className="btn btn-ghost btn-sm" onClick={handleExportCSV} title="Export CSV">📥 Download List</button>}
         <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{filteredDevices.length} / {rawDevices.length} {t('deviceCount')}</span>
@@ -278,6 +281,7 @@ export default function DeviceListPage({ onEdit }) {
       )}
 
       {showBulkImport && <BulkImportModal onClose={() => setShowBulkImport(false)} />}
+      {showFindDevice && <FindDeviceModal onClose={() => setShowFindDevice(false)} />}
     </div>
   );
 }
