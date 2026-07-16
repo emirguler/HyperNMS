@@ -1,5 +1,6 @@
 import { useState, useRef, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useApp } from '../context/AppContext';
 import { showToast } from '../Toast';
 import { t } from '../i18n';
 
@@ -27,11 +28,13 @@ const csvCell = (v) => String(v ?? '').replace(/[",\r\n]/g, ' ').trim();
 
 export default function FindDeviceModal({ onClose }) {
   const { authFetch } = useAuth();
+  const { topoTabs } = useApp();
   const [ipText, setIpText] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [snmpCommunity, setSnmpCommunity] = useState('');
   const [typeOverride, setTypeOverride] = useState('auto'); // 'auto' = keşifte tespit edilen
+  const [topologyPage, setTopologyPage] = useState('main');
   const [running, setRunning] = useState(false);
   const [results, setResults] = useState([]);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
@@ -94,6 +97,7 @@ export default function FindDeviceModal({ onClose }) {
   const downloadFoundCsv = () => {
     const found = results.filter(r => r.status === 'ok');
     if (found.length === 0) return;
+    const pageName = (topoTabs || []).find(tab => tab.id === topologyPage)?.name || 'main';
     const rows = found.map(r => [
       csvCell(r.name || r.ip),   // Name (import zorunlu) — boşsa IP'ye düş
       csvCell(r.ip),
@@ -103,7 +107,7 @@ export default function FindDeviceModal({ onClose }) {
       csvCell(password),         // SSH Password
       csvCell(snmpCommunity),    // SNMP Community (SSH ile keşfedilemez → kullanıcı girer)
       '',                        // Tags
-      'main'                     // Topology Page
+      csvCell(pageName)          // Topology Page — id yerine ad: okunur ve import adı çözüyor
     ].join(','));
     const csv = ['Name,IP,Type,Model,SSH Username,SSH Password,SNMP Community,Tags,Topology Page', ...rows].join('\r\n');
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
@@ -168,6 +172,14 @@ export default function FindDeviceModal({ onClose }) {
                 <option value="cloud">Cloud / Internet</option>
               </select>
             </div>
+          </div>
+          <div>
+            <label className="input-label" style={{ display: 'block', marginBottom: 6, color: 'var(--text-muted)' }}>{t('topologyPage')}</label>
+            <select className="modern-input" value={topologyPage} onChange={e => setTopologyPage(e.target.value)} style={{ cursor: 'pointer' }}>
+              {(topoTabs || [{ id: 'main', name: 'Main Topology' }]).map(tab => (
+                <option key={tab.id} value={tab.id}>{tab.name}</option>
+              ))}
+            </select>
           </div>
         </div>
 
