@@ -40,6 +40,10 @@ module.exports = {
     DB_AUDIT,
     DB_TOPO_TABS,
     PING_INTERVAL: 5000,
+    // Klasik NMS flap damping: cihaz DOWN sayılmadan önce kaç ARDIŞIK ping kaybı gerekir.
+    // Tek paket kaybı (özellikle kablosuz/anten linklerde normaldir) yanlış alarm üretmesin.
+    // Kurtulma tek başarılı ping ile anında olur.
+    PING_FAIL_THRESHOLD: 3,
     MAX_HISTORY: 50000,
     SMOOTHING_FACTOR: 0.3,
     JWT_EXPIRY: '8h',

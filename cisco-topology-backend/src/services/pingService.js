@@ -9,6 +9,7 @@ let pingTimer = null;
 let stopped = false;
 let running = false;
 const lastPingAt = {}; // cihaz id → son ping zamanı (healthIntervalSec için)
+const failCount = {};  // cihaz id → ardışık başarısız ping sayısı (flap damping)
 const statusChangeListeners = [];
 
 function onStatusChange(callback) {
@@ -48,24 +49,45 @@ async function pingCycle() {
 
     await runPool(due, async (s) => {
         lastPingAt[s.id] = Date.now();
+
+        // 1) Ölçüm — probe hatası da başarısız deneme sayılır
+        let alive = false;
+        let latency = -1;
         try {
             const res = await ping.promise.probe(s.ip, { timeout: 2, extra: isWin ? ['-n', '1'] : ['-c', '1'] });
-            const status = res.alive ? 'UP' : 'DOWN';
-            const latency = res.time === 'unknown' ? -1 : Math.round(res.time);
-            pingResults[s.id] = { status, latency };
-
-            if (s.status !== status) {
-                statusChanges.push({
-                    deviceId: s.id, deviceName: s.name, deviceIp: s.ip,
-                    topologyPage: s.topologyPage || 'main', // bildirimde sayfa adı için
-                    previousStatus: s.status, newStatus: status,
-                    timestamp: new Date().toISOString()
-                });
-            }
-            store.appendHistory(s.id, { switchId: s.id, timestamp: Date.now(), value: latency });
+            alive = !!res.alive;
+            if (alive) latency = res.time === 'unknown' ? -1 : Math.round(res.time);
         } catch (e) {
-            pingResults[s.id] = { status: 'DOWN', latency: -1 };
+            alive = false;
         }
+
+        // 2) Karar — klasik NMS: tek kayıp paket DOWN yapmaz.
+        // DOWN için ardışık PING_FAIL_THRESHOLD başarısızlık gerekir (soft-fail penceresinde
+        // cihaz mevcut durumunu korur); ilk başarılı ping'de anında UP'a döner.
+        let status;
+        if (alive) {
+            failCount[s.id] = 0;
+            status = 'UP';
+        } else {
+            failCount[s.id] = (failCount[s.id] || 0) + 1;
+            status = failCount[s.id] >= config.PING_FAIL_THRESHOLD
+                ? 'DOWN'
+                : (s.status || 'DOWN'); // eşik altında: durumu değiştirme
+        }
+
+        pingResults[s.id] = { status, latency };
+
+        // 3) Bildirim yalnızca GERÇEK geçişte (soft-fail sırasında değil)
+        if (s.status !== status) {
+            statusChanges.push({
+                deviceId: s.id, deviceName: s.name, deviceIp: s.ip,
+                topologyPage: s.topologyPage || 'main', // bildirimde sayfa adı için
+                previousStatus: s.status, newStatus: status,
+                timestamp: new Date().toISOString()
+            });
+        }
+        // Geçmişe ham ölçüm yazılır (-1 = kayıp) → paket kaybı grafikte görünür
+        store.appendHistory(s.id, { switchId: s.id, timestamp: Date.now(), value: latency });
     }, PING_CONCURRENCY);
 
     store.updatePingResults(pingResults);
