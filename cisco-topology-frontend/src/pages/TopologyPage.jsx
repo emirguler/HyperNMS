@@ -134,7 +134,8 @@ function TopologyInner({ onEdit, onClone }) {
       if (cached && cached.sig === sig) return cached.styled;
 
       const styled = wireless
-        ? { ...e, animated: false, className: active ? 'wireless-edge' : 'wireless-edge-idle',
+        // Anten-anten: düz çizgi (eğri bezier değil)
+        ? { ...e, type: 'straight', animated: false, className: active ? 'wireless-edge' : 'wireless-edge-idle',
             style: { stroke: active ? 'rgba(245, 158, 11, 0.7)' : 'rgba(148, 163, 184, 0.35)', strokeWidth: 2, opacity: 1 } }
         : { ...e, type: 'cable', animated: false, data: { ...(e.data || {}), active },
             style: { stroke: active ? 'rgba(250, 204, 21, 0.5)' : 'rgba(148, 163, 184, 0.28)', strokeWidth: 2.2, opacity: 1 } };
