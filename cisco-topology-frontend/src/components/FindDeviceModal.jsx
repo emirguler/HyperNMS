@@ -43,15 +43,21 @@ export default function FindDeviceModal({ onClose }) {
   // Tabloda ve CSV'de aynı değer görünsün: 'auto' ise keşfin bulduğu tip, değilse seçilen
   const effectiveType = (r) => (typeOverride === 'auto' ? (r.type || 'switch') : typeOverride);
 
-  const handleRun = async () => {
-    const { ips } = parsed;
+  // reset=true → yeni tarama (tüm sonuçlar sıfırlanır)
+  // reset=false → sadece verilen IP'ler yeniden denenir, diğer sonuçlar korunur
+  const runDiscovery = async (ips, reset) => {
     if (ips.length === 0) { showToast(t('findNoValidIp'), 'error'); return; }
     if (!username || !password) { showToast(t('findCredsRequired'), 'error'); return; }
 
     cancelRef.current = false;
     setRunning(true);
     setProgress({ done: 0, total: ips.length });
-    setResults(ips.map(ip => ({ ip, status: 'pending' })));
+    setResults(prev => {
+      if (reset) return ips.map(ip => ({ ip, status: 'pending' }));
+      const map = new Map(prev.map(r => [r.ip, r]));
+      for (const ip of ips) map.set(ip, { ip, status: 'pending' });
+      return [...map.values()];
+    });
 
     for (let i = 0; i < ips.length; i += BATCH_SIZE) {
       if (cancelRef.current) break;
@@ -82,6 +88,8 @@ export default function FindDeviceModal({ onClose }) {
     }
     setRunning(false);
   };
+
+  const failedIps = results.filter(r => r.status === 'fail').map(r => r.ip);
 
   const downloadFoundCsv = () => {
     const found = results.filter(r => r.status === 'ok');
@@ -164,9 +172,14 @@ export default function FindDeviceModal({ onClose }) {
         </div>
 
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 16 }}>
-          <button className="btn btn-primary" onClick={handleRun} disabled={running || parsed.ips.length === 0}>
+          <button className="btn btn-primary" onClick={() => runDiscovery(parsed.ips, true)} disabled={running || parsed.ips.length === 0}>
             {running ? t('findRunning') : t('findRun')}
           </button>
+          {!running && failedIps.length > 0 && (
+            <button className="btn btn-ghost btn-sm" onClick={() => runDiscovery(failedIps, false)} title={t('findRetryFailedTitle')}>
+              ↻ {t('findRetryFailed')} ({failedIps.length})
+            </button>
+          )}
           {running && (
             <>
               <button className="btn btn-ghost btn-sm" onClick={() => { cancelRef.current = true; }}>{t('cancel')}</button>

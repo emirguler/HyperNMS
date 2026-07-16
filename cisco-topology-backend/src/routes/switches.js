@@ -538,7 +538,8 @@ router.put('/switches/batch', authenticate, requireAdmin, async (req, res) => {
 //  * sınırlı eşzamanlılık; parola asla loglanmaz/yankılanmaz; ham hata mesajı dönmez
 const MAX_PROBE_TARGETS = 64;
 const PROBE_CONCURRENCY = 8;
-const discoverLimiter = rateLimiter({ windowMs: 5 * 60 * 1000, max: 20, message: 'Too many discovery requests, please wait' });
+// 40 istek × 8 IP = 5dk'da ~320 hedef; tekrar denemelere pay bırakır ama SSH fan-out'u sınırlar
+const discoverLimiter = rateLimiter({ windowMs: 5 * 60 * 1000, max: 40, message: 'Too many discovery requests, please wait' });
 
 async function probePool(items, limit, worker) {
     const results = new Array(items.length);

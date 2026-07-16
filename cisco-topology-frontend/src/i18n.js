@@ -123,6 +123,8 @@ const translations = {
     findInvalidIp: 'invalid',
     findProbeFailed: 'Probe failed',
     findCredsRequired: 'Username and password are required',
+    findRetryFailed: 'Retry failed',
+    findRetryFailedTitle: 'Probe only the IPs that failed, keeping the ones already found',
 
     // Terminal
     closeAll: 'Close All',
@@ -261,6 +263,8 @@ const translations = {
     findInvalidIp: 'ge\u00e7ersiz',
     findProbeFailed: 'Ke\u015fif ba\u015far\u0131s\u0131z',
     findCredsRequired: 'Kullan\u0131c\u0131 ad\u0131 ve parola gerekli',
+    findRetryFailed: 'Ba\u015far\u0131s\u0131zlar\u0131 Tekrar Dene',
+    findRetryFailedTitle: 'Sadece ba\u015far\u0131s\u0131z olan IP\'leri yeniden dener; bulunanlar korunur',
 
     // Terminal
     closeAll: 'T\u00fcm\u00fcn\u00fc Kapat',
