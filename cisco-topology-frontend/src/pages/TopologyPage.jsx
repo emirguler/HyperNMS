@@ -148,6 +148,7 @@ function TopologyInner({ onEdit, onClone }) {
   }, [edges, deviceById]);
 
   const onConnect = useCallback((params) => {
+    if (params.source === params.target) return; // kendine bağlanma engeli (savunma amaçlı)
     const newEdge = {
       ...params,
       id: `e-${params.source}-${params.target}-${Date.now()}`,
@@ -328,6 +329,7 @@ function TopologyInner({ onEdit, onClone }) {
           onSelectionContextMenu={isAdmin ? ((e, nodes) => { e.preventDefault(); if (nodes.length >= 2) { setSelMenu({ ids: nodes.map(n => n.id), top: e.clientY, left: e.clientX }); setMenu(null); setEdgeMenu(null); } }) : undefined}
           onPaneClick={() => { setMenu(null); setEdgeMenu(null); setTabMenu(null); setSelMenu(null); }}
           onMoveEnd={(_, viewport) => setZoomLevel(viewport.zoom)}
+          isValidConnection={(c) => c.source !== c.target} // kendine bağlanma (loop) yok
           nodesDraggable={isAdmin}
           nodesConnectable={isAdmin}
           elementsSelectable

@@ -118,6 +118,7 @@ function SwitchNode({ data }) {
         className={`node-shape ${shape}`}
         style={{
           borderColor: isDown ? 'var(--danger)' : `rgba(${rgb}, 0.9)`,
+          borderStyle: isDown ? 'dashed' : 'solid', // renk dışı ipucu (renk körlüğü için)
           background: `linear-gradient(160deg, rgba(${rgb}, ${isDown ? 0.06 : 0.18}), rgba(${rgb}, 0.04)), var(--node-bg)`,
           boxShadow: isDown
             ? '0 0 10px rgba(239,68,68,0.35), 0 4px 12px rgba(0,0,0,0.3)'

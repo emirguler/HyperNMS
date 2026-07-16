@@ -10,6 +10,10 @@ router.post('/edges', authenticate, requireAdmin, async (req, res) => {
     if (!newEdge.id || !newEdge.source || !newEdge.target) {
         return res.status(400).json({ error: 'Edge id, source ve target gereklidir' });
     }
+    // Cihazın kendine bağlanması (loop) anlamsız — UI'da da engelli ama API'den gelmesin
+    if (newEdge.source === newEdge.target) {
+        return res.status(400).json({ error: 'Bir cihaz kendine bağlanamaz' });
+    }
 
     store.addEdge({
         id: newEdge.id,
