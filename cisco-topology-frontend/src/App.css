@@ -757,16 +757,6 @@ select.modern-input option {
 .topology-tab:hover { color: var(--text-main); background: rgba(255, 255, 255, 0.02); }
 .topology-tab.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
 
-.topology-tab-close {
-  font-size: 0.9rem;
-  line-height: 1;
-  opacity: 0;
-  cursor: pointer;
-  transition: opacity 0.1s;
-}
-.topology-tab:hover .topology-tab-close { opacity: 0.5; }
-.topology-tab-close:hover { opacity: 1; color: var(--danger); }
-
 .topology-tab-rename {
   background: transparent;
   border: 1px solid var(--primary);
@@ -861,20 +851,69 @@ select.modern-input option {
 /* ============================================
    RESPONSIVE
    ============================================ */
+/* Responsive grid yardımcıları — masaüstü varsayılanı, mobilde media query ile yığılır.
+   (Inline gridTemplateColumns media query ile ezilemediğinden sınıfa çevrildi.) */
+.grid-stats     { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+.grid-dash-main { display: grid; grid-template-columns: 1fr 1fr 2fr; gap: 20px; }
+.grid-detail-main { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 24px; }
+.grid-2col      { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+/* Navbar mobil parçaları — masaüstünde gizli */
+.nav-hamburger { display: none; }
+.nav-mobile-panel { display: none; }
+
 @media (max-width: 1200px) {
   .nav-header { padding: 0 16px; }
   .list-container { padding: 20px; }
 }
 
 @media (max-width: 900px) {
-  .nav-menu { gap: 2px; }
   .nav-btn { padding: 6px 10px; font-size: 0.8rem; }
+  .grid-stats { grid-template-columns: repeat(2, 1fr); }
+  .grid-dash-main { grid-template-columns: 1fr; }
+  .grid-detail-main { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 768px) {
   .nav-header { padding: 0 12px; }
-  .nav-menu { gap: 1px; }
-  .nav-btn { padding: 6px 8px; font-size: 0.75rem; }
   .list-container { padding: 12px; }
   .modern-table th, .modern-table td { padding: 10px 8px; font-size: 0.8rem; }
+
+  /* Navbar: masaüstü menü/aksiyonlar gizlenir, hamburger açılır
+     (!important: inline display:flex'i ezmek için) */
+  .nav-menu, .nav-desktop-right { display: none !important; }
+  .nav-hamburger {
+    display: flex; align-items: center; justify-content: center;
+    background: transparent; border: none; color: var(--text-main);
+    font-size: 1.4rem; cursor: pointer; padding: 4px 8px; line-height: 1;
+  }
+  .nav-mobile-panel.open {
+    display: flex; flex-direction: column;
+    position: absolute; top: 48px; left: 0; right: 0;
+    background: var(--bg-panel); border-bottom: 1px solid var(--border-color);
+    box-shadow: 0 12px 30px rgba(0,0,0,0.5); padding: 8px; gap: 2px; z-index: 10000;
+  }
+  .nav-mobile-panel .nav-btn,
+  .nav-mobile-panel .btn { width: 100%; text-align: left; justify-content: flex-start; }
+  .nav-mobile-panel .nav-mobile-user {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 12px; border-top: 1px solid var(--border-color); margin-top: 4px;
+  }
+
+  /* Grid'ler yığılır */
+  .grid-stats { grid-template-columns: repeat(2, 1fr); }
+  .grid-2col  { grid-template-columns: 1fr; }
+
+  /* Modallar ekrana sığar (max-width inline width'i her zaman kısıtlar) */
+  .modal-overlay { padding: 12px; box-sizing: border-box; }
+  .modal-content, .confirm-modal-content {
+    max-width: calc(100vw - 24px); padding: 20px; box-sizing: border-box;
+  }
+  .confirm-modal-content { width: auto; }
+  /* Inline min-width'i geçersiz kıl (ör. auto-discover 380px) → taşmayı önle */
+  .modal-content, .confirm-modal-content { min-width: 0 !important; }
+
+  /* Geniş tablolar dikey yerine yatay kaydırılır (sıkışıp okunmaz olmasın) */
+  .list-container .chart-container { overflow-x: auto !important; }
+  .modern-table { min-width: 560px; }
 }

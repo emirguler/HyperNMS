@@ -314,16 +314,7 @@ function TopologyInner({ onEdit, onClone }) {
             ) : (
               <span>{tab.name}</span>
             )}
-            {isAdmin && tab.id !== 'main' && (
-              <span className="topology-tab-close" onClick={(e) => {
-                e.stopPropagation();
-                setConfirmState({
-                  title: t('deletePage'),
-                  message: `"${tab.name}" ${t('deletePageConfirm')}`,
-                  onConfirm: () => { removeTab(tab.id); if (activeTabId === tab.id) navigate('/topology'); }
-                });
-              }}>&times;</span>
-            )}
+            {/* Silme yalnızca sağ-tık menüsünden — yanlışlıkla tıklamayla sayfa silinmesin */}
           </div>
         ))}
         {isAdmin && <button className="topology-tab-add" onClick={handleAddTab} title="Add sub page">+</button>}

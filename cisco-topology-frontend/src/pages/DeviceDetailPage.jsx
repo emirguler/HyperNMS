@@ -53,7 +53,7 @@ export default function DeviceDetailPage() {
       </div>
 
       <div className="chart-container" style={{ marginBottom: 24, padding: '24px 32px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 24, textAlign: 'center', marginBottom: details.snmpCommunity || details.sshUsername ? 20 : 0 }}>
+        <div className="grid-stats" style={{ textAlign: 'center', marginBottom: details.snmpCommunity || details.sshUsername ? 20 : 0 }}>
           {[
             { label: 'Real Hostname', value: displayHostname, color: 'var(--primary)' },
             { label: 'IP Address', value: details.ip, mono: true },
@@ -96,7 +96,7 @@ export default function DeviceDetailPage() {
         )}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 24, marginBottom: 24 }}>
+      <div className="grid-detail-main" style={{ marginBottom: 24 }}>
         <PingHistoryChart deviceId={id} />
         <Gauge value={details.cpu || 0} label="CPU Load" color={(details.cpu || 0) > 80 ? 'var(--danger)' : 'var(--primary)'} />
         <Gauge value={details.ram || 0} label="RAM Usage" color={(details.ram || 0) > 80 ? 'var(--danger)' : '#8b5cf6'} />

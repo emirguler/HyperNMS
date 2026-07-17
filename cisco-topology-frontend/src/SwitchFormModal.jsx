@@ -66,7 +66,7 @@ function SwitchFormModal({ mode, initialValues, onCancel, onSave, topologyTabs }
         </div>
 
         <form onSubmit={handleSubmit}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+          <div className="grid-2col">
 
             <div style={{ gridColumn: 'span 2' }}>
               <label className="input-label" style={{display:'block', marginBottom:8, color:'var(--text-muted)'}}>{t('deviceName')}</label>
@@ -113,7 +113,7 @@ function SwitchFormModal({ mode, initialValues, onCancel, onSave, topologyTabs }
               <input className="modern-input" type="password" name="sshPassword" value={values.sshPassword} onChange={handleChange} placeholder={isEdit && initialValues?.sshPasswordSet ? 'Leave empty to keep current' : ''} autoComplete="new-password" />
             </div>
 
-            <div style={{ gridColumn: 'span 2', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            <div className="grid-2col" style={{ gridColumn: 'span 2' }}>
                <div>
                   <label className="input-label" style={{display:'block', marginBottom:8, color:'var(--text-muted)'}}>{t('snmpCommunity')}</label>
                   <input className="modern-input" name="snmpCommunity" value={values.snmpCommunity} onChange={handleChange} />

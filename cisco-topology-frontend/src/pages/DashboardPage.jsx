@@ -23,7 +23,7 @@ export default function DashboardPage() {
 
   return (
     <div className="list-container">
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20, marginBottom: 24 }}>
+      <div className="grid-stats" style={{ marginBottom: 24 }}>
         {[
           { label: t('totalDevices'), value: rawDevices.length, color: undefined },
           { label: t('activeUp'), value: stats.upCount, color: 'var(--success)' },
@@ -39,7 +39,7 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr', gap: 20 }}>
+      <div className="grid-dash-main">
         {/* Network Health Pie */}
         <div className="chart-container" style={{ textAlign: 'center' }}>
           <h3 className="dash-section-title">{t('networkHealth')}</h3>

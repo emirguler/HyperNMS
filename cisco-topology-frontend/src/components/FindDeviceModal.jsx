@@ -144,7 +144,7 @@ export default function FindDeviceModal({ onClose }) {
               {parsed.invalid.length > 0 && <span style={{ color: 'var(--danger)' }}> · {parsed.invalid.length} {t('findInvalidIp')}</span>}
             </div>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          <div className="grid-2col">
             <div>
               <label className="input-label" style={{ display: 'block', marginBottom: 6, color: 'var(--text-muted)' }}>{t('sshUser')}</label>
               <input className="modern-input" value={username} onChange={e => setUsername(e.target.value)} autoComplete="off" />
@@ -154,7 +154,7 @@ export default function FindDeviceModal({ onClose }) {
               <input className="modern-input" type="password" value={password} onChange={e => setPassword(e.target.value)} autoComplete="new-password" />
             </div>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          <div className="grid-2col">
             <div>
               <label className="input-label" style={{ display: 'block', marginBottom: 6, color: 'var(--text-muted)' }}>{t('snmpCommunity')}</label>
               <input className="modern-input" value={snmpCommunity} onChange={e => setSnmpCommunity(e.target.value)} autoComplete="off" placeholder="public" />

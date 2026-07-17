@@ -10,84 +10,76 @@ export default function Navbar({ onAddDevice }) {
   const location = useLocation();
   const path = location.pathname;
   const [showSettings, setShowSettings] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
-  const navItems = [
-    { label: 'Dashboard', path: '/dashboard' },
-    { label: 'Devices', path: '/devices' },
-  ];
+  const go = (p) => { navigate(p); setMobileOpen(false); };
+  const cls = (p) => `nav-btn ${path === p ? 'active' : ''}`;
 
   return (
     <>
       <header className="nav-header" onClick={e => e.stopPropagation()}>
         {/* Left — Brand + Nav */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }} onClick={() => navigate('/dashboard')}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }} onClick={() => go('/dashboard')}>
             <span style={{ fontSize: '1.6rem', filter: 'drop-shadow(0 0 4px var(--primary))' }}>⚡</span>
             <span style={{ fontSize: '1rem', fontWeight: 700, letterSpacing: '-0.3px', color: 'var(--text-main)' }}>NetPulse</span>
           </div>
 
-          <div style={{ width: 1, height: 24, background: 'var(--border-color)', margin: '0 4px' }} />
+          <div style={{ width: 1, height: 24, background: 'var(--border-color)', margin: '0 4px' }} className="nav-desktop-right" />
 
           <nav className="nav-menu">
-            {navItems.map(item => (
-              <button
-                key={item.path}
-                className={`nav-btn ${path === item.path ? 'active' : ''}`}
-                onClick={() => navigate(item.path)}
-              >{item.label}</button>
-            ))}
+            <button className={cls('/dashboard')} onClick={() => go('/dashboard')}>Dashboard</button>
+            <button className={cls('/devices')} onClick={() => go('/devices')}>Devices</button>
 
             <div className="dropdown">
-              <button className={`nav-btn ${path.startsWith('/topology') || path === '/geomap' ? 'active' : ''}`}>
-                Maps ▾
-              </button>
+              <button className={`nav-btn ${path.startsWith('/topology') || path === '/geomap' ? 'active' : ''}`}>Maps ▾</button>
               <div className="dropdown-content">
-                <a className="dropdown-item" onClick={() => navigate('/topology')}>Topology Map</a>
-                <a className="dropdown-item" onClick={() => navigate('/geomap')}>Geographic Map</a>
+                <a className="dropdown-item" onClick={() => go('/topology')}>Topology Map</a>
+                <a className="dropdown-item" onClick={() => go('/geomap')}>Geographic Map</a>
               </div>
             </div>
 
-            <button className={`nav-btn ${path === '/mac-search' ? 'active' : ''}`} onClick={() => navigate('/mac-search')}>
-              MAC Search
-            </button>
-
-            {isAdmin && (
-              <button className={`nav-btn ${path === '/audit' ? 'active' : ''}`} onClick={() => navigate('/audit')}>
-                Audit Log
-              </button>
-            )}
+            <button className={cls('/mac-search')} onClick={() => go('/mac-search')}>MAC Search</button>
+            {isAdmin && <button className={cls('/audit')} onClick={() => go('/audit')}>Audit Log</button>}
 
             {isAdmin && (path === '/devices' || path.startsWith('/topology')) && onAddDevice && (
-              <button className="btn btn-primary btn-sm" style={{ marginLeft: 8 }} onClick={onAddDevice}>
-                + Add Device
-              </button>
+              <button className="btn btn-primary btn-sm" style={{ marginLeft: 8 }} onClick={onAddDevice}>+ Add Device</button>
             )}
           </nav>
         </div>
 
-        {/* Right — Actions */}
+        {/* Right — bell always visible; details on desktop, hamburger on mobile */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <NotificationBell />
 
-          {isAdmin && (
-            <button className={`nav-btn ${path === '/users' ? 'active' : ''}`} onClick={() => navigate('/users')} title="User Management">
-              Users
-            </button>
+          <span className="nav-desktop-right" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {isAdmin && <button className={cls('/users')} onClick={() => go('/users')} title="User Management">Users</button>}
+            {isAdmin && <button className="nav-btn" onClick={() => setShowSettings(true)} title="Settings" style={{ fontSize: '0.95rem' }}>⚙</button>}
+            <div style={{ width: 1, height: 20, background: 'var(--border-color)', margin: '0 4px' }} />
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginRight: 4 }}>{username}</span>
+            <button className="btn btn-ghost btn-sm" onClick={() => { logout(); navigate('/login'); }} style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>Sign Out</button>
+          </span>
+
+          <button className="nav-hamburger" onClick={() => setMobileOpen(o => !o)} aria-label="Menu">{mobileOpen ? '✕' : '☰'}</button>
+        </div>
+
+        {/* Mobile dropdown panel */}
+        <div className={`nav-mobile-panel ${mobileOpen ? 'open' : ''}`}>
+          <button className={cls('/dashboard')} onClick={() => go('/dashboard')}>Dashboard</button>
+          <button className={cls('/devices')} onClick={() => go('/devices')}>Devices</button>
+          <button className={cls('/topology')} onClick={() => go('/topology')}>Topology Map</button>
+          <button className={cls('/geomap')} onClick={() => go('/geomap')}>Geographic Map</button>
+          <button className={cls('/mac-search')} onClick={() => go('/mac-search')}>MAC Search</button>
+          {isAdmin && <button className={cls('/audit')} onClick={() => go('/audit')}>Audit Log</button>}
+          {isAdmin && <button className={cls('/users')} onClick={() => go('/users')}>Users</button>}
+          {isAdmin && (path === '/devices' || path.startsWith('/topology')) && onAddDevice && (
+            <button className="btn btn-primary btn-sm" onClick={() => { onAddDevice(); setMobileOpen(false); }}>+ Add Device</button>
           )}
-
-          {isAdmin && (
-            <button className="nav-btn" onClick={() => setShowSettings(true)} title="Settings" style={{ fontSize: '0.95rem' }}>
-              ⚙
-            </button>
-          )}
-
-          <div style={{ width: 1, height: 20, background: 'var(--border-color)', margin: '0 4px' }} />
-
-          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginRight: 4 }}>{username}</span>
-          <button className="btn btn-ghost btn-sm" onClick={() => { logout(); navigate('/login'); }}
-            style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-            Sign Out
-          </button>
+          {isAdmin && <button className="nav-btn" onClick={() => { setShowSettings(true); setMobileOpen(false); }}>⚙ Settings</button>}
+          <div className="nav-mobile-user">
+            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{username}</span>
+            <button className="btn btn-ghost btn-sm" onClick={() => { logout(); navigate('/login'); }} style={{ color: 'var(--danger)' }}>Sign Out</button>
+          </div>
         </div>
       </header>
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
