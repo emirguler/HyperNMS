@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
+// Önbellekte MAC'ler 12 hane ham tutulur → aa:bb:cc:dd:ee:ff olarak göster
+const fmtMac = (m) => String(m || '').replace(/(.{2})(?=.)/g, '$1:');
+
 export default function MacSearchPage() {
   const { authFetch } = useAuth();
   const navigate = useNavigate();
@@ -12,7 +15,7 @@ export default function MacSearchPage() {
   const [error, setError] = useState(null);
 
   const doSearch = async (force = false) => {
-    if (!query.trim() || query.trim().length < 5) return;
+    if (!query.trim() || query.trim().length < 4) return;
     setLoading(true);
     setLoadingType(force ? 'live' : 'search');
     setError(null);
@@ -73,7 +76,7 @@ export default function MacSearchPage() {
         <button
           className="btn btn-primary"
           type="submit"
-          disabled={loading || query.trim().length < 5}
+          disabled={loading || query.trim().length < 4}
           style={{ padding: '12px 24px', fontSize: '0.9rem', whiteSpace: 'nowrap' }}
         >
           {loading && loadingType === 'search' ? 'Searching...' : 'Search'}
@@ -131,6 +134,7 @@ export default function MacSearchPage() {
               <table className="modern-table">
                 <thead>
                   <tr>
+                    <th>MAC</th>
                     <th>Switch</th>
                     <th>IP</th>
                     <th>Port</th>
@@ -140,7 +144,8 @@ export default function MacSearchPage() {
                 </thead>
                 <tbody>
                   {result.results.map((r, i) => (
-                    <tr key={i} style={{ cursor: 'pointer' }} onClick={() => navigate(`/devices/${r.switchId}`)}>
+                    <tr key={i} style={{ cursor: 'pointer' }} onClick={() => navigate(`/devices/${r.switchId}`, { state: { from: '/mac-search' } })}>
+                      <td style={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{fmtMac(r.mac)}</td>
                       <td style={{ fontWeight: 600 }}>{r.switchName}</td>
                       <td style={{ fontFamily: 'monospace', color: 'var(--text-muted)' }}>{r.switchIp}</td>
                       <td style={{ fontFamily: 'monospace', fontWeight: 600, color: 'var(--primary)' }}>{r.port}</td>

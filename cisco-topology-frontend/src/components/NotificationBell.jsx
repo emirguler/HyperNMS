@@ -7,7 +7,23 @@ export default function NotificationBell() {
   const [open, setOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const wsRef = useRef(null);
+  const containerRef = useRef(null);
   const { isAuthenticated } = useAuth();
+
+  // Panel açıkken dışarı tıklama / Escape ile kapansın (yalnızca butona basmak zorunda kalma)
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) setOpen(false);
+    };
+    const onKeyDown = (e) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open]);
 
   useEffect(() => {
     // Fetch initial notifications
@@ -46,7 +62,7 @@ export default function NotificationBell() {
   };
 
   return (
-    <div style={{ position: 'relative' }}>
+    <div ref={containerRef} style={{ position: 'relative' }}>
       <button className="nav-btn" onClick={() => { setOpen(!open); setUnreadCount(0); }} style={{ fontSize: '1.2rem', position: 'relative' }}>
         🔔
         {unreadCount > 0 && (

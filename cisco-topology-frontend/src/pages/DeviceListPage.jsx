@@ -187,7 +187,7 @@ export default function DeviceListPage({ onEdit }) {
           </thead>
           <tbody>
             {filteredDevices.length > 0 ? filteredDevices.map(d => (
-              <tr key={d.id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/devices/${d.id}`)}>
+              <tr key={d.id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/devices/${d.id}`, { state: { from: '/devices' } })}>
                 {isAdmin && <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}><input type="checkbox" checked={selectedIds.has(d.id)} onChange={() => toggleSelect(d.id)} /></td>}
                 <td><span className={`status-badge ${d.status === 'UP' ? 'status-up' : 'status-down'}`}>{d.status}</span></td>
                 <td style={{ fontWeight: 600 }}>{d.name}</td>

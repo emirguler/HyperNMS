@@ -919,17 +919,24 @@ async function resolveIpToMac(devices, ip) {
     return results.find(r => r !== null) || null;
 }
 
+// Kısmi aramada dönecek azami satır (tek harf grubu çok MAC'e uyabilir)
+const MAX_PARTIAL_RESULTS = 200;
+
 async function searchMAC(devices, searchTerm, forceRefresh = false) {
-    let searchMac = null;
+    let searchMac = null;   // tam 12 haneli MAC
+    let partialMac = null;  // kısmi arama (4-11 hane) — MAC'in herhangi bir yerinde geçer
     let searchIp = null;
 
     if (/^\d{1,3}(\.\d{1,3}){3}$/.test(searchTerm.trim())) {
         searchIp = searchTerm.trim();
     } else {
-        searchMac = searchTerm.replace(/[:\-\.]/g, '').toLowerCase();
-        if (!/^[0-9a-f]{12}$/.test(searchMac)) {
+        const cleaned = searchTerm.replace(/[:\-.\s]/g, '').toLowerCase();
+        if (!/^[0-9a-f]+$/.test(cleaned)) {
             return { error: 'Invalid MAC address format', results: [] };
         }
+        if (cleaned.length === 12) searchMac = cleaned;
+        else if (cleaned.length >= 4) partialMac = cleaned;
+        else return { error: 'Enter a full IP, a full MAC, or at least 4 hex characters', results: [] };
     }
 
     // Step 1: Resolve IP → MAC (parallel)
@@ -942,7 +949,22 @@ async function searchMAC(devices, searchTerm, forceRefresh = false) {
         console.log(`[MAC-SEARCH] Resolved ${searchIp} → ${searchMac}`);
     }
 
-    const formattedMac = searchMac.replace(/(.{2})/g, '$1:').slice(0, 17);
+    // Kısmi aramada tek bir "çözülmüş MAC" yok → null (istemci arama terimini gösterir)
+    const formattedMac = searchMac ? searchMac.replace(/(.{2})/g, '$1:').slice(0, 17) : null;
+
+    // Tam MAC → O(1) birebir; kısmi → önbellek anahtarlarında alt-dize taraması
+    const lookup = () => {
+        if (searchMac) return macCache.get(searchMac) || [];
+        const out = [];
+        for (const [mac, entries] of macCache) {
+            if (mac.includes(partialMac)) {
+                out.push(...entries);
+                if (out.length >= MAX_PARTIAL_RESULTS) break;
+            }
+        }
+        return out.slice(0, MAX_PARTIAL_RESULTS);
+    };
+
     const sortResults = (arr) => [...arr].sort((a, b) => {
         if (a.type === 'access' && b.type === 'trunk') return -1;
         if (a.type === 'trunk' && b.type === 'access') return 1;
@@ -953,9 +975,10 @@ async function searchMAC(devices, searchTerm, forceRefresh = false) {
     const cacheAge = Date.now() - macCacheTimestamp;
     if (!forceRefresh && cacheAge < MAC_CACHE_TTL && macCache.size > 0) {
         console.log(`[MAC-SEARCH] Cache hit (age: ${Math.round(cacheAge / 1000)}s)`);
-        const cached = macCache.get(searchMac) || [];
+        const cached = lookup();
         return {
             results: sortResults(cached), resolvedMac: formattedMac,
+            partial: !!partialMac,
             searchedDevices: devices.length, fromCache: true,
             cacheAge: Math.round(cacheAge / 1000)
         };
@@ -965,10 +988,11 @@ async function searchMAC(devices, searchTerm, forceRefresh = false) {
     console.log(`[MAC-SEARCH] ${forceRefresh ? 'Force refresh' : 'Cache miss'}, scanning...`);
     await buildMacCache(devices);
 
-    const results = macCache.get(searchMac) || [];
-    console.log(`[MAC-SEARCH] Found ${results.length} result(s) for ${formattedMac}`);
+    const results = lookup();
+    console.log(`[MAC-SEARCH] Found ${results.length} result(s) for ${formattedMac || `*${partialMac}*`}`);
     return {
         results: sortResults(results), resolvedMac: formattedMac,
+        partial: !!partialMac,
         searchedDevices: devices.length, fromCache: false, cacheAge: 0
     };
 }

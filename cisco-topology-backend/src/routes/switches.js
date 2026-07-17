@@ -496,8 +496,9 @@ router.post('/topology/auto-discover', authenticate, requireAdmin, async (req, r
 
 router.post('/mac-search', authenticate, async (req, res) => {
     const { query, force } = req.body;
-    if (!query || typeof query !== 'string' || query.trim().length < 5) {
-        return res.status(400).json({ error: 'Valid IP or MAC address required' });
+    // 4 hane = kısmi MAC araması (searchMAC alt-dize eşleşmesi yapar)
+    if (!query || typeof query !== 'string' || query.trim().length < 4) {
+        return res.status(400).json({ error: 'Enter at least 4 characters' });
     }
 
     const devices = store.getSwitches().filter(s => s.status === 'UP' && s.snmpCommunity);
@@ -681,7 +682,9 @@ router.get('/switches/:id/ping-history', authenticate, (req, res) => {
 });
 
 // SSH komutu çalıştır (show run vb.)
-router.post('/switches/:id/exec', authenticate, async (req, res) => {
+// requireAdmin: bu rota cihazda komut çalıştırır (running-config dahil) — User rolü
+// SSH'ta whitelist'e kısıtlıyken buradan serbest komut çalıştırabilmemeli.
+router.post('/switches/:id/exec', authenticate, requireAdmin, async (req, res) => {
     const device = store.getSwitch(req.params.id);
     if (!device) return res.status(404).json({ error: 'Device not found' });
     if (!device.sshUsername || !device.sshPassword) return res.status(400).json({ error: 'SSH credentials missing' });

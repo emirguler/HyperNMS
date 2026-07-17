@@ -400,7 +400,13 @@ function TopologyInner({ onEdit, onClone }) {
 
         {menu && (
           <div className="context-menu" style={{ top: menu.top, left: menu.left }}>
-            <div className="context-menu-item" onClick={() => { navigate(`/devices/${menu.id}`); setMenu(null); }}>📊 Details</div>
+            {/* Geri dönünce Devices'a değil, bulunduğumuz topoloji sekmesine dönsün */}
+            <div className="context-menu-item" onClick={() => {
+              navigate(`/devices/${menu.id}`, {
+                state: { from: activeTabId === 'main' ? '/topology' : `/topology/${activeTabId}` }
+              });
+              setMenu(null);
+            }}>📊 Details</div>
             {isAdmin && <div className="context-menu-item" onClick={() => { onEdit(rawDevices.find(d => d.id === menu.id)); setMenu(null); }}>✏️ Edit</div>}
             {isAdmin && <div className="context-menu-item" onClick={() => { onClone(rawDevices.find(d => d.id === menu.id)); setMenu(null); }}>⧉ Clone</div>}
             {(isAdmin || allowedCommands.length > 0) && <div className="context-menu-item" onClick={() => { openSshSession(menu.id, menu.label); setMenu(null); }}>💻 SSH Terminal</div>}

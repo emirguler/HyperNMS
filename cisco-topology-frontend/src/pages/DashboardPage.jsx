@@ -88,7 +88,7 @@ export default function DashboardPage() {
             <table className="modern-table" style={{ borderSpacing: 0 }}>
               <tbody>
                 {rawDevices.slice(0, 10).map(d => (
-                  <tr key={d.id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/devices/${d.id}`)}>
+                  <tr key={d.id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/devices/${d.id}`, { state: { from: '/dashboard' } })}>
                     <td style={{ padding: '10px 16px', width: 80 }}>
                       <span className={`status-badge ${d.status === 'UP' ? 'status-up' : 'status-down'}`} style={{ fontSize: '0.7rem', padding: '3px 8px' }}>{d.status}</span>
                     </td>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Gauge from '../components/Gauge';
 import PingHistoryChart from '../components/PingHistoryChart';
@@ -8,7 +8,11 @@ import { t } from '../i18n';
 export default function DeviceDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { authFetch } = useAuth();
+  // Geri dön: gelinen sayfaya (topoloji sekmesi / Devices / Dashboard ...).
+  // Doğrudan link ile açıldıysa (state yok) Devices'a düş.
+  const backTo = location.state?.from || '/devices';
   const [details, setDetails] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -43,7 +47,7 @@ export default function DeviceDetailPage() {
   return (
     <div className="list-container">
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
-        <button onClick={() => navigate('/devices')} className="btn btn-ghost">{t('goBack')}</button>
+        <button onClick={() => navigate(backTo)} className="btn btn-ghost">{t('goBack')}</button>
         <h2 style={{ margin: 0, fontSize: '1.8rem' }}>{displayHostname}</h2>
         <span className={`status-badge ${details.status === 'UP' ? 'status-up' : 'status-down'}`} style={{ marginLeft: 'auto' }}>{details.status}</span>
       </div>
@@ -182,6 +186,9 @@ function ShowRunCard({ deviceId }) {
     }
   };
 
+  // Running config yalnızca admin'e. (Hook'lardan SONRA dönülüyor — hook sırası bozulmasın.)
+  // Backend'de de requireAdmin var: UI'ı gizlemek tek başına yetki denetimi değildir.
+  if (!isAdmin) return null;
 
   return (
     <div className="chart-container" style={{ marginTop: 24, padding: 0, overflow: 'hidden' }}>
