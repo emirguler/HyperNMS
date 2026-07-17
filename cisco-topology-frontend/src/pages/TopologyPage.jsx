@@ -9,6 +9,7 @@ import { toPng } from 'html-to-image';
 import SwitchNode from '../components/SwitchNode';
 import CableEdge from '../components/CableEdge';
 import BatchEditModal from '../components/BatchEditModal';
+import ConfirmModal from '../components/ConfirmModal';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { API_BASE } from '../config';
@@ -39,6 +40,7 @@ function TopologyInner({ onEdit, onClone }) {
   const [tabMenu, setTabMenu] = useState(null);
   const [batchEditIds, setBatchEditIds] = useState(null); // çoklu seçim toplu düzenleme
   const [selMenu, setSelMenu] = useState(null); // çoklu seçim sağ-tık menüsü {ids, top, left}
+  const [confirmState, setConfirmState] = useState(null); // tema uyumlu onay {title, message, onConfirm}
   const [localNodes, setLocalNodes] = useState([]);
   const [renamingTab, setRenamingTab] = useState(null);
   const [renameValue, setRenameValue] = useState('');
@@ -289,8 +291,11 @@ function TopologyInner({ onEdit, onClone }) {
             {isAdmin && tab.id !== 'main' && (
               <span className="topology-tab-close" onClick={(e) => {
                 e.stopPropagation();
-                removeTab(tab.id);
-                if (activeTabId === tab.id) navigate('/topology');
+                setConfirmState({
+                  title: t('deletePage'),
+                  message: `"${tab.name}" ${t('deletePageConfirm')}`,
+                  onConfirm: () => { removeTab(tab.id); if (activeTabId === tab.id) navigate('/topology'); }
+                });
               }}>&times;</span>
             )}
           </div>
@@ -305,9 +310,13 @@ function TopologyInner({ onEdit, onClone }) {
           <div className="context-menu-item" onClick={() => handleStartRename(tabMenu.id, tabMenu.name)}>✏️ Rename</div>
           {tabMenu.id !== 'main' && (
             <div className="context-menu-item" style={{ color: 'var(--danger)' }} onClick={() => {
-              removeTab(tabMenu.id);
-              if (activeTabId === tabMenu.id) navigate('/topology');
+              const { id, name } = tabMenu;
               setTabMenu(null);
+              setConfirmState({
+                title: t('deletePage'),
+                message: `"${name}" ${t('deletePageConfirm')}`,
+                onConfirm: () => { removeTab(id); if (activeTabId === id) navigate('/topology'); }
+              });
             }}>🗑️ Delete</div>
           )}
         </div>
@@ -379,17 +388,22 @@ function TopologyInner({ onEdit, onClone }) {
               const nodeId = menu.id;
               const nodeName = menu.label;
               setMenu(null);
-              if (!window.confirm(`Delete device "${nodeName}"? This action cannot be undone.`)) return;
-              try {
-                const res = await authFetch('/switches/' + nodeId, { method: 'DELETE' });
-                if (res && res.ok) {
-                  showToast(`"${nodeName}" deleted`, 'success');
-                  fetchData();
-                } else {
-                  const d = await res.json().catch(() => ({}));
-                  showToast(d.error || 'Delete failed', 'error');
+              setConfirmState({
+                title: t('deleteDevice'),
+                message: `"${nodeName}" ${t('deleteDeviceConfirmShort')}`,
+                onConfirm: async () => {
+                  try {
+                    const res = await authFetch('/switches/' + nodeId, { method: 'DELETE' });
+                    if (res && res.ok) {
+                      showToast(`"${nodeName}" deleted`, 'success');
+                      fetchData();
+                    } else {
+                      const d = await res.json().catch(() => ({}));
+                      showToast(d.error || 'Delete failed', 'error');
+                    }
+                  } catch { showToast('Delete failed', 'error'); }
                 }
-              } catch { showToast('Delete failed', 'error'); }
+              });
             }}>🗑️ Delete Device</div>}
           </div>
         )}
@@ -402,13 +416,18 @@ function TopologyInner({ onEdit, onClone }) {
             <div className="context-menu-item" style={{ color: 'var(--danger)' }} onClick={async () => {
               const ids = selMenu.ids;
               setSelMenu(null);
-              if (!window.confirm(`Delete ${ids.length} device(s)? This action cannot be undone.`)) return;
-              let deleted = 0;
-              for (const id of ids) {
-                try { const res = await authFetch('/switches/' + id, { method: 'DELETE' }); if (res && res.ok) deleted++; } catch { /* ignore */ }
-              }
-              showToast(`${deleted} device(s) deleted`, 'success');
-              fetchData();
+              setConfirmState({
+                title: t('deleteDevice'),
+                message: `${ids.length} ${t('deleteSelectedConfirm')}`,
+                onConfirm: async () => {
+                  let deleted = 0;
+                  for (const id of ids) {
+                    try { const res = await authFetch('/switches/' + id, { method: 'DELETE' }); if (res && res.ok) deleted++; } catch { /* ignore */ }
+                  }
+                  showToast(`${deleted} device(s) deleted`, 'success');
+                  fetchData();
+                }
+              });
             }}>🗑️ Delete Selected</div>
           </div>
         )}
@@ -464,6 +483,16 @@ function TopologyInner({ onEdit, onClone }) {
             />
           </div>
         </div>
+      )}
+
+      {/* Tema uyumlu onay penceresi (window.confirm yerine) */}
+      {confirmState && (
+        <ConfirmModal
+          title={confirmState.title}
+          message={confirmState.message}
+          onCancel={() => setConfirmState(null)}
+          onConfirm={() => { const fn = confirmState.onConfirm; setConfirmState(null); fn(); }}
+        />
       )}
 
       {/* Çoklu seçim toplu düzenleme */}

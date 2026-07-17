@@ -52,6 +52,10 @@ const translations = {
     deleteDeviceWarn: 'This action cannot be undone.',
     cancel: 'Cancel',
     yesDelete: 'Yes, Delete',
+    deleteDeviceConfirmShort: 'will be deleted. This action cannot be undone.',
+    deleteSelectedConfirm: 'device(s) will be deleted. This action cannot be undone.',
+    deletePage: 'Delete Topology Page?',
+    deletePageConfirm: 'page will be deleted. Its devices are moved back to Main Topology.',
     deleted: 'deleted',
     deleteFailed: 'Delete failed',
 
@@ -193,6 +197,10 @@ const translations = {
     deleteDeviceWarn: 'Bu i\u015flem geri al\u0131namaz.',
     cancel: '\u0130ptal',
     yesDelete: 'Evet, Sil',
+    deleteDeviceConfirmShort: 'silinecek. Bu i\u015flem geri al\u0131namaz.',
+    deleteSelectedConfirm: 'cihaz silinecek. Bu i\u015flem geri al\u0131namaz.',
+    deletePage: 'Topoloji Sayfas\u0131n\u0131 Sil?',
+    deletePageConfirm: 'sayfas\u0131 silinecek. \u0130\u00e7indeki cihazlar Main Topology\'ye ta\u015f\u0131n\u0131r.',
     deleted: 'silindi',
     deleteFailed: 'Silme ba\u015far\u0131s\u0131z',
 
