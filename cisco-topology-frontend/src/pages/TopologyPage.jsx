@@ -32,7 +32,7 @@ function TopologyInner({ onEdit, onClone }) {
   const { tabId } = useParams();
   const reactFlowWrapper = useRef(null);
   const { fitView, setCenter } = useReactFlow();
-  const { tabs, addTab, removeTab, renameTab } = useTopologyTabs();
+  const { tabs, addTab, removeTab, renameTab, reorderTabs } = useTopologyTabs();
 
   const activeTabId = tabId || 'main';
   const [menu, setMenu] = useState(null);
@@ -41,6 +41,8 @@ function TopologyInner({ onEdit, onClone }) {
   const [batchEditIds, setBatchEditIds] = useState(null); // çoklu seçim toplu düzenleme
   const [selMenu, setSelMenu] = useState(null); // çoklu seçim sağ-tık menüsü {ids, top, left}
   const [confirmState, setConfirmState] = useState(null); // tema uyumlu onay {title, message, onConfirm}
+  const [dragTabId, setDragTabId] = useState(null);       // sürüklenen sekme
+  const [dragOverTabId, setDragOverTabId] = useState(null); // üzerine gelinen sekme
   const [localNodes, setLocalNodes] = useState([]);
   const [renamingTab, setRenamingTab] = useState(null);
   const [renameValue, setRenameValue] = useState('');
@@ -186,6 +188,18 @@ function TopologyInner({ onEdit, onClone }) {
   }, [authFetch]);
   const onEdgesChange = useCallback((changes) => setEdges(eds => applyEdgeChanges(changes, eds)), [setEdges]);
 
+  // Sürüklenen sekmeyi hedefin bulunduğu konuma taşı
+  const handleTabDrop = (targetId) => {
+    const from = tabs.findIndex(t => t.id === dragTabId);
+    const to = tabs.findIndex(t => t.id === targetId);
+    setDragTabId(null);
+    setDragOverTabId(null);
+    if (!dragTabId || dragTabId === targetId || from < 0 || to < 0) return;
+    const ids = tabs.map(t => t.id);
+    ids.splice(to, 0, ids.splice(from, 1)[0]);
+    reorderTabs(ids);
+  };
+
   const handleAddTab = async () => {
     const name = `Sub Page ${tabs.length}`;
     const id = await addTab(name);
@@ -272,6 +286,18 @@ function TopologyInner({ onEdit, onClone }) {
           <div
             key={tab.id}
             className={`topology-tab ${activeTabId === tab.id ? 'active' : ''}`}
+            // Yeniden sıralama: admin sürükleyebilir (rename sırasında kapalı — metin seçimi bozulmasın)
+            draggable={isAdmin && renamingTab !== tab.id}
+            onDragStart={(e) => { setDragTabId(tab.id); e.dataTransfer.effectAllowed = 'move'; }}
+            onDragOver={(e) => { if (!dragTabId) return; e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (dragOverTabId !== tab.id) setDragOverTabId(tab.id); }}
+            onDragLeave={() => setDragOverTabId(prev => (prev === tab.id ? null : prev))}
+            onDrop={(e) => { e.preventDefault(); handleTabDrop(tab.id); }}
+            onDragEnd={() => { setDragTabId(null); setDragOverTabId(null); }}
+            style={{
+              opacity: dragTabId === tab.id ? 0.4 : 1,
+              boxShadow: dragOverTabId === tab.id && dragTabId !== tab.id ? 'inset 3px 0 0 var(--primary)' : undefined,
+              cursor: isAdmin ? 'grab' : 'pointer'
+            }}
             onClick={() => navigate(tab.id === 'main' ? '/topology' : `/topology/${tab.id}`)}
             onContextMenu={isAdmin ? ((e) => handleTabContextMenu(tab, e)) : undefined}
           >

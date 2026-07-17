@@ -47,6 +47,17 @@ router.post('/topology/tabs', authenticate, requireAdmin, (req, res) => {
     res.json(tab);
 });
 
+// DİKKAT: Bu rota '/topology/tabs/:id'den ÖNCE gelmeli — aksi halde Express
+// "reorder" kelimesini :id sanıp rename rotasını çalıştırır.
+router.put('/topology/tabs/reorder', authenticate, requireAdmin, (req, res) => {
+    const { ids } = req.body || {};
+    if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ error: 'ids array required' });
+    }
+    store.reorderTopoTabs(ids);
+    res.json({ success: true, tabs: store.getTopoTabs() });
+});
+
 router.put('/topology/tabs/:id', authenticate, requireAdmin, (req, res) => {
     const { name } = req.body;
     if (!name || typeof name !== 'string' || name.trim().length === 0) {

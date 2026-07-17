@@ -209,6 +209,23 @@ class MemoryStore {
         return tab;
     }
 
+    // Sekme sırasını istemciden gelen id dizisine göre yeniden düzenle.
+    // Dayanıklı: tanınmayan id'ler yok sayılır, dizide olmayan sekmeler (istemci listesi
+    // bayatsa, ör. başka biri sekme eklediyse) sona eklenir → sekme kaybolmaz.
+    reorderTopoTabs(ids) {
+        if (!Array.isArray(ids) || ids.length === 0) return false;
+        const byId = new Map(this.data.topoTabs.map(t => [t.id, t]));
+        const next = [];
+        for (const id of ids) {
+            const tab = byId.get(id);
+            if (tab) { next.push(tab); byId.delete(id); }
+        }
+        for (const tab of byId.values()) next.push(tab); // artakalanlar
+        this.data.topoTabs = next;
+        this._markDirty('topoTabs');
+        return true;
+    }
+
     renameTopoTab(id, name) {
         const tab = this.data.topoTabs.find(t => t.id === id);
         if (tab) {

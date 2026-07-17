@@ -49,7 +49,30 @@ export function useTopologyTabs() {
     } catch (e) { console.error('Failed to rename tab:', e); }
   };
 
-  return { tabs, addTab, removeTab, renameTab };
+  // Sekme sırasını değiştir. Sıra backend'de kalıcı olmazsa 4sn'lik /topology poll'ü
+  // eski sırayı geri getireceği için sunucuya yazmak şart.
+  const reorderTabs = async (ids) => {
+    const prevOrder = tabs;
+    // İyimser: sürükleme bırakılır bırakılmaz yeni sıra görünsün
+    setTopoTabs(prev => {
+      const byId = new Map(prev.map(t => [t.id, t]));
+      const next = ids.map(id => byId.get(id)).filter(Boolean);
+      prev.forEach(t => { if (!ids.includes(t.id)) next.push(t); });
+      return next;
+    });
+    try {
+      const res = await authFetch('/topology/tabs/reorder', {
+        method: 'PUT',
+        body: JSON.stringify({ ids })
+      });
+      if (!res || !res.ok) setTopoTabs(prevOrder); // başarısızsa geri al
+    } catch (e) {
+      console.error('Failed to reorder tabs:', e);
+      setTopoTabs(prevOrder);
+    }
+  };
+
+  return { tabs, addTab, removeTab, renameTab, reorderTabs };
 }
 
 // For non-hook contexts (e.g. BulkImportModal)
