@@ -1048,7 +1048,9 @@ function entIndex(colBase, oid) { return oid.slice(colBase.length + 1); }
 
 // Tek cihazın envanter satırını döndür. ASLA throw etmez (havuz güvenliği).
 async function inventoryDevice(device) {
-    const row = { name: device.name || '', type: device.type || 'switch', manufacturer: '', model: device.model || '', serial: '', version: '', ip: device.ip, topologyPage: device.topologyPage || 'main' };
+    // Device Name domain sonekini taşımasın (SNMP sysName FQDN dönebilir) → ilk noktaya kadar
+    const stripDomain = (n) => String(n || '').trim().split('.')[0];
+    const row = { name: stripDomain(device.name), type: device.type || 'switch', manufacturer: '', model: device.model || '', serial: '', version: '', ip: device.ip, topologyPage: device.topologyPage || 'main' };
     if (!device.snmpCommunity) return row; // SNMP yok → sadece kayıtlı alanlar
 
     let session;
@@ -1065,7 +1067,7 @@ async function inventoryDevice(device) {
         const base = await getScalar([SYS_NAME, SYS_DESCR, SYS_OBJID]);
         let sysDescr = '', sysObjId = '';
         if (base) {
-            if (!snmp.isVarbindError(base[0])) row.name = base[0].value.toString().trim() || row.name;
+            if (!snmp.isVarbindError(base[0])) row.name = stripDomain(base[0].value.toString()) || row.name;
             if (!snmp.isVarbindError(base[1])) sysDescr = base[1].value.toString();
             if (!snmp.isVarbindError(base[2])) sysObjId = base[2].value.toString();
         }
