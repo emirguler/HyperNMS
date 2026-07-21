@@ -781,7 +781,7 @@ router.post('/switches/:id/exec', authenticate, requireAdmin, async (req, res) =
     }
 });
 
-router.get('/switches/export/csv', authenticate, (req, res) => {
+router.get('/switches/export/csv', authenticate, requireAdmin, (req, res) => {
     const switches = store.getSwitches();
     const headers = ['Name', 'IP', 'Type', 'Status', 'Latency', 'Model', 'Tags'];
     const rows = switches.map(s => [
@@ -799,11 +799,13 @@ const detailedExportLimiter = rateLimiter({ windowMs: 5 * 60 * 1000, max: 10, me
 router.get('/switches/export/detailed', authenticate, requireAdmin, detailedExportLimiter, async (req, res) => {
     try {
         const rows = await inventoryAll(store.getSwitches());
+        // Topoloji sayfası id → okunur ad
+        const pageName = (id) => store.getTopoTabs().find(t => t.id === (id || 'main'))?.name || (id || 'main');
         const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-        const headers = ['Device Name', 'Manufacturer', 'Model', 'Serial Number', 'Image Version', 'LAN IP'];
+        const headers = ['Device Name', 'Type', 'Manufacturer', 'Model', 'Serial Number', 'Image Version', 'LAN IP', 'Topology Page'];
         const csv = [
             headers.join(','),
-            ...rows.map(r => [r.name, r.manufacturer, r.model, r.serial, r.version, r.ip].map(esc).join(','))
+            ...rows.map(r => [r.name, r.type, r.manufacturer, r.model, r.serial, r.version, r.ip, pageName(r.topologyPage)].map(esc).join(','))
         ].join('\r\n');
         res.setHeader('Content-Type', 'text/csv; charset=utf-8');
         res.setHeader('Content-Disposition', 'attachment; filename=devices-detailed.csv');

@@ -1048,7 +1048,7 @@ function entIndex(colBase, oid) { return oid.slice(colBase.length + 1); }
 
 // Tek cihazın envanter satırını döndür. ASLA throw etmez (havuz güvenliği).
 async function inventoryDevice(device) {
-    const row = { name: device.name || '', manufacturer: '', model: device.model || '', serial: '', version: '', ip: device.ip };
+    const row = { name: device.name || '', type: device.type || 'switch', manufacturer: '', model: device.model || '', serial: '', version: '', ip: device.ip, topologyPage: device.topologyPage || 'main' };
     if (!device.snmpCommunity) return row; // SNMP yok → sadece kayıtlı alanlar
 
     let session;
