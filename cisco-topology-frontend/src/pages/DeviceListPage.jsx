@@ -21,6 +21,8 @@ export default function DeviceListPage({ onEdit }) {
   const [showBulkImport, setShowBulkImport] = useState(false);
   const [showFindDevice, setShowFindDevice] = useState(false);
   const [confirmBatchDelete, setConfirmBatchDelete] = useState(false);
+  const [showDownloadMenu, setShowDownloadMenu] = useState(false);
+  const [detailedLoading, setDetailedLoading] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [showBatchEdit, setShowBatchEdit] = useState(false);
   const [batchForm, setBatchForm] = useState({ sshUsername: '', sshPassword: '', snmpCommunity: '', tags: '', topologyPage: '' });
@@ -79,8 +81,32 @@ export default function DeviceListPage({ onEdit }) {
         a.click();
         URL.revokeObjectURL(url);
         showToast('CSV exported', 'success');
+        setShowDownloadMenu(false);
       }
     } catch { showToast('Export failed', 'error'); }
+  };
+
+  // Detaylı liste: her cihazdan SNMP ile serial/model/version toplanır (yavaş)
+  const handleExportDetailed = async () => {
+    setDetailedLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/switches/export/detailed`, { credentials: 'include' });
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'devices-detailed.csv';
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('Detailed CSV exported', 'success');
+        setShowDownloadMenu(false);
+      } else {
+        const d = await res.json().catch(() => ({}));
+        showToast(d.error || 'Export failed', 'error');
+      }
+    } catch { showToast('Export failed', 'error'); }
+    finally { setDetailedLoading(false); }
   };
 
   const toggleSelect = (id) => {
@@ -157,7 +183,7 @@ export default function DeviceListPage({ onEdit }) {
         </select>
         {isAdmin && <button className="btn btn-ghost btn-sm" onClick={() => setShowFindDevice(true)} title={t('findDeviceTitle')}>🔍 {t('findDevice')}</button>}
         {isAdmin && <button className="btn btn-ghost btn-sm" onClick={() => setShowBulkImport(true)} title="Bulk Import">📤 Import List</button>}
-        {isAdmin && <button className="btn btn-ghost btn-sm" onClick={handleExportCSV} title="Export CSV">📥 Download List</button>}
+        {isAdmin && <button className="btn btn-ghost btn-sm" onClick={() => setShowDownloadMenu(true)} title="Export CSV">📥 Download List</button>}
         <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{filteredDevices.length} / {rawDevices.length} {t('deviceCount')}</span>
       </div>
 
@@ -274,6 +300,30 @@ export default function DeviceListPage({ onEdit }) {
 
       {showBulkImport && <BulkImportModal onClose={() => setShowBulkImport(false)} />}
       {showFindDevice && <FindDeviceModal onClose={() => setShowFindDevice(false)} />}
+
+      {showDownloadMenu && (
+        <div className="modal-overlay" onClick={() => !detailedLoading && setShowDownloadMenu(false)}
+          onKeyDown={e => { if (e.key === 'Escape' && !detailedLoading) setShowDownloadMenu(false); }}>
+          <div className="modal-content" style={{ width: 420 }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <h2 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 600, color: 'var(--text-main)' }}>{t('downloadTitle')}</h2>
+              <button onClick={() => !detailedLoading && setShowDownloadMenu(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '1.5rem', cursor: 'pointer' }}>&times;</button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <button className="btn btn-ghost" onClick={handleExportCSV} disabled={detailedLoading}
+                style={{ textAlign: 'left', padding: '14px 16px', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
+                <span style={{ fontWeight: 600 }}>📄 {t('downloadSummary')}</span>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{t('downloadSummaryDesc')}</span>
+              </button>
+              <button className="btn btn-primary" onClick={handleExportDetailed} disabled={detailedLoading}
+                style={{ textAlign: 'left', padding: '14px 16px', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
+                <span style={{ fontWeight: 600 }}>{detailedLoading ? `⏳ ${t('downloadGathering')}` : `📋 ${t('downloadDetailed')}`}</span>
+                <span style={{ fontSize: '0.75rem', opacity: 0.85 }}>{t('downloadDetailedDesc')}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {confirmBatchDelete && (
         <ConfirmModal

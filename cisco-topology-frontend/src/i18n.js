@@ -130,6 +130,12 @@ const translations = {
     findRetryFailed: 'Retry failed',
     findRetryFailedTitle: 'Probe only the IPs that failed, keeping the ones already found',
     topologyPage: 'Topology Page',
+    downloadTitle: 'Download Device List',
+    downloadSummary: 'Summary List',
+    downloadSummaryDesc: 'Name, IP, type, status, latency, model, tags',
+    downloadDetailed: 'Detailed List',
+    downloadDetailedDesc: 'Name, manufacturer, model, serial, image version, IP (queried live over SNMP)',
+    downloadGathering: 'Gathering over SNMP...',
 
     // Terminal
     closeAll: 'Close All',
@@ -275,6 +281,12 @@ const translations = {
     findRetryFailed: 'Ba\u015far\u0131s\u0131zlar\u0131 Tekrar Dene',
     findRetryFailedTitle: 'Sadece ba\u015far\u0131s\u0131z olan IP\'leri yeniden dener; bulunanlar korunur',
     topologyPage: 'Topoloji Sayfas\u0131',
+    downloadTitle: 'Cihaz Listesini \u0130ndir',
+    downloadSummary: '\u00d6zet Liste',
+    downloadSummaryDesc: 'Ad, IP, tip, durum, gecikme, model, etiketler',
+    downloadDetailed: 'Detayl\u0131 Liste',
+    downloadDetailedDesc: 'Ad, \u00fcretici, model, seri no, image s\u00fcr\u00fcm\u00fc, IP (SNMP ile canl\u0131 sorgulan\u0131r)',
+    downloadGathering: 'SNMP ile toplan\u0131yor...',
 
     // Terminal
     closeAll: 'T\u00fcm\u00fcn\u00fc Kapat',

@@ -3,7 +3,7 @@ const store = require('../utils/memoryStore');
 const { authenticate, requireAdmin } = require('../middleware/auth');
 const { validateSwitch, sanitizeSwitch, isBlockedIP, isValidIPv4 } = require('../utils/validation');
 const { encryptPassword, decryptPassword } = require('../utils/crypto');
-const { getDeviceDetails, discoverNeighbors, searchMAC } = require('../services/snmpService');
+const { getDeviceDetails, discoverNeighbors, searchMAC, inventoryAll } = require('../services/snmpService');
 const { probeDevice } = require('../services/sshService');
 const { identifyFromSsh } = require('../utils/sshIdentify');
 const { logAction } = require('../services/auditLog');
@@ -787,10 +787,31 @@ router.get('/switches/export/csv', authenticate, (req, res) => {
     const rows = switches.map(s => [
         s.name, s.ip, s.type || 'switch', s.status, s.latency, s.model || '', (s.tags || []).join(';')
     ]);
-    const csv = [headers.join(','), ...rows.map(r => r.map(v => `"${v}"`).join(','))].join('\n');
-    res.setHeader('Content-Type', 'text/csv');
+    const csv = [headers.join(','), ...rows.map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(','))].join('\r\n');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', 'attachment; filename=devices.csv');
-    res.send(csv);
+    res.send('﻿' + csv); // UTF-8 BOM → Excel'de Türkçe karakter bozulmaz
+});
+
+// --- Detaylı envanter (Detailed List): her cihazdan SNMP ile serial/model/version topla ---
+// Aktif olarak tüm cihazlara SNMP atar → admin-only + kendi rate limiter'ı.
+const detailedExportLimiter = rateLimiter({ windowMs: 5 * 60 * 1000, max: 10, message: 'Too many export requests, please wait' });
+router.get('/switches/export/detailed', authenticate, requireAdmin, detailedExportLimiter, async (req, res) => {
+    try {
+        const rows = await inventoryAll(store.getSwitches());
+        const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+        const headers = ['Device Name', 'Manufacturer', 'Model', 'Serial Number', 'Image Version', 'LAN IP'];
+        const csv = [
+            headers.join(','),
+            ...rows.map(r => [r.name, r.manufacturer, r.model, r.serial, r.version, r.ip].map(esc).join(','))
+        ].join('\r\n');
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', 'attachment; filename=devices-detailed.csv');
+        res.send('﻿' + csv);
+    } catch (e) {
+        console.error('[EXPORT-DETAILED] Hata:', e.message);
+        res.status(500).json({ error: 'Detailed export failed' });
+    }
 });
 
 module.exports = router;

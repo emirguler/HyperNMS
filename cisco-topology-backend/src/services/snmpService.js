@@ -997,4 +997,129 @@ async function searchMAC(devices, searchTerm, forceRefresh = false) {
     };
 }
 
-module.exports = { getDeviceDetails, getVendorConfig, discoverNeighbors, searchMAC };
+// ========================================================================
+// Detaylı envanter (Detailed List export) — cihazdan SNMP ile serial/model/
+// version/manufacturer topla. ENTITY-MIB hem Cisco IOS/IOS-XE hem Allied
+// Telesis'te çalışır. Parser'lar saf (I/O yok), gerçek çıktılarla doğrulandı.
+// ========================================================================
+
+// sysDescr → CSV'deki BÜYÜK HARFLİ üretici etiketi
+function manufacturerFromSysDescr(sysDescr) {
+    const d = String(sysDescr || '').toLowerCase();
+    if (/allied\s*telesis|alliedware\s*plus|\baw\+/.test(d)) return 'ALLIED TELESIS';
+    if (d.includes('cisco')) return 'CISCO';
+    if (d.includes('huawei')) return 'HUAWEI';
+    if (/arubaos|aruba/.test(d)) return 'ARUBA';
+    if (/procurve|hewlett[- ]packard|\bhp\b/.test(d)) return 'HP';
+    if (d.includes('juniper') || d.includes('junos')) return 'JUNIPER';
+    if (d.includes('fortinet') || d.includes('fortigate')) return 'FORTINET';
+    return '';
+}
+
+// sysDescr → image/yazılım sürümü. Cisco klasik IOS "15.2(8)E1", IOS-XE
+// "17.06.04(CAT9K_IOSXE)" (image train eklenir), Allied Telesis veya bilinmiyorsa ''.
+function imageVersionFromSysDescr(sysDescr) {
+    const s = String(sysDescr || '');
+    let m = s.match(/Version\s+(\d{1,2}\.\d{1,2}\(\d+[A-Za-z]?\)[0-9A-Za-z]*)/); // klasik IOS
+    if (m) return m[1];
+    m = s.match(/Version\s+(\d{1,2}\.\d{1,2}\.\d{1,2}[A-Za-z]?)/);               // IOS-XE
+    if (m) {
+        const ver = m[1];
+        const t = s.match(/Software\s+\(([A-Za-z0-9_-]*IOSXE[A-Za-z0-9_-]*)\)/i);
+        return t ? `${ver}(${t[1]})` : ver;
+    }
+    if (/allied\s*telesis|alliedware\s*plus|\baw\+/i.test(s)) {
+        const a = s.match(/(?:AlliedWare Plus\b[^\n]*?|\bversion\s+|\bAW\+\s*v?)(main-\d{8}|\d+\.\d+\.\d+(?:-\d+\.\d+)?)/i);
+        return a ? a[1] : '';
+    }
+    return '';
+}
+
+// ENTITY-MIB entPhysicalTable sütunları + sistem skalerleri
+const ENT_CLASS  = '1.3.6.1.2.1.47.1.1.1.1.5';   // entPhysicalClass (chassis == 3)
+const ENT_SW_REV = '1.3.6.1.2.1.47.1.1.1.1.10';  // entPhysicalSoftwareRev
+const ENT_SERIAL = '1.3.6.1.2.1.47.1.1.1.1.11';  // entPhysicalSerialNum
+const ENT_MODEL  = '1.3.6.1.2.1.47.1.1.1.1.13';  // entPhysicalModelName
+const SYS_NAME   = '1.3.6.1.2.1.1.5.0';
+const SYS_DESCR  = '1.3.6.1.2.1.1.1.0';
+const SYS_OBJID  = '1.3.6.1.2.1.1.2.0';          // Allied Telesis kök: 1.3.6.1.4.1.207
+
+function entIndex(colBase, oid) { return oid.slice(colBase.length + 1); }
+
+// Tek cihazın envanter satırını döndür. ASLA throw etmez (havuz güvenliği).
+async function inventoryDevice(device) {
+    const row = { name: device.name || '', manufacturer: '', model: device.model || '', serial: '', version: '', ip: device.ip };
+    if (!device.snmpCommunity) return row; // SNMP yok → sadece kayıtlı alanlar
+
+    let session;
+    try {
+        session = snmp.createSession(device.ip, device.snmpCommunity, {
+            port: device.snmpPort || 161, version: snmp.Version2c, timeout: 3000, retries: 0
+        });
+        const getScalar = (oids) => new Promise(r => session.get(oids, (e, vb) => r(e ? null : vb)));
+        const getSubtree = (oid) => new Promise(r => {
+            const o = [];
+            session.subtree(oid, 20, (vbs) => { for (const vb of vbs) o.push(vb); }, () => r(o));
+        });
+
+        const base = await getScalar([SYS_NAME, SYS_DESCR, SYS_OBJID]);
+        let sysDescr = '', sysObjId = '';
+        if (base) {
+            if (!snmp.isVarbindError(base[0])) row.name = base[0].value.toString().trim() || row.name;
+            if (!snmp.isVarbindError(base[1])) sysDescr = base[1].value.toString();
+            if (!snmp.isVarbindError(base[2])) sysObjId = base[2].value.toString();
+        }
+
+        const [cVbs, sVbs, mVbs, wVbs] = await Promise.all([
+            getSubtree(ENT_CLASS), getSubtree(ENT_SERIAL), getSubtree(ENT_MODEL), getSubtree(ENT_SW_REV)
+        ]);
+        const clean = (v) => v.toString().replace(/\x00/g, '').trim();
+        const ent = {};
+        for (const vb of cVbs) { const i = entIndex(ENT_CLASS, vb.oid);  (ent[i] || (ent[i] = {})).cls = parseSnmpInt(vb.value); }
+        for (const vb of sVbs) { const i = entIndex(ENT_SERIAL, vb.oid); (ent[i] || (ent[i] = {})).serial = clean(vb.value); }
+        for (const vb of mVbs) { const i = entIndex(ENT_MODEL, vb.oid);  (ent[i] || (ent[i] = {})).model = clean(vb.value); }
+        for (const vb of wVbs) { const i = entIndex(ENT_SW_REV, vb.oid); (ent[i] || (ent[i] = {})).sw = clean(vb.value); }
+
+        const idxs = Object.keys(ent).sort((a, b) => Number(a) - Number(b));
+        const pick = idxs.find(i => ent[i].cls === 3 && ent[i].serial)
+            || idxs.find(i => ent[i].cls === 3)
+            || idxs.find(i => ent[i].serial);
+        const chassis = pick ? ent[pick] : {};
+
+        row.serial = chassis.serial || '';
+        row.model = chassis.model || device.model || '';
+
+        // Version: temiz entPhysicalSoftwareRev tercih; yoksa sysDescr'den parse
+        const swRev = (chassis.sw && chassis.sw.trim()) || idxs.map(i => ent[i].sw).find(sw => sw && sw.trim()) || '';
+        row.version = swRev ? swRev.trim() : imageVersionFromSysDescr(sysDescr);
+
+        row.manufacturer = manufacturerFromSysDescr(sysDescr)
+            || (sysObjId.startsWith('1.3.6.1.4.1.207') ? 'ALLIED TELESIS' : '');
+    } catch (e) {
+        /* pool güvenliği: yut, boş alanlarla dön */
+    } finally {
+        if (session) { try { session.close(); } catch (_) { /* ignore */ } }
+    }
+    return row;
+}
+
+// Tüm cihazların envanteri — sınırlı eşzamanlılıkla (SNMP fan-out sınırı)
+async function inventoryAll(devices, concurrency = 8) {
+    const list = Array.isArray(devices) ? devices : [];
+    const results = new Array(list.length);
+    let cursor = 0;
+    const runners = Array.from({ length: Math.min(concurrency, list.length) }, async () => {
+        for (;;) {
+            const i = cursor++;
+            if (i >= list.length) return;
+            results[i] = await inventoryDevice(list[i]);
+        }
+    });
+    await Promise.all(runners);
+    return results;
+}
+
+module.exports = {
+    getDeviceDetails, getVendorConfig, discoverNeighbors, searchMAC,
+    manufacturerFromSysDescr, imageVersionFromSysDescr, inventoryDevice, inventoryAll,
+};
