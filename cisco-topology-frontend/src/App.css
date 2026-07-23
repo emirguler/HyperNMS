@@ -854,7 +854,7 @@ select.modern-input option {
 /* Responsive grid yardımcıları — masaüstü varsayılanı, mobilde media query ile yığılır.
    (Inline gridTemplateColumns media query ile ezilemediğinden sınıfa çevrildi.) */
 .grid-stats     { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
-.grid-dash-main { display: grid; grid-template-columns: 1fr 1fr 2fr; gap: 20px; }
+.grid-dash-main { display: grid; grid-template-columns: 1fr 1fr 2fr; gap: 20px; align-items: stretch; }
 .grid-detail-main { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 24px; }
 .grid-2col      { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 

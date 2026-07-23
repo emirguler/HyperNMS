@@ -29,6 +29,8 @@ const translations = {
     networkHealth: 'Network Health',
     deviceTypes: 'Device Types',
     deviceStatus: 'Device Status',
+    notifications: 'Notifications',
+    noNotifications: 'No notifications yet',
 
     // Device list
     searchPlaceholder: 'Search by name, IP or type...',
@@ -184,6 +186,8 @@ const translations = {
     networkHealth: 'A\u011f Sa\u011fl\u0131\u011f\u0131',
     deviceTypes: 'Cihaz Tipleri',
     deviceStatus: 'Cihaz Durumlar\u0131',
+    notifications: 'Bildirimler',
+    noNotifications: 'Hen\u00fcz bildirim yok',
 
     // Device list
     searchPlaceholder: 'Cihaz ad\u0131, IP veya tip ara...',

@@ -1,16 +1,18 @@
 import { useState, useEffect, useRef } from 'react';
-import { WS_BASE, API_BASE } from '../config';
-import { useAuth } from '../context/AuthContext';
+import { useApp } from '../context/AppContext';
+
+export function severityColor(severity) {
+  if (severity === 'critical') return 'var(--danger)';
+  if (severity === 'resolved') return 'var(--success)';
+  return 'var(--text-muted)';
+}
 
 export default function NotificationBell() {
-  const [notifications, setNotifications] = useState([]);
+  const { notifications, unreadCount, markNotificationsRead } = useApp();
   const [open, setOpen] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const wsRef = useRef(null);
   const containerRef = useRef(null);
-  const { isAuthenticated } = useAuth();
 
-  // Panel açıkken dışarı tıklama / Escape ile kapansın (yalnızca butona basmak zorunda kalma)
+  // Panel açıkken dışarı tıklama / Escape ile kapansın
   useEffect(() => {
     if (!open) return;
     const onPointerDown = (e) => {
@@ -25,45 +27,9 @@ export default function NotificationBell() {
     };
   }, [open]);
 
-  useEffect(() => {
-    // Fetch initial notifications
-    fetch(`${API_BASE}/notifications`, { credentials: 'include' })
-      .then(r => r.ok ? r.json() : [])
-      .then(data => {
-        setNotifications(data);
-        setUnreadCount(data.filter(n => !n.read).length);
-      })
-      .catch(() => {});
-
-    // WebSocket for real-time
-    const ws = new WebSocket(`${WS_BASE}/ws/notifications`);
-    wsRef.current = ws;
-
-    ws.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data);
-        if (msg.type === 'notification') {
-          setNotifications(prev => [msg.data, ...prev].slice(0, 50));
-          setUnreadCount(prev => prev + 1);
-        } else if (msg.type === 'history') {
-          setNotifications(msg.data);
-          setUnreadCount(msg.data.filter(n => !n.read).length);
-        }
-      } catch (e) { /* ignore */ }
-    };
-
-    return () => { try { ws.close(); } catch (e) {} };
-  }, [isAuthenticated]);
-
-  const severityColor = (severity) => {
-    if (severity === 'critical') return 'var(--danger)';
-    if (severity === 'resolved') return 'var(--success)';
-    return 'var(--text-muted)';
-  };
-
   return (
     <div ref={containerRef} style={{ position: 'relative' }}>
-      <button className="nav-btn" onClick={() => { setOpen(!open); setUnreadCount(0); }} style={{ fontSize: '1.2rem', position: 'relative' }}>
+      <button className="nav-btn" onClick={() => { setOpen(!open); markNotificationsRead(); }} style={{ fontSize: '1.2rem', position: 'relative' }}>
         🔔
         {unreadCount > 0 && (
           <span style={{

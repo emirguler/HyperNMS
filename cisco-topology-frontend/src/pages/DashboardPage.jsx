@@ -2,10 +2,11 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { useApp } from '../context/AppContext';
+import { severityColor } from '../components/NotificationBell';
 import { t } from '../i18n';
 
 export default function DashboardPage() {
-  const { rawDevices, topoTabs } = useApp();
+  const { rawDevices, topoTabs, notifications } = useApp();
   const navigate = useNavigate();
 
   // DOWN cihazlar tablosu — topoloji sayfası + tip filtresi
@@ -56,15 +57,15 @@ export default function DashboardPage() {
         <div className="chart-container" style={{ textAlign: 'center' }}>
           <h3 className="dash-section-title">{t('networkHealth')}</h3>
           <div style={{ position: 'relative', display: 'inline-block' }}>
-            <ResponsiveContainer width={160} height={160}>
+            <ResponsiveContainer width={130} height={130}>
               <PieChart>
-                <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={70} dataKey="value" strokeWidth={0}>
+                <Pie data={pieData} cx="50%" cy="50%" innerRadius={42} outerRadius={58} dataKey="value" strokeWidth={0}>
                   {pieData.map((_, i) => <Cell key={i} fill={COLORS[i]} />)}
                 </Pie>
               </PieChart>
             </ResponsiveContainer>
             <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', textAlign: 'center' }}>
-              <div style={{ fontSize: '1.8rem', fontWeight: 700, color: stats.healthPct >= 80 ? 'var(--success)' : stats.healthPct >= 50 ? 'var(--warning)' : 'var(--danger)' }}>{stats.healthPct}%</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 700, color: stats.healthPct >= 80 ? 'var(--success)' : stats.healthPct >= 50 ? 'var(--warning)' : 'var(--danger)' }}>{stats.healthPct}%</div>
             </div>
           </div>
           <div style={{ display: 'flex', justifyContent: 'center', gap: 20, marginTop: 8 }}>
@@ -76,7 +77,7 @@ export default function DashboardPage() {
         {/* Device Types */}
         <div className="chart-container">
           <h3 className="dash-section-title">{t('deviceTypes')}</h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 12, maxHeight: 190, overflowY: 'auto' }}>
             {Object.entries(stats.typeGroups).map(([type, count]) => (
               <div key={type} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span style={{ fontSize: '0.85rem', textTransform: 'capitalize' }}>{type}</span>
@@ -91,28 +92,31 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Device Status Table */}
+        {/* Notifications (zil ile aynı veri) */}
         <div className="chart-container" style={{ padding: 0, overflow: 'hidden' }}>
           <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border-color)' }}>
-            <h3 className="dash-section-title" style={{ margin: 0 }}>{t('deviceStatus')}</h3>
+            <h3 className="dash-section-title" style={{ margin: 0 }}>🔔 {t('notifications')}</h3>
           </div>
-          <div style={{ maxHeight: 260, overflowY: 'auto' }}>
-            <table className="modern-table" style={{ borderSpacing: 0 }}>
-              <tbody>
-                {rawDevices.slice(0, 10).map(d => (
-                  <tr key={d.id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/devices/${d.id}`, { state: { from: '/dashboard' } })}>
-                    <td style={{ padding: '10px 16px', width: 80 }}>
-                      <span className={`status-badge ${d.status === 'UP' ? 'status-up' : 'status-down'}`} style={{ fontSize: '0.7rem', padding: '3px 8px' }}>{d.status}</span>
-                    </td>
-                    <td style={{ padding: '10px 0', fontWeight: 500, fontSize: '0.85rem' }}>{d.name}</td>
-                    <td style={{ padding: '10px 16px', fontFamily: 'monospace', fontSize: '0.8rem', color: 'var(--text-muted)' }}>{d.ip}</td>
-                    <td style={{ padding: '10px 16px', fontSize: '0.8rem', color: d.latency > 100 ? 'var(--danger)' : 'var(--text-muted)' }}>{d.latency > 0 ? d.latency + ' ms' : '-'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div style={{ maxHeight: 190, overflowY: 'auto' }}>
+            {notifications.length > 0 ? notifications.map(n => (
+              <div key={n.id} style={{ padding: '10px 16px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                <span style={{ fontSize: '1rem', lineHeight: 1.2 }}>{n.severity === 'critical' ? '🔴' : '🟢'}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: '0.82rem', fontWeight: 600, color: severityColor(n.severity) }}>{n.title}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3, flexWrap: 'wrap' }}>
+                    {n.topologyPage && (
+                      <span style={{ background: 'rgba(56,189,248,0.15)', color: 'var(--primary)', padding: '1px 6px', borderRadius: 10, fontSize: '0.65rem', fontWeight: 600 }}>🗺️ {n.topologyPage}</span>
+                    )}
+                    <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>{new Date(n.timestamp).toLocaleString()}</span>
+                  </div>
+                </div>
+              </div>
+            )) : (
+              <div style={{ padding: 30, textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>{t('noNotifications')}</div>
+            )}
           </div>
         </div>
+
       </div>
 
       {/* DOWN cihazlar — sayfa sekmeleri + tip filtresi */}

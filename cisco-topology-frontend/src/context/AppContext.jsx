@@ -1,10 +1,11 @@
 import { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react';
 import { useAuth } from './AuthContext';
+import { API_BASE, WS_BASE } from '../config';
 
 const AppContext = createContext(null);
 
 export function AppProvider({ children }) {
-  const { authFetch, isAdmin } = useAuth();
+  const { authFetch, isAdmin, isAuthenticated } = useAuth();
   const [rawDevices, setRawDevices] = useState([]);
   const [users, setUsers] = useState([]);
   const [edges, setEdges] = useState([]);
@@ -15,6 +16,36 @@ export function AppProvider({ children }) {
   const [sshSessions, setSshSessions] = useState([]);
   const [activeSshTabId, setActiveSshTabId] = useState(null);
   const [terminalHeight, setTerminalHeight] = useState(350);
+
+  // Bildirimler — tek kaynak: hem zil hem dashboard bloğu bunu okur (tek WebSocket)
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const markNotificationsRead = useCallback(() => setUnreadCount(0), []);
+
+  useEffect(() => {
+    if (!isAuthenticated) { setNotifications([]); setUnreadCount(0); return; }
+    // İlk yükleme (en yeni önce)
+    fetch(`${API_BASE}/notifications`, { credentials: 'include' })
+      .then(r => (r.ok ? r.json() : []))
+      .then(data => { setNotifications(data); setUnreadCount(data.filter(n => !n.read).length); })
+      .catch(() => {});
+    // Canlı akış
+    const ws = new WebSocket(`${WS_BASE}/ws/notifications`);
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        if (msg.type === 'notification') {
+          setNotifications(prev => [msg.data, ...prev].slice(0, 50));
+          setUnreadCount(prev => prev + 1);
+        } else if (msg.type === 'history') {
+          const list = [...msg.data].reverse(); // en yeni önce
+          setNotifications(list);
+          setUnreadCount(list.filter(n => !n.read).length);
+        }
+      } catch (e) { /* ignore */ }
+    };
+    return () => { try { ws.close(); } catch (e) { /* ignore */ } };
+  }, [isAuthenticated]);
 
   useEffect(() => {
     document.body.setAttribute('data-theme', theme);
@@ -109,11 +140,13 @@ export function AppProvider({ children }) {
     theme, toggleTheme,
     fetchData, fetchUsers,
     sshSessions, activeSshTabId, setActiveSshTabId, terminalHeight, setTerminalHeight,
-    openSshSession, closeSshSession, closeAllSessions
+    openSshSession, closeSshSession, closeAllSessions,
+    notifications, unreadCount, markNotificationsRead
   }), [
     rawDevices, users, edges, setEdges, topoTabs, setTopoTabs, theme, toggleTheme,
     fetchData, fetchUsers, sshSessions, activeSshTabId, setActiveSshTabId,
-    terminalHeight, setTerminalHeight, openSshSession, closeSshSession, closeAllSessions
+    terminalHeight, setTerminalHeight, openSshSession, closeSshSession, closeAllSessions,
+    notifications, unreadCount, markNotificationsRead
   ]);
 
   return (
