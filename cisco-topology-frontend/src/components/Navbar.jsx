@@ -25,7 +25,7 @@ export default function Navbar({ onAddDevice }) {
         {/* Left — Brand + Nav */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }} onClick={() => go('/dashboard')}>
-            <span style={{ fontSize: '1.6rem', filter: 'drop-shadow(0 0 4px var(--primary))' }}>⚡</span>
+            <img src="/app-icon.png" alt="NetPulse" style={{ width: 26, height: 26, filter: 'drop-shadow(0 0 6px var(--primary))' }} />
             <span style={{ fontSize: '1rem', fontWeight: 700, letterSpacing: '-0.3px', color: 'var(--text-main)' }}>NetPulse</span>
           </div>
 
