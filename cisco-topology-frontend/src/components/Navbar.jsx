@@ -5,6 +5,7 @@ import NotificationBell from './NotificationBell';
 import SettingsModal from './SettingsModal';
 import PingModal from './PingModal';
 import PingIcon from './PingIcon';
+import SettingsIcon from './SettingsIcon';
 
 export default function Navbar({ onAddDevice }) {
   const { logout, isAdmin, username } = useAuth();
@@ -58,7 +59,7 @@ export default function Navbar({ onAddDevice }) {
 
           <span className="nav-desktop-right" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             {isAdmin && <button className={cls('/users')} onClick={() => go('/users')} title="User Management">Users</button>}
-            {isAdmin && <button className="nav-btn" onClick={() => setShowSettings(true)} title="Settings" style={{ fontSize: '0.95rem' }}>⚙</button>}
+            {isAdmin && <button className="nav-btn" onClick={() => setShowSettings(true)} title="Settings" style={{ display: 'flex', alignItems: 'center', padding: '6px 10px' }}><SettingsIcon size={18} /></button>}
             <div style={{ width: 1, height: 20, background: 'var(--border-color)', margin: '0 4px' }} />
             <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginRight: 4 }}>{username}</span>
             <button className="btn btn-ghost btn-sm" onClick={() => { logout(); navigate('/login'); }} style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>Sign Out</button>
@@ -79,7 +80,7 @@ export default function Navbar({ onAddDevice }) {
           {isAdmin && (path === '/devices' || path.startsWith('/topology')) && onAddDevice && (
             <button className="btn btn-primary btn-sm" onClick={() => { onAddDevice(); setMobileOpen(false); }}>+ Add Device</button>
           )}
-          {isAdmin && <button className="nav-btn" onClick={() => { setShowSettings(true); setMobileOpen(false); }}>⚙ Settings</button>}
+          {isAdmin && <button className="nav-btn" onClick={() => { setShowSettings(true); setMobileOpen(false); }} style={{ display: 'flex', alignItems: 'center', gap: 8 }}><SettingsIcon size={16} /> Settings</button>}
           <div className="nav-mobile-user">
             <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{username}</span>
             <button className="btn btn-ghost btn-sm" onClick={() => { logout(); navigate('/login'); }} style={{ color: 'var(--danger)' }}>Sign Out</button>
