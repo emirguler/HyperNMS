@@ -10,6 +10,8 @@ import SwitchNode from '../components/SwitchNode';
 import CableEdge from '../components/CableEdge';
 import BatchEditModal from '../components/BatchEditModal';
 import ConfirmModal from '../components/ConfirmModal';
+import PingModal from '../components/PingModal';
+import PingIcon from '../components/PingIcon';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { API_BASE } from '../config';
@@ -41,6 +43,7 @@ function TopologyInner({ onEdit, onClone }) {
   const [batchEditIds, setBatchEditIds] = useState(null); // çoklu seçim toplu düzenleme
   const [selMenu, setSelMenu] = useState(null); // çoklu seçim sağ-tık menüsü {ids, top, left}
   const [confirmState, setConfirmState] = useState(null); // tema uyumlu onay {title, message, onConfirm}
+  const [pingIp, setPingIp] = useState(null); // cihaz bazlı ping (IP kilitli)
   const [dragTabId, setDragTabId] = useState(null);       // sürüklenen sekme
   const [dragOverTabId, setDragOverTabId] = useState(null); // üzerine gelinen sekme
   const [localNodes, setLocalNodes] = useState([]);
@@ -398,6 +401,7 @@ function TopologyInner({ onEdit, onClone }) {
               });
               setMenu(null);
             }}>📊 Details</div>
+            {menu.data?.ip && <div className="context-menu-item" onClick={() => { setPingIp(menu.data.ip); setMenu(null); }} style={{ display: 'flex', alignItems: 'center', gap: 8 }}><PingIcon size={15} /> Ping</div>}
             {isAdmin && <div className="context-menu-item" onClick={() => { onEdit(rawDevices.find(d => d.id === menu.id)); setMenu(null); }}>✏️ Edit</div>}
             {isAdmin && <div className="context-menu-item" onClick={() => { onClone(rawDevices.find(d => d.id === menu.id)); setMenu(null); }}>⧉ Clone</div>}
             {(isAdmin || allowedCommands.length > 0) && <div className="context-menu-item" onClick={() => { openSshSession(menu.id, menu.label); setMenu(null); }}>💻 SSH Terminal</div>}
@@ -507,6 +511,9 @@ function TopologyInner({ onEdit, onClone }) {
           </div>
         </div>
       )}
+
+      {/* Cihaz bazlı ping (IP kilitli) */}
+      {pingIp && <PingModal ip={pingIp} lockIp onClose={() => setPingIp(null)} />}
 
       {/* Tema uyumlu onay penceresi (window.confirm yerine) */}
       {confirmState && (

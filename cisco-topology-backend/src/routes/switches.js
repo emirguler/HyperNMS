@@ -9,9 +9,46 @@ const { identifyFromSsh } = require('../utils/sshIdentify');
 const { logAction } = require('../services/auditLog');
 const { snmpCache } = require('../utils/cache');
 const rateLimiter = require('../middleware/rateLimiter');
+const ping = require('ping');
 const ssh2 = require('ssh2').Client;
 
 const router = express.Router();
+
+// --- Manuel ping (Ping aracı) — hem admin hem User rolüne açık ---
+// Ping çıktısını sınıflandır: success / timeout / unreachable / failed
+function classifyPing(r) {
+    if (r.alive) return { status: 'success', latency: r.time === 'unknown' ? null : Math.round(r.time) };
+    const out = String(r.output || '').toLowerCase();
+    if (out.includes('unreachable')) return { status: 'unreachable', latency: null };
+    if (out.includes('timed out') || out.includes('timeout') || out.includes('100% packet loss')) return { status: 'timeout', latency: null };
+    return { status: 'failed', latency: null };
+}
+
+const pingToolLimiter = rateLimiter({ windowMs: 60000, max: 80, message: 'Too many ping requests, please slow down' });
+router.post('/ping', authenticate, pingToolLimiter, async (req, res) => {
+    try {
+        const ip = String((req.body && req.body.ip) || '').trim();
+        // SSRF: yalnızca geçerli IPv4, bloklu aralıklar hariç (loopback/link-local/metadata/multicast)
+        if (!isValidIPv4(ip) || isBlockedIP(ip)) {
+            return res.status(400).json({ error: 'Valid IP address required' });
+        }
+        const n = Math.min(Math.max(parseInt(req.body && req.body.count) || 1, 1), 10);
+        const isWin = process.platform === 'win32';
+        const results = [];
+        for (let i = 0; i < n; i++) {
+            try {
+                const r = await ping.promise.probe(ip, { timeout: 2, extra: isWin ? ['-n', '1'] : ['-c', '1'] });
+                results.push(classifyPing(r));
+            } catch (e) {
+                results.push({ status: 'error', latency: null });
+            }
+        }
+        res.json({ ip, results });
+    } catch (e) {
+        console.error('[PING-TOOL] Hata:', e.message);
+        res.status(500).json({ error: 'Ping failed' });
+    }
+});
 
 router.get('/topology', authenticate, (req, res) => {
     const switches = store.getSwitches();

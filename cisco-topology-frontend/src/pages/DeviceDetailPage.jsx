@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
+import PingModal from '../components/PingModal';
+import PingIcon from '../components/PingIcon';
 import Gauge from '../components/Gauge';
 import PingHistoryChart from '../components/PingHistoryChart';
 import { t } from '../i18n';
@@ -10,8 +12,9 @@ export default function DeviceDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const { authFetch, isAdmin } = useAuth();
+  const { authFetch, isAdmin, allowedCommands } = useAuth();
   const { openSshSession } = useApp();
+  const [showPing, setShowPing] = useState(false);
   // Geri dön: gelinen sayfaya (topoloji sekmesi / Devices / Dashboard ...).
   // Doğrudan link ile açıldıysa (state yok) Devices'a düş.
   const backTo = location.state?.from || '/devices';
@@ -51,9 +54,14 @@ export default function DeviceDetailPage() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
         <button onClick={() => navigate(backTo)} className="btn btn-ghost">{t('goBack')}</button>
         <h2 style={{ margin: 0, fontSize: '1.8rem' }}>{displayHostname}</h2>
-        {isAdmin && (
+        {(isAdmin || allowedCommands.length > 0) && (
           <button className="btn btn-primary btn-sm" onClick={() => openSshSession(id, displayHostname || details.name || id)}>
             💻 SSH Terminal
+          </button>
+        )}
+        {details.ip && (
+          <button className="btn btn-primary btn-sm" onClick={() => setShowPing(true)}>
+            <PingIcon size={16} /> {t('pingTool')}
           </button>
         )}
         <span className={`status-badge ${details.status === 'UP' ? 'status-up' : 'status-down'}`} style={{ marginLeft: 'auto' }}>{details.status}</span>
@@ -159,6 +167,9 @@ export default function DeviceDetailPage() {
         </table>
       </div>
 
+      {showPing && details.ip && (
+        <PingModal ip={details.ip} lockIp onClose={() => setShowPing(false)} />
+      )}
     </div>
   );
 }

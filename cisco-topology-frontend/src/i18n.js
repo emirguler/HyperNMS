@@ -31,6 +31,13 @@ const translations = {
     deviceStatus: 'Device Status',
     notifications: 'Notifications',
     noNotifications: 'No notifications yet',
+    pingTool: 'Ping',
+    pingStart: 'Ping',
+    pingRunning: 'Pinging...',
+    pingSuccess: 'Success',
+    pingTimeout: 'Timeout',
+    pingUnreachable: 'Destination host unreachable',
+    pingFailed: 'Failed',
 
     // Device list
     searchPlaceholder: 'Search by name, IP or type...',
@@ -188,6 +195,13 @@ const translations = {
     deviceStatus: 'Cihaz Durumlar\u0131',
     notifications: 'Bildirimler',
     noNotifications: 'Hen\u00fcz bildirim yok',
+    pingTool: 'Ping',
+    pingStart: 'Ping',
+    pingRunning: 'Ping at\u0131l\u0131yor...',
+    pingSuccess: 'Ba\u015far\u0131l\u0131',
+    pingTimeout: 'Zaman a\u015f\u0131m\u0131',
+    pingUnreachable: 'Hedefe ula\u015f\u0131lam\u0131yor',
+    pingFailed: 'Ba\u015far\u0131s\u0131z',
 
     // Device list
     searchPlaceholder: 'Cihaz ad\u0131, IP veya tip ara...',

@@ -3,6 +3,8 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import NotificationBell from './NotificationBell';
 import SettingsModal from './SettingsModal';
+import PingModal from './PingModal';
+import PingIcon from './PingIcon';
 
 export default function Navbar({ onAddDevice }) {
   const { logout, isAdmin, username } = useAuth();
@@ -10,6 +12,7 @@ export default function Navbar({ onAddDevice }) {
   const location = useLocation();
   const path = location.pathname;
   const [showSettings, setShowSettings] = useState(false);
+  const [showPing, setShowPing] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const go = (p) => { navigate(p); setMobileOpen(false); };
@@ -50,6 +53,7 @@ export default function Navbar({ onAddDevice }) {
 
         {/* Right — bell always visible; details on desktop, hamburger on mobile */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <button className="btn btn-primary btn-sm" onClick={() => setShowPing(true)} title="Ping"><PingIcon size={16} /> Ping</button>
           <NotificationBell />
 
           <span className="nav-desktop-right" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -83,6 +87,7 @@ export default function Navbar({ onAddDevice }) {
         </div>
       </header>
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+      {showPing && <PingModal onClose={() => setShowPing(false)} />}
     </>
   );
 }
