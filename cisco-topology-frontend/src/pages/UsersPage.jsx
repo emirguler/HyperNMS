@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
@@ -14,6 +14,13 @@ export default function UsersPage() {
   const [editingUser, setEditingUser] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
+
+  // "Active" durumunu canlı tutmak için periyodik tazeleme
+  useEffect(() => {
+    fetchUsers();
+    const id = setInterval(fetchUsers, 15000);
+    return () => clearInterval(id);
+  }, [fetchUsers]);
 
   const confirmDelete = async () => {
     if (!deleteTarget) return;
@@ -36,7 +43,15 @@ export default function UsersPage() {
           <tbody>
             {users.map(u => (
               <tr key={u.id}>
-                <td style={{ paddingLeft: 24 }}><span style={{ fontWeight: 600 }}>{u.username}</span></td>
+                <td style={{ paddingLeft: 24 }}>
+                  <span style={{ fontWeight: 600 }}>{u.username}</span>
+                  {u.active && (
+                    <span style={{ marginLeft: 8, display: 'inline-flex', alignItems: 'center', gap: 5, background: 'rgba(34,197,94,0.12)', color: 'var(--success)', padding: '3px 9px', borderRadius: 20, fontSize: '0.7rem', fontWeight: 600, border: '1px solid rgba(34,197,94,0.3)', verticalAlign: 'middle' }}>
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--success)' }} />
+                      {t('activeLabel')}
+                    </span>
+                  )}
+                </td>
                 <td>
                   <span style={{ background: u.role === 'Administrator' ? 'rgba(168,85,247,0.15)' : 'rgba(255,255,255,0.05)', color: u.role === 'Administrator' ? '#a855f7' : 'var(--text-muted)', padding: '4px 10px', borderRadius: 20, fontSize: '0.75rem', fontWeight: 600, border: `1px solid ${u.role === 'Administrator' ? 'rgba(168,85,247,0.3)' : 'var(--border-color)'}` }}>{u.role}</span>
                 </td>

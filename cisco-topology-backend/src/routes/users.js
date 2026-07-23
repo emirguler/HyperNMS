@@ -5,11 +5,16 @@ const { BCRYPT_ROUNDS } = require('../config');
 const { authenticate, requireAdmin } = require('../middleware/auth');
 const { validateUser, sanitizeUser } = require('../utils/validation');
 const { logAction } = require('../services/auditLog');
+const presence = require('../services/presence');
 
 const router = express.Router();
 
 router.get('/users', authenticate, requireAdmin, (req, res) => {
-    const safeUsers = store.getUsers().map(({ password, ...u }) => u);
+    const safeUsers = store.getUsers().map(({ password, ...u }) => ({
+        ...u,
+        active: presence.isActive(u.id),   // son 5 dk içinde istek yapmış (uygulaması açık)
+        lastSeen: presence.lastSeenAt(u.id),
+    }));
     res.json(safeUsers);
 });
 

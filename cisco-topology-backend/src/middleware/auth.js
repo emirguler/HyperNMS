@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const { SECRET_KEY, NODE_ENV } = require('../config');
+const presence = require('../services/presence');
 
 // Cookie options
 const COOKIE_OPTIONS = {
@@ -41,6 +42,7 @@ const authenticate = (req, res, next) => {
             return res.status(403).json({ error: 'Invalid token' });
         }
         req.user = user;
+        presence.touch(user.id); // aktif kullanıcı takibi (User Management "Active" rozeti)
         next();
     });
 };

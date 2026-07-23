@@ -75,6 +75,7 @@ const translations = {
     // User management
     userManagement: 'User Management',
     newUser: '+ New User',
+    activeLabel: 'Active',
     usernameCol: 'Username',
     role: 'Role',
     actions: 'Actions',
@@ -239,6 +240,7 @@ const translations = {
     // User management
     userManagement: 'Kullan\u0131c\u0131 Y\u00f6netimi',
     newUser: '+ Yeni Kullan\u0131c\u0131',
+    activeLabel: 'Aktif',
     usernameCol: 'Kullan\u0131c\u0131 Ad\u0131',
     role: 'Rol',
     actions: '\u0130\u015flemler',
