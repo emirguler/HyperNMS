@@ -13,7 +13,7 @@ const { encryptPassword } = require('./utils/crypto');
 const { startPingService, onStatusChange } = require('./services/pingService');
 const { setupWebSocket } = require('./services/sshService');
 const { setupHttps } = require('./middleware/httpsRedirect');
-const { setupNotificationWs, addNotification, getNotifications } = require('./services/notificationService');
+const { setupNotificationWs, addNotification, getNotifications, flushNotifications } = require('./services/notificationService');
 const { authenticate } = require('./middleware/auth');
 const rateLimiter = require('./middleware/rateLimiter');
 
@@ -236,8 +236,8 @@ onStatusChange((change) => {
 });
 
 // --- Graceful shutdown ---
-process.on('SIGINT', () => { store.flushSync(); process.exit(0); });
-process.on('SIGTERM', () => { store.flushSync(); process.exit(0); });
+process.on('SIGINT', () => { store.flushSync(); flushNotifications(); process.exit(0); });
+process.on('SIGTERM', () => { store.flushSync(); flushNotifications(); process.exit(0); });
 
 // --- Server Start ---
 const httpServer = http.createServer(app);
