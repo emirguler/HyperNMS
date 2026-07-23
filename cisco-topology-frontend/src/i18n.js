@@ -136,6 +136,10 @@ const translations = {
     downloadDetailed: 'Detailed List',
     downloadDetailedDesc: 'Name, manufacturer, model, serial, image version, IP (queried live over SNMP)',
     downloadGathering: 'Gathering over SNMP...',
+    downDevices: 'Down Devices',
+    allTypes: 'All Types',
+    allPages: 'All Pages',
+    noDownDevices: 'No down devices',
 
     // Terminal
     closeAll: 'Close All',
@@ -287,6 +291,10 @@ const translations = {
     downloadDetailed: 'Detayl\u0131 Liste',
     downloadDetailedDesc: 'Ad, \u00fcretici, model, seri no, image s\u00fcr\u00fcm\u00fc, IP (SNMP ile canl\u0131 sorgulan\u0131r)',
     downloadGathering: 'SNMP ile toplan\u0131yor...',
+    downDevices: 'Kapal\u0131 Cihazlar',
+    allTypes: 'T\u00fcm Tipler',
+    allPages: 'T\u00fcm Sayfalar',
+    noDownDevices: 'Kapal\u0131 cihaz yok',
 
     // Terminal
     closeAll: 'T\u00fcm\u00fcn\u00fc Kapat',

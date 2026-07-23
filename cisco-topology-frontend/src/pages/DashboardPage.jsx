@@ -1,12 +1,24 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { useApp } from '../context/AppContext';
 import { t } from '../i18n';
 
 export default function DashboardPage() {
-  const { rawDevices } = useApp();
+  const { rawDevices, topoTabs } = useApp();
   const navigate = useNavigate();
+
+  // DOWN cihazlar tablosu — topoloji sayfası + tip filtresi
+  const [downPage, setDownPage] = useState('all');
+  const [downType, setDownType] = useState('all');
+
+  const downDevices = useMemo(() => rawDevices.filter(d => d.status !== 'UP'), [rawDevices]);
+  const downTypes = useMemo(() => [...new Set(downDevices.map(d => d.type || 'switch'))].sort(), [downDevices]);
+  const filteredDown = useMemo(() => downDevices.filter(d =>
+    (downPage === 'all' || (d.topologyPage || 'main') === downPage) &&
+    (downType === 'all' || (d.type || 'switch') === downType)
+  ), [downDevices, downPage, downType]);
+  const pageName = (id) => topoTabs.find(tab => tab.id === (id || 'main'))?.name || (id || 'main');
 
   const stats = useMemo(() => {
     const upCount = rawDevices.filter(d => d.status === 'UP').length;
@@ -100,6 +112,55 @@ export default function DashboardPage() {
               </tbody>
             </table>
           </div>
+        </div>
+      </div>
+
+      {/* DOWN cihazlar — sayfa sekmeleri + tip filtresi */}
+      <div className="chart-container no-float" style={{ padding: 0, overflow: 'hidden', marginTop: 24 }}>
+        <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+          <h3 className="dash-section-title" style={{ margin: 0 }}>
+            🔴 {t('downDevices')} <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>({filteredDown.length})</span>
+          </h3>
+          <select className="modern-input" value={downType} onChange={e => setDownType(e.target.value)}
+            style={{ width: 'auto', minWidth: 140, fontSize: '0.8rem', padding: '8px 12px' }}>
+            <option value="all">{t('allTypes')}</option>
+            {downTypes.map(ty => <option key={ty} value={ty} style={{ textTransform: 'capitalize' }}>{ty}</option>)}
+          </select>
+        </div>
+
+        {/* Sayfa sekmeleri */}
+        <div className="topology-tabs" style={{ padding: '0 12px', flexWrap: 'wrap' }}>
+          <div className={`topology-tab ${downPage === 'all' ? 'active' : ''}`} onClick={() => setDownPage('all')}>{t('allPages')}</div>
+          {topoTabs.map(tab => (
+            <div key={tab.id} className={`topology-tab ${downPage === tab.id ? 'active' : ''}`} onClick={() => setDownPage(tab.id)}>{tab.name}</div>
+          ))}
+        </div>
+
+        <div style={{ maxHeight: 340, overflowY: 'auto' }}>
+          <table className="modern-table">
+            <thead>
+              <tr>
+                <th style={{ paddingLeft: 24 }}>Status</th>
+                <th>Name</th>
+                <th>IP</th>
+                <th>Type</th>
+                <th style={{ paddingRight: 24 }}>Page</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredDown.length > 0 ? filteredDown.map(d => (
+                <tr key={d.id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/devices/${d.id}`, { state: { from: '/dashboard' } })}>
+                  <td style={{ paddingLeft: 24 }}><span className="status-badge status-down" style={{ fontSize: '0.7rem', padding: '3px 8px' }}>DOWN</span></td>
+                  <td style={{ fontWeight: 500, fontSize: '0.85rem' }}>{d.name}</td>
+                  <td style={{ fontFamily: 'monospace', fontSize: '0.8rem', color: 'var(--text-muted)' }}>{d.ip}</td>
+                  <td style={{ fontSize: '0.8rem', textTransform: 'capitalize' }}>{d.type || 'switch'}</td>
+                  <td style={{ fontSize: '0.8rem', color: 'var(--text-muted)', paddingRight: 24 }}>{pageName(d.topologyPage)}</td>
+                </tr>
+              )) : (
+                <tr><td colSpan={5} style={{ textAlign: 'center', padding: 30, color: 'var(--text-muted)' }}>{t('noDownDevices')}</td></tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
