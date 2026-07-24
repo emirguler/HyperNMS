@@ -99,7 +99,11 @@ export default function DashboardPage() {
           </div>
           <div style={{ maxHeight: 190, overflowY: 'auto' }}>
             {notifications.length > 0 ? notifications.map(n => (
-              <div key={n.id} style={{ padding: '10px 16px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+              <div key={n.id}
+                className={n.deviceId ? 'notif-clickable' : undefined}
+                onClick={n.deviceId ? () => navigate(`/devices/${n.deviceId}`) : undefined}
+                title={n.deviceId ? n.deviceName : undefined}
+                style={{ padding: '10px 16px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                 <span style={{ fontSize: '1rem', lineHeight: 1.2 }}>{n.severity === 'critical' ? '🔴' : '🟢'}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: '0.82rem', fontWeight: 600, color: severityColor(n.severity) }}>{n.title}</div>

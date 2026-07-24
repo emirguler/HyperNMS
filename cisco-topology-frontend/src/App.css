@@ -173,6 +173,10 @@ body {
   background: var(--primary-light);
 }
 
+/* Tıklanabilir bildirim satırı (cihaz detayına gider) */
+.notif-clickable { cursor: pointer; transition: background 0.12s ease; }
+.notif-clickable:hover { background: rgba(255, 255, 255, 0.05); }
+
 /* ============================================
    FORM ELEMENTS
    ============================================ */
