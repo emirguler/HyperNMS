@@ -36,7 +36,7 @@ export default function DashboardPage() {
 
   return (
     <div className="list-container">
-      <div className="grid-stats" style={{ marginBottom: 24 }}>
+      <div className="grid-stats" style={{ marginBottom: 14 }}>
         {[
           { label: t('totalDevices'), value: rawDevices.length, color: undefined },
           { label: t('activeUp'), value: stats.upCount, color: 'var(--success)' },
@@ -124,7 +124,7 @@ export default function DashboardPage() {
       </div>
 
       {/* DOWN cihazlar — sayfa sekmeleri + tip filtresi */}
-      <div className="chart-container no-float" style={{ padding: 0, overflow: 'hidden', marginTop: 24 }}>
+      <div className="chart-container no-float" style={{ padding: 0, overflow: 'hidden', marginTop: 14 }}>
         <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
           <h3 className="dash-section-title" style={{ margin: 0 }}>
             🔴 {t('downDevices')} <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>({filteredDown.length})</span>
