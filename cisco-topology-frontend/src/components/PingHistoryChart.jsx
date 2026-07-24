@@ -17,7 +17,8 @@ export default function PingHistoryChart({ deviceId }) {
         const d = await res.json();
         setData(d.map(h => ({
           ts: h.timestamp,
-          ms: h.value === -1 ? 0 : h.value
+          ms: h.value === -1 ? 0 : h.value,
+          down: h.value === -1
         })));
       }
     } catch (e) { /* ignore */ }
@@ -104,6 +105,35 @@ export default function PingHistoryChart({ deviceId }) {
     ctx.fillStyle = gradient;
     ctx.fill();
 
+    // DOWN bantları (kırmızı) — bitişik down aralıklarını dikey kırmızı alanla işaretle
+    {
+      const drawBand = (left, right) => {
+        const w = right - left;
+        ctx.fillStyle = 'rgba(239,68,68,0.22)';
+        ctx.fillRect(left, PAD_T, Math.max(3, w), chartH);
+        if (w < 6) {
+          // Çok kısa down (ör. hızlı down→up) yine de belirgin olsun
+          const cx = (left + right) / 2;
+          ctx.strokeStyle = 'rgba(239,68,68,0.85)';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath(); ctx.moveTo(cx, PAD_T); ctx.lineTo(cx, PAD_T + chartH); ctx.stroke();
+        }
+      };
+      let runStart = null;
+      for (let i = 0; i < data.length; i++) {
+        if (data[i].down && runStart === null) runStart = i;
+        const isEnd = data[i].down && (i === data.length - 1 || !data[i + 1].down);
+        if (isEnd && runStart !== null) {
+          const a = runStart, b = i;
+          // Bant kenarları: komşu örneklerle orta nokta → down aralığını doğal genişlikte kapla
+          const left = a > 0 ? (toX(data[a - 1].ts) + toX(data[a].ts)) / 2 : toX(data[a].ts);
+          const right = b < data.length - 1 ? (toX(data[b].ts) + toX(data[b + 1].ts)) / 2 : toX(data[b].ts);
+          drawBand(left, right);
+          runStart = null;
+        }
+      }
+    }
+
     // Line
     ctx.beginPath();
     data.forEach((d, i) => {
@@ -119,7 +149,7 @@ export default function PingHistoryChart({ deviceId }) {
     if (hover) {
       ctx.beginPath();
       ctx.arc(hover.x, hover.y, 4, 0, Math.PI * 2);
-      ctx.fillStyle = '#38bdf8';
+      ctx.fillStyle = hover.down ? '#ef4444' : '#38bdf8';
       ctx.fill();
       ctx.strokeStyle = '#0f172a';
       ctx.lineWidth = 2;
@@ -165,7 +195,7 @@ export default function PingHistoryChart({ deviceId }) {
     const y = PAD_T + chartH - (closest.ms / maxMs) * chartH;
     const time = new Date(closest.ts).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
-    setHover({ x, y, ms: closest.ms, time });
+    setHover({ x, y, ms: closest.ms, time, down: closest.down });
   }, [data]);
 
   const handleMouseLeave = useCallback(() => setHover(null), []);
@@ -173,7 +203,13 @@ export default function PingHistoryChart({ deviceId }) {
   return (
     <div className="chart-container" style={{ height: 350 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--primary)' }}>Ping History (ms)</h3>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--primary)' }}>Ping History (ms)</h3>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+            <span style={{ width: 11, height: 11, background: 'rgba(239,68,68,0.25)', border: '1px solid rgba(239,68,68,0.9)', borderRadius: 2 }} />
+            Down
+          </span>
+        </div>
         <div style={{ display: 'flex', gap: 8 }}>
           {['1H', '1D', '1W', '1M'].map(r => (
             <button key={r} onClick={() => setRange(r)} className={`nav-btn ${range === r ? 'active' : ''}`}
@@ -193,12 +229,16 @@ export default function PingHistoryChart({ deviceId }) {
             position: 'absolute',
             left: Math.min(hover.x + 12, (containerRef.current?.clientWidth || 300) - 100),
             top: Math.max(hover.y - 45, 0),
-            background: 'var(--bg-panel)', border: '1px solid var(--primary)',
+            background: 'var(--bg-panel)', border: `1px solid ${hover.down ? 'var(--danger)' : 'var(--primary)'}`,
             borderRadius: 8, padding: '6px 10px', boxShadow: '0 8px 20px rgba(0,0,0,0.5)',
             pointerEvents: 'none', zIndex: 10
           }}>
             <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{hover.time}</div>
-            <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--primary)' }}>{hover.ms} ms</div>
+            {hover.down ? (
+              <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--danger)' }}>● DOWN</div>
+            ) : (
+              <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--primary)' }}>{hover.ms} ms</div>
+            )}
           </div>
         )}
       </div>
