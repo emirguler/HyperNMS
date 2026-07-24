@@ -13,7 +13,7 @@ export default function DeviceDetailPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { authFetch, isAdmin, allowedCommands } = useAuth();
-  const { openSshSession } = useApp();
+  const { openSshSession, topoTabs } = useApp();
   const [showPing, setShowPing] = useState(false);
   // Geri dön: gelinen sayfaya (topoloji sekmesi / Devices / Dashboard ...).
   // Doğrudan link ile açıldıysa (state yok) Devices'a düş.
@@ -83,6 +83,12 @@ export default function DeviceDetailPage() {
         </div>
         {details.sshPasswordSet !== undefined && (
           <div style={{ display: 'flex', gap: 32, borderTop: '1px solid var(--border-color)', paddingTop: 16 }}>
+            <div>
+              <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>Topology Page</span>
+              <div style={{ fontSize: '0.9rem', marginTop: 4, color: 'var(--text-main)' }}>
+                🗺️ {topoTabs.find(t => t.id === details.topologyPage)?.name || details.topologyPage || 'Main Topology'}
+              </div>
+            </div>
             <div>
               <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>SNMP Community</span>
               <div style={{ fontFamily: 'monospace', fontSize: '0.9rem', marginTop: 4, color: details.snmpCommunity ? 'var(--text-main)' : 'var(--danger)' }}>

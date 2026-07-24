@@ -701,6 +701,7 @@ router.get('/switches/:id/details', authenticate, async (req, res) => {
     const device = store.getSwitch(req.params.id);
     if (!device) return res.status(404).send();
     const details = await getDeviceDetails(device);
+    details.topologyPage = device.topologyPage || 'main'; // cihazın bulunduğu topoloji sayfası (id)
     // Admin can see SNMP community, SSH username, and password status
     if (req.user.role === 'Administrator') {
         details.snmpCommunity = device.snmpCommunity || '';
