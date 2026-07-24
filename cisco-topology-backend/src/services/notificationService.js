@@ -28,7 +28,11 @@ function loadNotifications() {
     try {
         if (fs.existsSync(NOTIF_FILE)) {
             const data = JSON.parse(fs.readFileSync(NOTIF_FILE, 'utf8'));
+            const raw = Array.isArray(data) ? data.length : 0;
             notifications = Array.isArray(data) ? prune(data) : [];
+            console.log(`[NOTIF] Diskten yüklendi: ${notifications.length}/${raw} bildirim (24s içi tutuldu) — ${NOTIF_FILE}`);
+        } else {
+            console.log(`[NOTIF] Kayıt dosyası yok, boş başlanıyor — ${NOTIF_FILE}`);
         }
     } catch (e) {
         console.error('[NOTIF] okunamadı:', e.message);

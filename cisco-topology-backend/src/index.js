@@ -111,7 +111,7 @@ app.use(apiPrefix, auditRoutes);
 app.use(apiPrefix, settingsRoutes);
 app.use(apiPrefix, webproxyRoutes);
 
-app.get('/notifications', authenticate, (req, res) => {
+app.get(`${apiPrefix}/notifications`, authenticate, (req, res) => {
     res.json(getNotifications(parseInt(req.query.limit) || 50));
 });
 

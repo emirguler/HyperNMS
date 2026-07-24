@@ -24,27 +24,41 @@ export function AppProvider({ children }) {
 
   useEffect(() => {
     if (!isAuthenticated) { setNotifications([]); setUnreadCount(0); return; }
-    // İlk yükleme (en yeni önce)
-    fetch(`${API_BASE}/notifications`, { credentials: 'include' })
-      .then(r => (r.ok ? r.json() : []))
-      .then(data => { setNotifications(data); setUnreadCount(data.filter(n => !n.read).length); })
-      .catch(() => {});
-    // Canlı akış
-    const ws = new WebSocket(`${WS_BASE}/ws/notifications`);
-    ws.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data);
-        if (msg.type === 'notification') {
-          setNotifications(prev => [msg.data, ...prev].slice(0, 50));
-          setUnreadCount(prev => prev + 1);
-        } else if (msg.type === 'history') {
-          const list = [...msg.data].reverse(); // en yeni önce
-          setNotifications(list);
-          setUnreadCount(list.filter(n => !n.read).length);
-        }
-      } catch (e) { /* ignore */ }
+    let ws, reconnectTimer, closed = false;
+
+    // Sadece geçerli bir dizi geldiğinde uygula — başarısız/404 REST boş listeyi ezmesin
+    const applyHistory = (list) => {
+      if (!Array.isArray(list)) return;
+      setNotifications(list);
+      setUnreadCount(list.filter(n => !n.read).length);
     };
-    return () => { try { ws.close(); } catch (e) { /* ignore */ } };
+
+    // İlk yükleme (en yeni önce) — REST başarısızsa null döner, mevcut listeyi ezmez
+    fetch(`${API_BASE}/notifications`, { credentials: 'include' })
+      .then(r => (r.ok ? r.json() : null))
+      .then(applyHistory)
+      .catch(() => {});
+
+    // Canlı akış — backend restart olunca WS kopar; otomatik yeniden bağlan
+    const connect = () => {
+      ws = new WebSocket(`${WS_BASE}/ws/notifications`);
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.type === 'notification') {
+            setNotifications(prev => [msg.data, ...prev].slice(0, 50));
+            setUnreadCount(prev => prev + 1);
+          } else if (msg.type === 'history') {
+            applyHistory([...msg.data].reverse()); // her (re)bağlanışta 1 günlük geçmişi geri yükler
+          }
+        } catch (e) { /* ignore */ }
+      };
+      ws.onclose = () => { if (!closed) reconnectTimer = setTimeout(connect, 3000); };
+      ws.onerror = () => { try { ws.close(); } catch (e) { /* ignore */ } };
+    };
+    connect();
+
+    return () => { closed = true; clearTimeout(reconnectTimer); try { ws && ws.close(); } catch (e) { /* ignore */ } };
   }, [isAuthenticated]);
 
   useEffect(() => {
