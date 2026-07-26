@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
@@ -26,21 +26,6 @@ export default function DeviceListPage({ onEdit }) {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [showBatchEdit, setShowBatchEdit] = useState(false);
   const [batchForm, setBatchForm] = useState({ sshUsername: '', sshPassword: '', snmpCommunity: '', tags: '', topologyPage: '' });
-  const [ipSlaMap, setIpSlaMap] = useState({}); // { deviceId: 'MD'|'GSM'|null } — IP SLA sütunu
-
-  // IP SLA özetini 60 sn'de bir çek (backend eşzamanlılık sınırlı + cache'li)
-  useEffect(() => {
-    let active = true;
-    const f = async () => {
-      try {
-        const res = await authFetch('/switches/ip-sla-summary');
-        if (active && res && res.ok) { const d = await res.json(); setIpSlaMap(d && typeof d === 'object' ? d : {}); }
-      } catch (e) { /* ignore */ }
-    };
-    f();
-    const i = setInterval(f, 60000);
-    return () => { active = false; clearInterval(i); };
-  }, [authFetch]);
 
   // Topology page id → okunabilir sayfa adı
   const pageName = (id) => topoTabs.find(tab => tab.id === (id || 'main'))?.name || (id || 'main');
@@ -62,8 +47,6 @@ export default function DeviceListPage({ onEdit }) {
       } else if (sortConfig.key === 'topologyPage') {
         // id yerine okunabilir sayfa adına göre sırala
         valA = pageName(a.topologyPage).toLowerCase(); valB = pageName(b.topologyPage).toLowerCase();
-      } else if (sortConfig.key === 'ipSla') {
-        valA = String(ipSlaMap[a.id] || '').toLowerCase(); valB = String(ipSlaMap[b.id] || '').toLowerCase();
       } else {
         valA = String(a[sortConfig.key] ?? '').toLowerCase(); valB = String(b[sortConfig.key] ?? '').toLowerCase();
       }
@@ -72,7 +55,7 @@ export default function DeviceListPage({ onEdit }) {
       return 0;
     });
     return list;
-  }, [rawDevices, searchQuery, sortConfig, statusFilter, topoFilter, topoTabs, ipSlaMap]);
+  }, [rawDevices, searchQuery, sortConfig, statusFilter, topoFilter, topoTabs]);
 
   const handleSort = (key) => setSortConfig(prev => ({ key, dir: prev.key === key && prev.dir === 'asc' ? 'desc' : 'asc' }));
   const sortIcon = (key) => sortConfig.key === key ? (sortConfig.dir === 'asc' ? ' ▲' : ' ▼') : '';
@@ -224,7 +207,6 @@ export default function DeviceListPage({ onEdit }) {
               <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('type')}>Type{sortIcon('type')}</th>
               <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('topologyPage')}>Page{sortIcon('topologyPage')}</th>
               <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('latency')}>Latency{sortIcon('latency')}</th>
-              <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('ipSla')}>IP SLA{sortIcon('ipSla')}</th>
               <th>Tags</th>
               {isAdmin && <th style={{ textAlign: 'right', paddingRight: 32 }}>Actions</th>}
             </tr>
@@ -239,7 +221,6 @@ export default function DeviceListPage({ onEdit }) {
                 <td style={{ textTransform: 'capitalize' }}>{d.type}</td>
                 <td style={{ color: 'var(--text-muted)' }}>{pageName(d.topologyPage)}</td>
                 <td style={{ color: d.latency > 100 ? 'var(--danger)' : 'var(--text-muted)' }}>{d.latency > 0 ? d.latency + ' ms' : '-'}</td>
-                <td style={{ fontWeight: 700, fontSize: '0.8rem', color: ipSlaMap[d.id] === 'MD' ? 'var(--success)' : ipSlaMap[d.id] === 'GSM' ? 'var(--warning)' : 'var(--text-dim)' }}>{ipSlaMap[d.id] || '-'}</td>
                 <td>
                   {(d.tags || []).map(tag => (
                     <span key={tag} style={{ background: 'rgba(99,102,241,0.15)', color: 'var(--primary)', padding: '2px 8px', borderRadius: 12, fontSize: '0.7rem', marginRight: 4 }}>{tag}</span>
@@ -253,7 +234,7 @@ export default function DeviceListPage({ onEdit }) {
                 )}
               </tr>
             )) : (
-              <tr><td colSpan={isAdmin ? 10 : 8} style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
+              <tr><td colSpan={isAdmin ? 9 : 7} style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
                 {searchQuery || statusFilter !== 'all' ? t('noFilterResult') : t('noDevicesYet')}
               </td></tr>
             )}
