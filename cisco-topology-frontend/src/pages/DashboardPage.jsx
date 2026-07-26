@@ -12,6 +12,7 @@ export default function DashboardPage() {
   // DOWN cihazlar tablosu — topoloji sayfası + tip filtresi
   const [downPage, setDownPage] = useState('all');
   const [downType, setDownType] = useState('all');
+  const [healthType, setHealthType] = useState('all'); // Network Health kartı cihaz-tipi filtresi
 
   const downDevices = useMemo(() => rawDevices.filter(d => d.status !== 'UP'), [rawDevices]);
   const downTypes = useMemo(() => [...new Set(downDevices.map(d => d.type || 'switch'))].sort(), [downDevices]);
@@ -31,8 +32,17 @@ export default function DashboardPage() {
     return { upCount, downCount, avgLatency, healthPct, typeGroups };
   }, [rawDevices]);
 
-  const pieData = [{ name: 'UP', value: stats.upCount }, { name: 'DOWN', value: stats.downCount }];
   const COLORS = ['#22c55e', '#ef4444'];
+
+  // Network Health — cihaz tipine göre filtrelenebilir (dropdown)
+  const healthTypes = useMemo(() => [...new Set(rawDevices.map(d => d.type || 'switch'))].sort(), [rawDevices]);
+  const healthStats = useMemo(() => {
+    const devs = healthType === 'all' ? rawDevices : rawDevices.filter(d => (d.type || 'switch') === healthType);
+    const up = devs.filter(d => d.status === 'UP').length;
+    const down = devs.filter(d => d.status !== 'UP').length;
+    return { up, down, pct: devs.length ? Math.round((up / devs.length) * 100) : 0, total: devs.length };
+  }, [rawDevices, healthType]);
+  const healthPie = [{ name: 'UP', value: healthStats.up }, { name: 'DOWN', value: healthStats.down }];
 
   return (
     <div className="list-container">
@@ -53,24 +63,31 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid-dash-main">
-        {/* Network Health Pie */}
+        {/* Network Health Pie — cihaz tipine göre filtrelenebilir */}
         <div className="chart-container" style={{ textAlign: 'center' }}>
-          <h3 className="dash-section-title">{t('networkHealth')}</h3>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
+            <h3 className="dash-section-title" style={{ margin: 0 }}>{t('networkHealth')}</h3>
+            <select className="modern-input" value={healthType} onChange={e => setHealthType(e.target.value)}
+              style={{ width: 'auto', minWidth: 84, fontSize: '0.72rem', padding: '5px 8px' }}>
+              <option value="all">{t('allTypes')}</option>
+              {healthTypes.map(ty => <option key={ty} value={ty} style={{ textTransform: 'capitalize' }}>{ty}</option>)}
+            </select>
+          </div>
           <div style={{ position: 'relative', display: 'inline-block' }}>
             <ResponsiveContainer width={130} height={130}>
               <PieChart>
-                <Pie data={pieData} cx="50%" cy="50%" innerRadius={42} outerRadius={58} dataKey="value" strokeWidth={0}>
-                  {pieData.map((_, i) => <Cell key={i} fill={COLORS[i]} />)}
+                <Pie data={healthPie} cx="50%" cy="50%" innerRadius={42} outerRadius={58} dataKey="value" strokeWidth={0}>
+                  {healthPie.map((_, i) => <Cell key={i} fill={COLORS[i]} />)}
                 </Pie>
               </PieChart>
             </ResponsiveContainer>
             <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', textAlign: 'center' }}>
-              <div style={{ fontSize: '1.5rem', fontWeight: 700, color: stats.healthPct >= 80 ? 'var(--success)' : stats.healthPct >= 50 ? 'var(--warning)' : 'var(--danger)' }}>{stats.healthPct}%</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 700, color: healthStats.pct >= 80 ? 'var(--success)' : healthStats.pct >= 50 ? 'var(--warning)' : 'var(--danger)' }}>{healthStats.pct}%</div>
             </div>
           </div>
           <div style={{ display: 'flex', justifyContent: 'center', gap: 20, marginTop: 8 }}>
-            <span style={{ fontSize: '0.8rem', color: 'var(--success)' }}>● UP: {stats.upCount}</span>
-            <span style={{ fontSize: '0.8rem', color: 'var(--danger)' }}>● DOWN: {stats.downCount}</span>
+            <span style={{ fontSize: '0.8rem', color: 'var(--success)' }}>● UP: {healthStats.up}</span>
+            <span style={{ fontSize: '0.8rem', color: 'var(--danger)' }}>● DOWN: {healthStats.down}</span>
           </div>
         </div>
 
