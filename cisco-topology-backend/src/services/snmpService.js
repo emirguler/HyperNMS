@@ -1143,18 +1143,26 @@ async function ipSlaStatus(device) {
         return [];
     }
 
+    // { vbs, err } döndür — teşhis için subtree hatası da toplanır
     const getSubtree = (oid) => new Promise((resolve) => {
         const out = [];
         try {
-            session.subtree(oid, 20, (vbs) => { for (const vb of vbs) out.push(vb); }, () => resolve(out));
-        } catch (e) { resolve(out); }
+            session.subtree(oid, 20, (vbs) => { for (const vb of vbs) out.push(vb); }, (err) => resolve({ vbs: out, err: err ? err.message : null }));
+        } catch (e) { resolve({ vbs: out, err: e.message }); }
     });
     const indexOf = (vb, base) => vb.oid.slice(base.length + 1); // base'ten sonraki SLA index'i
 
     try {
-        const [senseVbs, rttVbs, tagVbs, targetVbs] = await Promise.all([
+        const [senseRes, rttRes, tagRes, targetRes] = await Promise.all([
             getSubtree(RTTMON_SENSE), getSubtree(RTTMON_RTT), getSubtree(RTTMON_TAG), getSubtree(RTTMON_TARGET)
         ]);
+        const senseVbs = senseRes.vbs, rttVbs = rttRes.vbs, tagVbs = tagRes.vbs, targetVbs = targetRes.vbs;
+
+        // Teşhis: sonuç boşsa hangi OID kaç kayıt döndü + SNMP hatası (IE4010 vb. kart gelmeme sorunu için)
+        if (senseVbs.length === 0) {
+            console.log(`[IP-SLA] ${device.name} (${device.ip}) model=${device.model || '?'} snmp=${device.snmpVersion || 'v2c'}: EMPTY — sense=0 rtt=${rttVbs.length} tag=${tagVbs.length} target=${targetVbs.length}` +
+                (senseRes.err || tagRes.err ? ` | err(sense=${senseRes.err}, tag=${tagRes.err})` : ''));
+        }
 
         const rttMap = {}, tagMap = {}, targetMap = {};
         for (const vb of rttVbs) rttMap[indexOf(vb, RTTMON_RTT)] = Number(vb.value);
