@@ -6,6 +6,7 @@ import PingModal from '../components/PingModal';
 import PingIcon from '../components/PingIcon';
 import Gauge from '../components/Gauge';
 import PingHistoryChart from '../components/PingHistoryChart';
+import IpSlaCard from '../components/IpSlaCard';
 import { t } from '../i18n';
 
 export default function DeviceDetailPage() {
@@ -122,6 +123,9 @@ export default function DeviceDetailPage() {
         <Gauge value={details.cpu || 0} label="CPU Load" color={(details.cpu || 0) > 80 ? 'var(--danger)' : 'var(--primary)'} />
         <Gauge value={details.ram || 0} label="RAM Usage" color={(details.ram || 0) > 80 ? 'var(--danger)' : '#8b5cf6'} />
       </div>
+
+      {/* IP SLA (SNMP - CISCO-RTTMON-MIB) — yalnızca IP SLA yapılandırılmış cihazlarda görünür */}
+      <IpSlaCard deviceId={id} />
 
       {/* Show Run Kartı */}
       <ShowRunCard deviceId={id} />

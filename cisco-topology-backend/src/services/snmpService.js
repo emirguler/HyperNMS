@@ -1121,7 +1121,75 @@ async function inventoryAll(devices, concurrency = 8) {
     return results;
 }
 
+// --- IP SLA (CISCO-RTTMON-MIB) ---
+// Cisco'nun "show ip sla summary" Return Code'unu SNMP ile okur.
+const RTTMON_SENSE  = '1.3.6.1.4.1.9.9.42.1.2.10.1.2'; // rttMonLatestRttOperSense (1=ok, 4=timeout, ...)
+const RTTMON_RTT    = '1.3.6.1.4.1.9.9.42.1.2.10.1.1'; // rttMonLatestRttOperCompletionTime (ms)
+const RTTMON_TAG    = '1.3.6.1.4.1.9.9.42.1.2.1.1.3';  // rttMonCtrlAdminTag (ad/etiket)
+const RTTMON_TARGET = '1.3.6.1.4.1.9.9.42.1.2.2.1.2';  // rttMonEchoAdminTargetAddress
+const SENSE_MAP = {
+    1: 'ok', 2: 'disconnected', 3: 'overThreshold', 4: 'timeout', 5: 'busy',
+    6: 'notConnected', 7: 'dropped', 8: 'sequenceError', 9: 'verifyError', 10: 'applicationSpecific'
+};
+
+// Cihazdaki tüm IP SLA operasyonlarının son durumunu döndürür.
+// [{ id, tag, target, rtt, sense, status }]  — IP SLA yoksa/okunamıyorsa []
+async function ipSlaStatus(device) {
+    if (!device.snmpCommunity || device.status !== 'UP') return [];
+    let session;
+    try {
+        session = createSnmpSession(device.ip, device.snmpCommunity, device.snmpPort, device.snmpVersion);
+    } catch (e) {
+        return [];
+    }
+
+    const getSubtree = (oid) => new Promise((resolve) => {
+        const out = [];
+        try {
+            session.subtree(oid, 20, (vbs) => { for (const vb of vbs) out.push(vb); }, () => resolve(out));
+        } catch (e) { resolve(out); }
+    });
+    const indexOf = (vb, base) => vb.oid.slice(base.length + 1); // base'ten sonraki SLA index'i
+
+    try {
+        const [senseVbs, rttVbs, tagVbs, targetVbs] = await Promise.all([
+            getSubtree(RTTMON_SENSE), getSubtree(RTTMON_RTT), getSubtree(RTTMON_TAG), getSubtree(RTTMON_TARGET)
+        ]);
+
+        const rttMap = {}, tagMap = {}, targetMap = {};
+        for (const vb of rttVbs) rttMap[indexOf(vb, RTTMON_RTT)] = Number(vb.value);
+        for (const vb of tagVbs) tagMap[indexOf(vb, RTTMON_TAG)] = vb.value != null ? vb.value.toString().trim() : '';
+        for (const vb of targetVbs) {
+            const k = indexOf(vb, RTTMON_TARGET);
+            if (Buffer.isBuffer(vb.value) && vb.value.length === 4) {
+                targetMap[k] = `${vb.value[0]}.${vb.value[1]}.${vb.value[2]}.${vb.value[3]}`;
+            } else if (vb.value != null) {
+                const s = vb.value.toString().trim();
+                if (s) targetMap[k] = s;
+            }
+        }
+
+        return senseVbs.map(vb => {
+            const id = indexOf(vb, RTTMON_SENSE);
+            const sense = Number(vb.value);
+            return {
+                id,
+                tag: tagMap[id] || '',
+                target: targetMap[id] || '',
+                rtt: rttMap[id] != null && Number.isFinite(rttMap[id]) ? rttMap[id] : null,
+                sense,
+                status: SENSE_MAP[sense] || `code-${sense}`
+            };
+        }).sort((a, b) => Number(a.id) - Number(b.id));
+    } catch (e) {
+        return [];
+    } finally {
+        try { session.close(); } catch (e) { /* ignore */ }
+    }
+}
+
 module.exports = {
     getDeviceDetails, getVendorConfig, discoverNeighbors, searchMAC,
     manufacturerFromSysDescr, imageVersionFromSysDescr, inventoryDevice, inventoryAll,
+    ipSlaStatus,
 };

@@ -3,7 +3,7 @@ const store = require('../utils/memoryStore');
 const { authenticate, requireAdmin } = require('../middleware/auth');
 const { validateSwitch, sanitizeSwitch, isBlockedIP, isValidIPv4 } = require('../utils/validation');
 const { encryptPassword, decryptPassword } = require('../utils/crypto');
-const { getDeviceDetails, discoverNeighbors, searchMAC, inventoryAll } = require('../services/snmpService');
+const { getDeviceDetails, discoverNeighbors, searchMAC, inventoryAll, ipSlaStatus } = require('../services/snmpService');
 const { probeDevice } = require('../services/sshService');
 const { identifyFromSsh } = require('../utils/sshIdentify');
 const { logAction } = require('../services/auditLog');
@@ -710,6 +710,23 @@ router.get('/switches/:id/details', authenticate, async (req, res) => {
         details.model = device.model || '';
     }
     res.json(details);
+});
+
+// IP SLA durumu (SNMP - CISCO-RTTMON-MIB) — her iki rol; cihazda IP SLA yoksa [] döner
+router.get('/switches/:id/ip-sla', authenticate, async (req, res) => {
+    const device = store.getSwitch(req.params.id);
+    if (!device) return res.status(404).json({ error: 'Device not found' });
+    try {
+        const cacheKey = `ipsla:${device.id}`;
+        const cached = snmpCache.get(cacheKey);
+        if (cached) return res.json(cached);
+        const list = await ipSlaStatus(device);
+        snmpCache.set(cacheKey, list, 15000); // 15 sn kısa cache (poll yükünü sınırla)
+        res.json(list);
+    } catch (e) {
+        console.error('[IP-SLA] Hata:', e.message);
+        res.status(500).json({ error: 'IP SLA read failed' });
+    }
 });
 
 router.get('/switches/:id/ping-history', authenticate, (req, res) => {
