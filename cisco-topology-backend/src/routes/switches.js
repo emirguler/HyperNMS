@@ -729,6 +729,35 @@ router.get('/switches/:id/ip-sla', authenticate, async (req, res) => {
     }
 });
 
+// Tüm cihazlar için IP SLA özeti (Devices listesi sütunu) — { deviceId: 'MD'|'GSM'|null }
+// Eşzamanlılık sınırlı + 60 sn cache (SNMP yükünü sınırla)
+router.get('/switches/ip-sla-summary', authenticate, async (req, res) => {
+    try {
+        const cacheKey = 'ipsla-summary';
+        const cached = snmpCache.get(cacheKey);
+        if (cached) return res.json(cached);
+
+        const devices = store.getSwitches().filter(d => d.snmpCommunity && d.status === 'UP');
+        const summary = {};
+        let idx = 0;
+        const worker = async () => {
+            while (idx < devices.length) {
+                const d = devices[idx++];
+                try {
+                    const slas = await ipSlaStatus(d);
+                    summary[d.id] = (slas && slas.length > 0) ? (slas.every(s => s.status === 'ok') ? 'MD' : 'GSM') : null;
+                } catch (e) { summary[d.id] = null; }
+            }
+        };
+        await Promise.all(Array.from({ length: Math.min(8, devices.length || 1) }, worker));
+        snmpCache.set(cacheKey, summary, 60000);
+        res.json(summary);
+    } catch (e) {
+        console.error('[IP-SLA-SUM] Hata:', e.message);
+        res.status(500).json({ error: 'IP SLA summary failed' });
+    }
+});
+
 router.get('/switches/:id/ping-history', authenticate, (req, res) => {
     const duration = parseInt(req.query.duration) || 3600000;
     const since = Date.now() - duration;
