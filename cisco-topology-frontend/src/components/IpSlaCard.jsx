@@ -1,6 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useAuth } from '../context/AuthContext';
-
+// IP SLA durum kartı — veriyi DeviceDetailPage sağlar (slas prop). Salt sunum.
 // Return Code → renk/etiket. ok/timeout ana durumlar; diğerleri uyarı (sarı).
 const STATUS_META = {
   ok:      { color: 'var(--success)', bg: 'rgba(34,197,94,0.12)', border: 'rgba(34,197,94,0.3)', label: 'OK' },
@@ -8,26 +6,7 @@ const STATUS_META = {
 };
 const FALLBACK = { color: 'var(--warning)', bg: 'rgba(245,158,11,0.12)', border: 'rgba(245,158,11,0.3)' };
 
-export default function IpSlaCard({ deviceId }) {
-  const { authFetch } = useAuth();
-  const [slas, setSlas] = useState(null); // null = henüz yüklenmedi
-
-  const fetchSla = useCallback(async () => {
-    try {
-      const res = await authFetch(`/switches/${deviceId}/ip-sla`);
-      if (res && res.ok) {
-        const data = await res.json();
-        setSlas(Array.isArray(data) ? data : []);
-      }
-    } catch { /* ignore */ }
-  }, [deviceId, authFetch]);
-
-  useEffect(() => {
-    fetchSla();
-    const i = setInterval(fetchSla, 30000);
-    return () => clearInterval(i);
-  }, [fetchSla]);
-
+export default function IpSlaCard({ slas }) {
   // IP SLA yapılandırılmamış cihazlarda kartı hiç gösterme → sayfa düzeni bozulmaz
   if (!slas || slas.length === 0) return null;
 

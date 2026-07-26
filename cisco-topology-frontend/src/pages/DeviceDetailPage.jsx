@@ -21,6 +21,7 @@ export default function DeviceDetailPage() {
   const backTo = location.state?.from || '/devices';
   const [details, setDetails] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [slas, setSlas] = useState(null); // IP SLA durumu (MD/GSM rozeti + IP SLA kartı)
 
   useEffect(() => {
     const f = async () => {
@@ -34,10 +35,29 @@ export default function DeviceDetailPage() {
     return () => clearInterval(i);
   }, [id, authFetch]);
 
+  // IP SLA — 30 sn'de bir (MD/GSM rozeti ve IP SLA kartı bunu kullanır)
+  useEffect(() => {
+    let active = true;
+    const f = async () => {
+      try {
+        const res = await authFetch(`/switches/${id}/ip-sla`);
+        if (active && res && res.ok) { const d = await res.json(); setSlas(Array.isArray(d) ? d : []); }
+      } catch (e) { /* ignore */ }
+    };
+    f();
+    const i = setInterval(f, 30000);
+    return () => { active = false; clearInterval(i); };
+  }, [id, authFetch]);
+
   if (loading && !details) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>{t('loadingDetails')}</div>;
   if (!details) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--danger)' }}>{t('noData')}</div>;
 
   const displayHostname = details.snmpHostname || details.name || 'Unknown';
+  // IP SLA OK (tüm operasyonlar ok) → MD (birincil hat), aksi halde GSM (yedek). IP SLA yoksa rozet gizli.
+  const slaBadge = (!slas || slas.length === 0) ? null
+    : slas.every(s => s.status === 'ok')
+      ? { label: 'MD', color: 'var(--success)', bg: 'rgba(34,197,94,0.15)', border: 'rgba(34,197,94,0.4)' }
+      : { label: 'GSM', color: 'var(--warning)', bg: 'rgba(245,158,11,0.15)', border: 'rgba(245,158,11,0.4)' };
   const formatTraffic = (bps) => {
     if (!bps || bps === 0) return '0 Mbps';
     const mbps = bps / 1000000;
@@ -65,7 +85,10 @@ export default function DeviceDetailPage() {
             <PingIcon size={16} /> {t('pingTool')}
           </button>
         )}
-        <span className={`status-badge ${details.status === 'UP' ? 'status-up' : 'status-down'}`} style={{ marginLeft: 'auto' }}>{details.status}</span>
+        {slaBadge && (
+          <span className="status-badge" title="IP SLA" style={{ marginLeft: 'auto', background: slaBadge.bg, color: slaBadge.color, border: `1px solid ${slaBadge.border}` }}>{slaBadge.label}</span>
+        )}
+        <span className={`status-badge ${details.status === 'UP' ? 'status-up' : 'status-down'}`} style={{ marginLeft: slaBadge ? 0 : 'auto' }}>{details.status}</span>
       </div>
 
       <div className="chart-container" style={{ marginBottom: 24, padding: '24px 32px' }}>
@@ -125,7 +148,7 @@ export default function DeviceDetailPage() {
       </div>
 
       {/* IP SLA (SNMP - CISCO-RTTMON-MIB) — yalnızca IP SLA yapılandırılmış cihazlarda görünür */}
-      <IpSlaCard deviceId={id} />
+      <IpSlaCard slas={slas} />
 
       {/* Show Run Kartı */}
       <ShowRunCard deviceId={id} />
