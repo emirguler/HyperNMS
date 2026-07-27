@@ -559,10 +559,18 @@ router.put('/switches/batch', authenticate, requireAdmin, async (req, res) => {
         return res.status(400).json({ error: 'ids array and updates object required' });
     }
 
-    const allowed = ['sshUsername', 'sshPassword', 'snmpCommunity', 'tags', 'topologyPage', 'type', 'healthIntervalSec'];
+    const allowed = ['sshUsername', 'sshPassword', 'snmpCommunity', 'tags', 'topologyPage', 'type', 'healthIntervalSec', 'ipSlaEnabled', 'ipSlaOkLabel', 'ipSlaFailLabel'];
     const safeUpdates = {};
     for (const key of Object.keys(updates)) {
         if (allowed.includes(key)) safeUpdates[key] = updates[key];
+    }
+
+    // IP SLA alanları: boolean'a çevir / etiketleri kırp (tek-cihaz sanitizeSwitch ile aynı davranış)
+    if (safeUpdates.ipSlaEnabled !== undefined) {
+        safeUpdates.ipSlaEnabled = !(safeUpdates.ipSlaEnabled === false || safeUpdates.ipSlaEnabled === 'false');
+    }
+    for (const k of ['ipSlaOkLabel', 'ipSlaFailLabel']) {
+        if (safeUpdates[k] !== undefined) safeUpdates[k] = String(safeUpdates[k]).trim().slice(0, 12);
     }
 
     if (safeUpdates.sshPassword) {

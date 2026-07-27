@@ -4,7 +4,7 @@ import { t } from '../i18n';
 
 // Çoklu cihaz toplu düzenleme — yalnızca doldurulan alanlar güncellenir (PUT /switches/batch)
 export default function BatchEditModal({ deviceIds, topoTabs = [], authFetch, onClose, onDone }) {
-  const [form, setForm] = useState({ sshUsername: '', sshPassword: '', snmpCommunity: '', tags: '', topologyPage: '' });
+  const [form, setForm] = useState({ sshUsername: '', sshPassword: '', snmpCommunity: '', tags: '', topologyPage: '', ipSlaEnabled: '', ipSlaOkLabel: '', ipSlaFailLabel: '' });
 
   const submit = async () => {
     const updates = {};
@@ -13,6 +13,9 @@ export default function BatchEditModal({ deviceIds, topoTabs = [], authFetch, on
     if (form.snmpCommunity) updates.snmpCommunity = form.snmpCommunity;
     if (form.tags) updates.tags = form.tags.split(',').map(s => s.trim()).filter(Boolean);
     if (form.topologyPage) updates.topologyPage = form.topologyPage;
+    if (form.ipSlaEnabled) updates.ipSlaEnabled = form.ipSlaEnabled === 'on';
+    if (form.ipSlaOkLabel) updates.ipSlaOkLabel = form.ipSlaOkLabel;
+    if (form.ipSlaFailLabel) updates.ipSlaFailLabel = form.ipSlaFailLabel;
 
     if (Object.keys(updates).length === 0) {
       showToast('No fields filled in', 'error');
@@ -64,6 +67,20 @@ export default function BatchEditModal({ deviceIds, topoTabs = [], authFetch, on
               {topoTabs.map(tab => <option key={tab.id} value={tab.id}>{tab.name}</option>)}
             </select>
           </div>
+          <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: 14, marginTop: 2 }}>
+            <label className="input-label" style={{ display: 'block', marginBottom: 6, color: 'var(--text-muted)' }}>{t('ipSlaMonitoring')}</label>
+            <select className="modern-input" value={form.ipSlaEnabled} onChange={e => setForm(p => ({ ...p, ipSlaEnabled: e.target.value }))}>
+              <option value="">-- No change --</option>
+              <option value="on">Enabled</option>
+              <option value="off">Disabled</option>
+            </select>
+          </div>
+          {form.ipSlaEnabled !== 'off' && (
+            <div className="grid-2col">
+              {field(t('ipSlaOkLabel'), 'ipSlaOkLabel', 'text', { placeholder: 'MD', maxLength: 12, autoComplete: 'off' })}
+              {field(t('ipSlaFailLabel'), 'ipSlaFailLabel', 'text', { placeholder: 'GSM', maxLength: 12, autoComplete: 'off' })}
+            </div>
+          )}
         </div>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 24 }}>
           <button className="btn btn-ghost" onClick={onClose}>{t('cancel')}</button>
