@@ -143,9 +143,9 @@ function TopologyInner({ onEdit, onClone }) {
       const styled = wireless
         // Anten-anten: düz çizgi (eğri bezier değil)
         ? { ...e, type: 'straight', animated: false, className: active ? 'wireless-edge' : 'wireless-edge-idle',
-            style: { stroke: active ? 'rgba(245, 158, 11, 0.7)' : 'rgba(148, 163, 184, 0.35)', strokeWidth: 2, opacity: 1 } }
+            style: { stroke: active ? 'rgba(245, 158, 11, 0.7)' : 'rgba(148, 163, 184, 0.35)', strokeWidth: 1.5, opacity: 1 } }
         : { ...e, type: 'cable', animated: false, data: { ...(e.data || {}), active },
-            style: { stroke: active ? 'rgba(250, 204, 21, 0.5)' : 'rgba(148, 163, 184, 0.28)', strokeWidth: 2.2, opacity: 1 } };
+            style: { stroke: active ? 'rgba(250, 204, 21, 0.5)' : 'rgba(148, 163, 184, 0.28)', strokeWidth: 1.6, opacity: 1 } };
       cache.set(e.id, { sig, styled });
       return styled;
     });
@@ -162,7 +162,7 @@ function TopologyInner({ onEdit, onClone }) {
       sourceHandle: params.sourceHandle,
       targetHandle: params.targetHandle,
       animated: true,
-      style: { stroke: 'var(--text-muted)', strokeWidth: 2 }
+      style: { stroke: 'var(--text-muted)', strokeWidth: 1.5 }
     };
     setEdges(eds => addEdge(newEdge, eds));
     authFetch('/edges', { method: 'POST', body: JSON.stringify(newEdge) });

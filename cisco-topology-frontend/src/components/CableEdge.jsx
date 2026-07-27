@@ -21,7 +21,7 @@ export default function CableEdge({
           className="cable-comet"
           fill="none"
           stroke="#fde047"
-          strokeWidth={3}
+          strokeWidth={2.2}
         />
       )}
     </>
