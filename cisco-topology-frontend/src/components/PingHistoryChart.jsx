@@ -81,18 +81,25 @@ function bucketize(points, tMin, tMax, N) {
   return out;
 }
 
-// Bitişik "veri var" (avg != null) kova koşuları -> [start, end) çiftleri
-function segments(buckets) {
-  const segs = [];
+// Çizgi parçaları: avg!=null kovaları sırayla bağla. Aradaki BOŞ (veri yok) kovaları
+// köprüle (seyrek örneklemede çizgi kopmasın); ama aralarında ÖLÇÜLMÜŞ kesinti (down>0)
+// varsa parçayı böl -> gerçek DOWN boşluk olarak kalır. Her parça = kova indeks dizisi.
+function lineSegments(buckets) {
   const N = buckets.length;
-  let i = 0;
-  while (i < N) {
-    if (buckets[i].avg == null) { i++; continue; }
-    let j = i;
-    while (j < N && buckets[j].avg != null) j++;
-    segs.push([i, j]);
-    i = j;
+  const segs = [];
+  let cur = [];
+  let last = -1;
+  for (let k = 0; k < N; k++) {
+    if (buckets[k].avg == null) continue;
+    if (last >= 0) {
+      let brk = false;
+      for (let j = last + 1; j < k; j++) { if (buckets[j].down > 0) { brk = true; break; } }
+      if (brk && cur.length) { segs.push(cur); cur = []; }
+    }
+    cur.push(k);
+    last = k;
   }
+  if (cur.length) segs.push(cur);
   return segs;
 }
 
@@ -230,15 +237,15 @@ export default function PingHistoryChart({ deviceId }) {
       ctx.fillText(fmtAxis(ts, axisRange), x, chartBottom + 12);
     }
 
-    const segs = segments(buckets);
+    const segs = lineSegments(buckets);
     const cx = (b) => toX(b.t + b.width / 2);
 
     // min-max bandı (rollup'ta gecikme yayılımı; ham veride min=max -> görünmez)
     ctx.fillStyle = C_BAND;
-    for (const [a, b] of segs) {
+    for (const seg of segs) {
       ctx.beginPath();
-      for (let k = a; k < b; k++) { const bk = buckets[k]; ctx.lineTo(cx(bk), toY(bk.max != null ? bk.max : bk.avg)); }
-      for (let k = b - 1; k >= a; k--) { const bk = buckets[k]; ctx.lineTo(cx(bk), toY(bk.min != null ? bk.min : bk.avg)); }
+      for (let i = 0; i < seg.length; i++) { const bk = buckets[seg[i]]; ctx.lineTo(cx(bk), toY(bk.max != null ? bk.max : bk.avg)); }
+      for (let i = seg.length - 1; i >= 0; i--) { const bk = buckets[seg[i]]; ctx.lineTo(cx(bk), toY(bk.min != null ? bk.min : bk.avg)); }
       ctx.closePath(); ctx.fill();
     }
 
@@ -246,11 +253,11 @@ export default function PingHistoryChart({ deviceId }) {
     const grad = ctx.createLinearGradient(0, PAD_T, 0, chartBottom);
     grad.addColorStop(0, C_AREA_TOP); grad.addColorStop(1, C_AREA_BOT);
     ctx.fillStyle = grad;
-    for (const [a, b] of segs) {
+    for (const seg of segs) {
       ctx.beginPath();
-      ctx.moveTo(cx(buckets[a]), chartBottom);
-      for (let k = a; k < b; k++) ctx.lineTo(cx(buckets[k]), toY(buckets[k].avg));
-      ctx.lineTo(cx(buckets[b - 1]), chartBottom);
+      ctx.moveTo(cx(buckets[seg[0]]), chartBottom);
+      for (const k of seg) ctx.lineTo(cx(buckets[k]), toY(buckets[k].avg));
+      ctx.lineTo(cx(buckets[seg[seg.length - 1]]), chartBottom);
       ctx.closePath(); ctx.fill();
     }
 
@@ -265,25 +272,30 @@ export default function PingHistoryChart({ deviceId }) {
       ctx.restore();
     }
 
-    // avg çizgisi (kesintide boşluk)
+    // avg çizgisi (boş kovaları köprüler, ölçülmüş DOWN'da kopar)
     ctx.strokeStyle = C_LINE; ctx.lineWidth = 1.5;
-    for (const [a, b] of segs) {
+    for (const seg of segs) {
       ctx.beginPath();
-      for (let k = a; k < b; k++) { const x = cx(buckets[k]), y = toY(buckets[k].avg); if (k === a) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
+      seg.forEach((k, i) => { const x = cx(buckets[k]), y = toY(buckets[k].avg); if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); });
       ctx.stroke();
     }
 
-    // izole (tek kova) veri noktaları çizgide görünmez kalır -> nokta ile göster
+    // izole (tek) veri noktası çizgi oluşturamaz -> nokta ile göster
     ctx.fillStyle = C_LINE;
-    for (const [a, b] of segs) {
-      if (b - a === 1) { const bk = buckets[a]; ctx.beginPath(); ctx.arc(cx(bk), toY(bk.avg), 1.8, 0, Math.PI * 2); ctx.fill(); }
+    for (const seg of segs) {
+      if (seg.length === 1) { const bk = buckets[seg[0]]; ctx.beginPath(); ctx.arc(cx(bk), toY(bk.avg), 1.8, 0, Math.PI * 2); ctx.fill(); }
     }
 
-    // Uygunluk şeridi (altta): yeşil=up, kırmızı=kesinti, gri=veri yok
+    // Uygunluk şeridi (altta): yeşil=up, kırmızı=kesinti, gri=veri yok.
+    // Boş kovalar son bilinen durumu taşır (seyrek örneklemede kesikli görünmesin);
+    // ilk örnekten önceki boşluk gri kalır (gerçekten veri yok).
     const stripY = H - STRIP_H;
+    let lastState = null; // 'up' | 'down'
     for (const b of buckets) {
+      const state = b.down > 0 ? 'down' : b.up > 0 ? 'up' : lastState;
+      if (state) lastState = state;
       const x0 = toX(b.t), x1 = toX(b.t + b.width);
-      ctx.fillStyle = b.empty ? C_EMPTY : (b.down > 0 ? C_DOWN : C_UP);
+      ctx.fillStyle = state === 'down' ? C_DOWN : state === 'up' ? C_UP : C_EMPTY;
       ctx.fillRect(x0, stripY, Math.max(1, x1 - x0), STRIP_H);
     }
   }, [payload, sizeTick, range, stats, points, rangeMs]);
