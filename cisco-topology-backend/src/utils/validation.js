@@ -107,7 +107,8 @@ function validateUser(data, isEdit = false) {
 function sanitizeSwitch(data) {
     const allowed = ['name', 'ip', 'model', 'type', 'sshUsername', 'sshPassword',
                      'snmpCommunity', 'snmpPort', 'snmpVersion', 'healthIntervalSec',
-                     'position', 'tags', 'location', 'topologyPage', 'ipSlaEnabled'];
+                     'position', 'tags', 'location', 'topologyPage', 'ipSlaEnabled',
+                     'ipSlaOkLabel', 'ipSlaFailLabel'];
     const clean = {};
     for (const key of allowed) {
         if (data[key] !== undefined) {
@@ -117,6 +118,12 @@ function sanitizeSwitch(data) {
     // ipSlaEnabled boolean'a çevrilir (yalnızca açıkça false/'false' → kapalı; varsayılan açık)
     if (clean.ipSlaEnabled !== undefined) {
         clean.ipSlaEnabled = !(clean.ipSlaEnabled === false || clean.ipSlaEnabled === 'false');
+    }
+    // IP SLA rozet etiketleri (OK→MD / Timeout→GSM): string'e çevir, kırp (boş bırakılırsa gösterimde varsayılana düşer)
+    for (const k of ['ipSlaOkLabel', 'ipSlaFailLabel']) {
+        if (clean[k] !== undefined) {
+            clean[k] = String(clean[k]).trim().slice(0, 12);
+        }
     }
     // Position objesini ayrıca sanitize et
     if (clean.position) {

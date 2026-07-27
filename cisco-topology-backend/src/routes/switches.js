@@ -54,7 +54,7 @@ router.get('/topology', authenticate, (req, res) => {
     const switches = store.getSwitches();
     const edges = store.getEdges();
     const isAdmin = req.user.role === 'Administrator';
-    const TOPOLOGY_ALLOWLIST = ['id', 'name', 'ip', 'type', 'status', 'latency', 'position', 'tags', 'topologyPage', 'lastLatency', 'healthIntervalSec', 'ipSlaEnabled'];
+    const TOPOLOGY_ALLOWLIST = ['id', 'name', 'ip', 'type', 'status', 'latency', 'position', 'tags', 'topologyPage', 'lastLatency', 'healthIntervalSec', 'ipSlaEnabled', 'ipSlaOkLabel', 'ipSlaFailLabel'];
     const safeSwitches = switches.map(({ sshPassword, ...s }) => {
         if (!isAdmin) {
             const filtered = {};
@@ -702,6 +702,9 @@ router.get('/switches/:id/details', authenticate, async (req, res) => {
     if (!device) return res.status(404).send();
     const details = await getDeviceDetails(device);
     details.topologyPage = device.topologyPage || 'main'; // cihazın bulunduğu topoloji sayfası (id)
+    // IP SLA rozet etiketleri (OK→birincil, Timeout→yedek). Boşsa varsayılan MD/GSM. Her iki rol görebilir.
+    details.ipSlaOkLabel = device.ipSlaOkLabel || 'MD';
+    details.ipSlaFailLabel = device.ipSlaFailLabel || 'GSM';
     // Admin can see SNMP community, SSH username, and password status
     if (req.user.role === 'Administrator') {
         details.snmpCommunity = device.snmpCommunity || '';

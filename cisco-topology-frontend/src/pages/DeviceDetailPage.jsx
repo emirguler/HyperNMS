@@ -52,11 +52,12 @@ export default function DeviceDetailPage() {
   if (!details) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--danger)' }}>{t('noData')}</div>;
 
   const displayHostname = details.snmpHostname || details.name || 'Unknown';
-  // IP SLA OK (tüm operasyonlar ok) → MD (birincil hat), aksi halde GSM (yedek). IP SLA yoksa rozet gizli.
+  // IP SLA OK (tüm operasyonlar ok) → birincil etiket (varsayılan MD), aksi halde yedek etiket (varsayılan GSM).
+  // Etiketler cihaz bazında elle girilebilir. IP SLA yoksa rozet gizli.
   const slaBadge = (!slas || slas.length === 0) ? null
     : slas.every(s => s.status === 'ok')
-      ? { label: 'MD', color: 'var(--success)', bg: 'rgba(34,197,94,0.15)', border: 'rgba(34,197,94,0.4)' }
-      : { label: 'GSM', color: 'var(--warning)', bg: 'rgba(245,158,11,0.15)', border: 'rgba(245,158,11,0.4)' };
+      ? { label: details.ipSlaOkLabel || 'MD', color: 'var(--success)', bg: 'rgba(34,197,94,0.15)', border: 'rgba(34,197,94,0.4)' }
+      : { label: details.ipSlaFailLabel || 'GSM', color: 'var(--warning)', bg: 'rgba(245,158,11,0.15)', border: 'rgba(245,158,11,0.4)' };
   const formatTraffic = (bps) => {
     if (!bps || bps === 0) return '0 Mbps';
     const mbps = bps / 1000000;

@@ -95,6 +95,8 @@ const translations = {
     checkInterval: 'Check Interval (sec)',
     ipSlaMonitoring: 'IP SLA Monitoring',
     ipSlaMonitoringHint: 'Read IP SLA for the MD/GSM status',
+    ipSlaOkLabel: 'Label when OK',
+    ipSlaFailLabel: 'Label when Timeout',
     save: 'Save',
     add: 'Add',
 
@@ -262,6 +264,8 @@ const translations = {
     checkInterval: 'Kontrol S\u0131kl\u0131\u011f\u0131 (sn)',
     ipSlaMonitoring: 'IP SLA \u0130zleme',
     ipSlaMonitoringHint: 'MD/GSM durumu i\u00e7in IP SLA okunsun',
+    ipSlaOkLabel: 'OK iken etiket',
+    ipSlaFailLabel: 'Timeout iken etiket',
     save: 'Kaydet',
     add: 'Ekle',
 

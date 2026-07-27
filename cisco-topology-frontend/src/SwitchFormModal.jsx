@@ -20,6 +20,8 @@ function SwitchFormModal({ mode, initialValues, onCancel, onSave, topologyTabs }
     tags: '',
     topologyPage: 'main',
     ipSlaEnabled: true, // varsayılan açık
+    ipSlaOkLabel: 'MD',   // IP SLA OK iken gösterilecek rozet
+    ipSlaFailLabel: 'GSM', // IP SLA Timeout iken gösterilecek rozet
   });
 
   useEffect(() => {
@@ -37,6 +39,8 @@ function SwitchFormModal({ mode, initialValues, onCancel, onSave, topologyTabs }
         tags: (initialValues.tags || []).join(', '),
         topologyPage: initialValues.topologyPage || 'main',
         ipSlaEnabled: initialValues.ipSlaEnabled !== false, // tanımsız/eski cihaz → açık
+        ipSlaOkLabel: initialValues.ipSlaOkLabel || 'MD',
+        ipSlaFailLabel: initialValues.ipSlaFailLabel || 'GSM',
       }));
     }
   }, [initialValues, isEdit]);
@@ -150,6 +154,19 @@ function SwitchFormModal({ mode, initialValues, onCancel, onSave, topologyTabs }
                 <span className="toggle-slider" />
               </label>
             </div>
+
+            {values.ipSlaEnabled && (
+              <div className="grid-2col" style={{ gridColumn: 'span 2' }}>
+                <div>
+                  <label className="input-label" style={{display:'block', marginBottom:8, color:'var(--text-muted)'}}>{t('ipSlaOkLabel')}</label>
+                  <input className="modern-input" name="ipSlaOkLabel" value={values.ipSlaOkLabel} onChange={handleChange} placeholder="MD" maxLength={12} autoComplete="off" />
+                </div>
+                <div>
+                  <label className="input-label" style={{display:'block', marginBottom:8, color:'var(--text-muted)'}}>{t('ipSlaFailLabel')}</label>
+                  <input className="modern-input" name="ipSlaFailLabel" value={values.ipSlaFailLabel} onChange={handleChange} placeholder="GSM" maxLength={12} autoComplete="off" />
+                </div>
+              </div>
+            )}
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '24px' }}>
