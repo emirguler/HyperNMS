@@ -744,11 +744,29 @@ router.get('/switches/:id/ip-sla', authenticate, async (req, res) => {
     }
 });
 
+// Ping geçmişi. Birleşik nokta şekli döner: { mode, bucketMs, rangeMs, points:[{t,avg,min,max,up,down}] }
+//  - 1H (veya eski ?duration=): ham 5sn örnekler (avg=min=max=latency, down=0/1)
+//  - 1D/1W/1M: ham seri yalnızca ~7 saat tuttuğundan 5dk özet (rollup) serisinden servis edilir
 router.get('/switches/:id/ping-history', authenticate, (req, res) => {
-    const duration = parseInt(req.query.duration) || 3600000;
-    const since = Date.now() - duration;
-    const history = store.getHistory(req.params.id, since);
-    res.json(history);
+    const RANGE_MS = { '1H': 3600000, '1D': 86400000, '1W': 604800000, '1M': 2592000000 };
+    const range = String(req.query.range || '');
+
+    // Ham seri ~7 saati kapsadığından 24 saat ve üzeri aralıklar rollup'tan gelir (1D=288 kova).
+    if (range === '1D' || range === '1W' || range === '1M') {
+        const rangeMs = RANGE_MS[range];
+        const buckets = store.getRollup(req.params.id, Date.now() - rangeMs);
+        return res.json({ mode: 'rollup', bucketMs: store.ROLLUP_BUCKET_MS, rangeMs, points: buckets });
+    }
+
+    const durationParam = parseInt(req.query.duration);
+    const rangeMs = RANGE_MS[range] || (durationParam > 0 ? durationParam : 3600000);
+    const raw = store.getHistory(req.params.id, Date.now() - rangeMs);
+    const points = raw.map(h => {
+        const isDown = h.value === -1;
+        const v = isDown ? null : h.value;
+        return { t: h.timestamp, avg: v, min: v, max: v, up: isDown ? 0 : 1, down: isDown ? 1 : 0 };
+    });
+    res.json({ mode: 'raw', bucketMs: 0, rangeMs, points });
 });
 
 // SSH komutu çalıştır (show run vb.)

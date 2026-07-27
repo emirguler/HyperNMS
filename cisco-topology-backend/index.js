@@ -410,11 +410,20 @@ setInterval(() => {
 }, 5000);
 
 app.get('/switches/:id/ping-history', authenticate, (req, res) => {
+    // Legacy sunucuda rollup yok -> her aralik icin ham veriyi birlesik sekle donusturup ver
+    // (frontend { mode, points:[{t,avg,min,max,up,down}] } bekler; duz dizi bos grafik olur).
+    const RANGE_MS = { '1H': 3600000, '1D': 86400000, '1W': 604800000, '1M': 2592000000 };
     const history = readJSON(DB_HISTORY);
-    const duration = parseInt(req.query.duration) || 3600000;
-    const since = Date.now() - duration;
-    const filtered = history.filter(h => h.switchId === req.params.id && h.timestamp > since);
-    res.json(filtered);
+    const rangeMs = RANGE_MS[String(req.query.range || '')] || parseInt(req.query.duration) || 3600000;
+    const since = Date.now() - rangeMs;
+    const points = history
+        .filter(h => h.switchId === req.params.id && h.timestamp > since)
+        .map(h => {
+            const isDown = h.value === -1;
+            const v = isDown ? null : h.value;
+            return { t: h.timestamp, avg: v, min: v, max: v, up: isDown ? 0 : 1, down: isDown ? 1 : 0 };
+        });
+    res.json({ mode: 'raw', bucketMs: 0, rangeMs, points });
 });
 
 

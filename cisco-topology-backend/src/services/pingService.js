@@ -87,7 +87,9 @@ async function pingCycle() {
             });
         }
         // Geçmişe ham ölçüm yazılır (-1 = kayıp) → paket kaybı grafikte görünür
-        store.appendHistory(s.id, { switchId: s.id, timestamp: Date.now(), value: latency });
+        const ts = Date.now();
+        store.appendHistory(s.id, { switchId: s.id, timestamp: ts, value: latency });
+        store.appendRollup(s.id, ts, latency); // uzun aralik (1W/1M) icin 5dk ozet
     }, PING_CONCURRENCY);
 
     store.updatePingResults(pingResults);

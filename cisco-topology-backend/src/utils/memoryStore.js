@@ -27,6 +27,15 @@ class MemoryStore {
         this.historyTimer = null;
         this.HISTORY_DEBOUNCE = 10000; // 10sn pencere — birden çok ping döngüsünü tek yazıma toplar
         this.MAX_HISTORY_PER_DEVICE = 5000;
+
+        // Ping ozet (rollup) - uzun aralik (1W/1M) icin sabit 5dk kovalar (cihaz basina).
+        // Ham 5sn seri yalnizca ~7 saat tutabildiginden hafta/ay gorunumleri buradan beslenir.
+        this.rollup = {};              // switchId -> kova dizisi {t, avg, min, max, up, down}
+        this.rollupDirty = new Set();
+        this.rollupTimer = null;
+        this.ROLLUP_DEBOUNCE = 30000;   // 30sn - rollup daha seyrek yazilir
+        this.ROLLUP_BUCKET_MS = 300000; // 5 dakikalik kova
+        this.MAX_ROLLUP_PER_DEVICE = 9000; // ~31 gun (5dk kova) - 1M gorunumunu kapsar
     }
 
     init() {
@@ -39,6 +48,12 @@ class MemoryStore {
         const historyDir = path.join(config.DATA_DIR, 'history');
         if (!fs.existsSync(historyDir)) {
             fs.mkdirSync(historyDir, { recursive: true });
+        }
+
+        // Rollup klasoru (cihaz basina 5dk ozet seri)
+        const rollupDir = path.join(config.DATA_DIR, 'rollup');
+        if (!fs.existsSync(rollupDir)) {
+            fs.mkdirSync(rollupDir, { recursive: true });
         }
 
         // Dosyalardan yükle
@@ -114,6 +129,8 @@ class MemoryStore {
             // Geçmiş bellek tamponunu da temizle (disk dosyası korunur)
             delete this.history[id];
             this.historyDirty.delete(id);
+            delete this.rollup[id];
+            this.rollupDirty.delete(id);
             return true;
         }
         return false;
@@ -319,6 +336,84 @@ class MemoryStore {
         }
     }
 
+    // --- Ping Rollup (5dk ozet, cihaz basina dosya) ---
+    _loadRollup(switchId) {
+        if (this.rollup[switchId]) return this.rollup[switchId];
+        const file = path.join(config.DATA_DIR, 'rollup', `${switchId}.json`);
+        this.rollup[switchId] = this._readFile(file);
+        return this.rollup[switchId];
+    }
+
+    getRollup(switchId, since) {
+        if (!/^[a-zA-Z0-9_-]+$/.test(switchId)) return [];
+        const buckets = this._loadRollup(switchId);
+        if (since) return buckets.filter(b => b.t >= since);
+        return buckets;
+    }
+
+    // Ham ping ornegini 5dk kovaya isle. value: latency ms, -1 = kayip/DOWN.
+    // Ping'ler zaman sirasiyla geldiginden yalnizca son kovaya bakmak yeterli
+    // (bucketT geriye giderse -> nadir saat kaymasi, son kovaya toplanir; dizi monoton kalir).
+    appendRollup(switchId, timestamp, value) {
+        if (!/^[a-zA-Z0-9_-]+$/.test(switchId)) return;
+        const buckets = this._loadRollup(switchId);
+        const bucketT = Math.floor(timestamp / this.ROLLUP_BUCKET_MS) * this.ROLLUP_BUCKET_MS;
+        let b = buckets.length ? buckets[buckets.length - 1] : null;
+        if (!b || bucketT > b.t) {
+            b = { t: bucketT, avg: null, min: null, max: null, up: 0, down: 0 };
+            buckets.push(b);
+            if (buckets.length > this.MAX_ROLLUP_PER_DEVICE) {
+                buckets.splice(0, buckets.length - this.MAX_ROLLUP_PER_DEVICE);
+            }
+        }
+        if (value === -1) {
+            b.down++;
+        } else {
+            b.avg = b.up === 0 ? value : (b.avg * b.up + value) / (b.up + 1);
+            b.min = b.min === null ? value : Math.min(b.min, value);
+            b.max = b.max === null ? value : Math.max(b.max, value);
+            b.up++;
+        }
+        this._markRollupDirty(switchId);
+    }
+
+    _markRollupDirty(switchId) {
+        this.rollupDirty.add(switchId);
+        if (!this.rollupTimer) {
+            this.rollupTimer = setTimeout(() => {
+                this.rollupTimer = null;
+                this._flushRollup();
+            }, this.ROLLUP_DEBOUNCE);
+        }
+    }
+
+    _flushRollup(sync = false) {
+        if (this.rollupDirty.size === 0) return;
+        const rollupDir = path.join(config.DATA_DIR, 'rollup');
+        const ids = [...this.rollupDirty];
+        this.rollupDirty.clear();
+        for (const switchId of ids) {
+            const buckets = this.rollup[switchId];
+            if (!buckets) continue;
+            const file = path.join(rollupDir, `${switchId}.json`);
+            const tmpFile = file + '.tmp';
+            const json = JSON.stringify(buckets);
+            try {
+                if (sync) {
+                    fs.writeFileSync(tmpFile, json);
+                    fs.renameSync(tmpFile, file);
+                } else {
+                    fs.writeFile(tmpFile, json, (err) => {
+                        if (err) return console.error(`[STORE] rollup ${switchId} yazilamadi:`, err.message);
+                        fs.rename(tmpFile, file, (e2) => { if (e2) console.error(`[STORE] rollup rename ${switchId}:`, e2.message); });
+                    });
+                }
+            } catch (e) {
+                console.error(`[STORE] rollup ${switchId} yazilamadi:`, e.message);
+            }
+        }
+    }
+
     // --- Dirty tracking & debounced write ---
     _markDirty(collection) {
         this.dirty.add(collection);
@@ -352,8 +447,10 @@ class MemoryStore {
     flushSync() {
         if (this.writeTimer) clearTimeout(this.writeTimer);
         if (this.historyTimer) { clearTimeout(this.historyTimer); this.historyTimer = null; }
+        if (this.rollupTimer) { clearTimeout(this.rollupTimer); this.rollupTimer = null; }
         this._flush();
         this._flushHistory(true); // kapanışta senkron (süreç bitmeden yazılsın)
+        this._flushRollup(true);
     }
 }
 
