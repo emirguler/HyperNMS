@@ -93,6 +93,8 @@ const translations = {
     sshPasswordHint: '(Leave empty to keep current)',
     snmpCommunity: 'SNMP Community',
     checkInterval: 'Check Interval (sec)',
+    ipSlaMonitoring: 'IP SLA Monitoring',
+    ipSlaMonitoringHint: 'Read IP SLA for the MD/GSM status',
     save: 'Save',
     add: 'Add',
 
@@ -258,6 +260,8 @@ const translations = {
     sshPasswordHint: '(De\u011fi\u015fmeyecekse bo\u015f b\u0131rak)',
     snmpCommunity: 'SNMP Community',
     checkInterval: 'Kontrol S\u0131kl\u0131\u011f\u0131 (sn)',
+    ipSlaMonitoring: 'IP SLA \u0130zleme',
+    ipSlaMonitoringHint: 'MD/GSM durumu i\u00e7in IP SLA okunsun',
     save: 'Kaydet',
     add: 'Ekle',
 

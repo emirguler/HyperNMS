@@ -54,7 +54,7 @@ router.get('/topology', authenticate, (req, res) => {
     const switches = store.getSwitches();
     const edges = store.getEdges();
     const isAdmin = req.user.role === 'Administrator';
-    const TOPOLOGY_ALLOWLIST = ['id', 'name', 'ip', 'type', 'status', 'latency', 'position', 'tags', 'topologyPage', 'lastLatency', 'healthIntervalSec'];
+    const TOPOLOGY_ALLOWLIST = ['id', 'name', 'ip', 'type', 'status', 'latency', 'position', 'tags', 'topologyPage', 'lastLatency', 'healthIntervalSec', 'ipSlaEnabled'];
     const safeSwitches = switches.map(({ sshPassword, ...s }) => {
         if (!isAdmin) {
             const filtered = {};
@@ -715,7 +715,8 @@ router.get('/switches/:id/details', authenticate, async (req, res) => {
 // IP SLA oku: önce SNMP (CISCO-RTTMON-MIB); boşsa ve SSH bilgisi varsa "show ip sla summary" SSH fallback.
 // (IE4010 gibi RTTMON MIB'i yayınlamayan cihazlar SNMP'de boş döner ama CLI'da IP SLA çalışır)
 async function readIpSla(device) {
-    if (!device || device.status !== 'UP') return [];
+    // ipSlaEnabled açıkça false ise atla (tanımsız/true → açık; varsayılan açık)
+    if (!device || device.status !== 'UP' || device.ipSlaEnabled === false) return [];
     let list = await ipSlaStatus(device);
     if ((!list || list.length === 0) && device.sshUsername && device.sshPassword) {
         list = await ipSlaViaSsh(device);

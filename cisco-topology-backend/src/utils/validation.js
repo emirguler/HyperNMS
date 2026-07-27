@@ -107,12 +107,16 @@ function validateUser(data, isEdit = false) {
 function sanitizeSwitch(data) {
     const allowed = ['name', 'ip', 'model', 'type', 'sshUsername', 'sshPassword',
                      'snmpCommunity', 'snmpPort', 'snmpVersion', 'healthIntervalSec',
-                     'position', 'tags', 'location', 'topologyPage'];
+                     'position', 'tags', 'location', 'topologyPage', 'ipSlaEnabled'];
     const clean = {};
     for (const key of allowed) {
         if (data[key] !== undefined) {
             clean[key] = data[key];
         }
+    }
+    // ipSlaEnabled boolean'a çevrilir (yalnızca açıkça false/'false' → kapalı; varsayılan açık)
+    if (clean.ipSlaEnabled !== undefined) {
+        clean.ipSlaEnabled = !(clean.ipSlaEnabled === false || clean.ipSlaEnabled === 'false');
     }
     // Position objesini ayrıca sanitize et
     if (clean.position) {

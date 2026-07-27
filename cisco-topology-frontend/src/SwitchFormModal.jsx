@@ -19,6 +19,7 @@ function SwitchFormModal({ mode, initialValues, onCancel, onSave, topologyTabs }
     snmpCommunity: '',
     tags: '',
     topologyPage: 'main',
+    ipSlaEnabled: true, // varsayılan açık
   });
 
   useEffect(() => {
@@ -35,13 +36,14 @@ function SwitchFormModal({ mode, initialValues, onCancel, onSave, topologyTabs }
         healthIntervalSec: initialValues.healthIntervalSec || 60,
         tags: (initialValues.tags || []).join(', '),
         topologyPage: initialValues.topologyPage || 'main',
+        ipSlaEnabled: initialValues.ipSlaEnabled !== false, // tanımsız/eski cihaz → açık
       }));
     }
   }, [initialValues, isEdit]);
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
-    setValues((prev) => ({ ...prev, [name]: value }));
+    const { name, value, type, checked } = e.target;
+    setValues((prev) => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
   };
 
   const handleSubmit = (e) => {
@@ -136,6 +138,17 @@ function SwitchFormModal({ mode, initialValues, onCancel, onSave, topologyTabs }
                   <option key={tab.id} value={tab.id}>{tab.name}</option>
                 ))}
               </select>
+            </div>
+
+            <div style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 0' }}>
+              <div>
+                <label className="input-label" style={{ display: 'block', color: 'var(--text-main)', fontWeight: 500 }}>{t('ipSlaMonitoring')}</label>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{t('ipSlaMonitoringHint')}</span>
+              </div>
+              <label className="toggle-switch">
+                <input type="checkbox" name="ipSlaEnabled" checked={values.ipSlaEnabled} onChange={handleChange} />
+                <span className="toggle-slider" />
+              </label>
             </div>
           </div>
 
