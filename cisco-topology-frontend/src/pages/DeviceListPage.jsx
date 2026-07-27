@@ -25,7 +25,7 @@ export default function DeviceListPage({ onEdit }) {
   const [detailedLoading, setDetailedLoading] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [showBatchEdit, setShowBatchEdit] = useState(false);
-  const [batchForm, setBatchForm] = useState({ sshUsername: '', sshPassword: '', snmpCommunity: '', tags: '', topologyPage: '' });
+  const [batchForm, setBatchForm] = useState({ sshUsername: '', sshPassword: '', snmpCommunity: '', tags: '', topologyPage: '', ipSlaEnabled: '', ipSlaOkLabel: '', ipSlaFailLabel: '' });
 
   // Topology page id → okunabilir sayfa adı
   const pageName = (id) => topoTabs.find(tab => tab.id === (id || 'main'))?.name || (id || 'main');
@@ -133,6 +133,9 @@ export default function DeviceListPage({ onEdit }) {
     if (batchForm.snmpCommunity) updates.snmpCommunity = batchForm.snmpCommunity;
     if (batchForm.tags) updates.tags = batchForm.tags.split(',').map(t => t.trim()).filter(Boolean);
     if (batchForm.topologyPage) updates.topologyPage = batchForm.topologyPage;
+    if (batchForm.ipSlaEnabled) updates.ipSlaEnabled = batchForm.ipSlaEnabled === 'on';
+    if (batchForm.ipSlaOkLabel) updates.ipSlaOkLabel = batchForm.ipSlaOkLabel;
+    if (batchForm.ipSlaFailLabel) updates.ipSlaFailLabel = batchForm.ipSlaFailLabel;
 
     if (Object.keys(updates).length === 0) {
       showToast('No fields filled in', 'error');
@@ -149,7 +152,7 @@ export default function DeviceListPage({ onEdit }) {
         showToast(`${selectedIds.size} device(s) updated`, 'success');
         setSelectedIds(new Set());
         setShowBatchEdit(false);
-        setBatchForm({ sshUsername: '', sshPassword: '', snmpCommunity: '', tags: '', topologyPage: '' });
+        setBatchForm({ sshUsername: '', sshPassword: '', snmpCommunity: '', tags: '', topologyPage: '', ipSlaEnabled: '', ipSlaOkLabel: '', ipSlaFailLabel: '' });
         fetchData();
       } else {
         const d = await res.json().catch(() => ({}));
@@ -289,6 +292,26 @@ export default function DeviceListPage({ onEdit }) {
                   ))}
                 </select>
               </div>
+              <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: 14, marginTop: 2 }}>
+                <label className="input-label" style={{ display: 'block', marginBottom: 6, color: 'var(--text-muted)' }}>{t('ipSlaMonitoring')}</label>
+                <select className="modern-input" value={batchForm.ipSlaEnabled} onChange={e => setBatchForm(p => ({ ...p, ipSlaEnabled: e.target.value }))}>
+                  <option value="">-- No change --</option>
+                  <option value="on">Enabled</option>
+                  <option value="off">Disabled</option>
+                </select>
+              </div>
+              {batchForm.ipSlaEnabled !== 'off' && (
+                <div className="grid-2col">
+                  <div>
+                    <label className="input-label" style={{ display: 'block', marginBottom: 6, color: 'var(--text-muted)' }}>{t('ipSlaOkLabel')}</label>
+                    <input className="modern-input" value={batchForm.ipSlaOkLabel} onChange={e => setBatchForm(p => ({ ...p, ipSlaOkLabel: e.target.value }))} placeholder="MD" maxLength={12} autoComplete="off" />
+                  </div>
+                  <div>
+                    <label className="input-label" style={{ display: 'block', marginBottom: 6, color: 'var(--text-muted)' }}>{t('ipSlaFailLabel')}</label>
+                    <input className="modern-input" value={batchForm.ipSlaFailLabel} onChange={e => setBatchForm(p => ({ ...p, ipSlaFailLabel: e.target.value }))} placeholder="GSM" maxLength={12} autoComplete="off" />
+                  </div>
+                </div>
+              )}
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 24 }}>
               <button className="btn btn-ghost" onClick={() => setShowBatchEdit(false)}>{t('cancel')}</button>
