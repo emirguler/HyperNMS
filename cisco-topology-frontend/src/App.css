@@ -868,7 +868,13 @@ select.modern-input option {
 .grid-stats     { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
 .grid-dash-main { display: grid; grid-template-columns: 1fr 1fr 2fr; gap: 20px; align-items: stretch; }
 .grid-detail-main { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 24px; }
+.grid-detail-main.with-backup { grid-template-columns: 2fr 1fr 1fr 1fr; } /* admin: CPU/RAM daralır + Config Backup kartı */
 .grid-2col      { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+/* Config Backup kartı satır & indirme ikonu */
+.cfg-backup-row:hover { background: rgba(255,255,255,0.03); }
+.cfg-dl-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 6px; border-radius: 6px; display: inline-flex; align-items: center; flex-shrink: 0; transition: color .15s ease, background .15s ease; }
+.cfg-dl-btn:hover { color: var(--primary); background: var(--primary-light); }
 
 /* Navbar mobil parçaları — masaüstünde gizli */
 .nav-hamburger { display: none; }
@@ -883,7 +889,7 @@ select.modern-input option {
   .nav-btn { padding: 6px 10px; font-size: 0.8rem; }
   .grid-stats { grid-template-columns: repeat(2, 1fr); }
   .grid-dash-main { grid-template-columns: 1fr; }
-  .grid-detail-main { grid-template-columns: 1fr; }
+  .grid-detail-main, .grid-detail-main.with-backup { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 768px) {

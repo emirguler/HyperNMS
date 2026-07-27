@@ -5,6 +5,7 @@ const { validateSwitch, sanitizeSwitch, isBlockedIP, isValidIPv4 } = require('..
 const { encryptPassword, decryptPassword } = require('../utils/crypto');
 const { getDeviceDetails, discoverNeighbors, searchMAC, inventoryAll, ipSlaStatus } = require('../services/snmpService');
 const { probeDevice, ipSlaViaSsh } = require('../services/sshService');
+const { listBackups, getBackup, backupDevice } = require('../services/configBackupService');
 const { identifyFromSsh } = require('../utils/sshIdentify');
 const { logAction } = require('../services/auditLog');
 const { snmpCache } = require('../utils/cache');
@@ -767,6 +768,38 @@ router.get('/switches/:id/ping-history', authenticate, (req, res) => {
         return { t: h.timestamp, avg: v, min: v, max: v, up: isDown ? 0 : 1, down: isDown ? 1 : 0 };
     });
     res.json({ mode: 'raw', bucketMs: 0, rangeMs, points });
+});
+
+// --- Config Backup (yalnızca admin) ---
+// Liste: son 7 yedeğin metadata'sı (yeni -> eski), config gövdesi olmadan
+router.get('/switches/:id/config-backups', authenticate, requireAdmin, (req, res) => {
+    const device = store.getSwitch(req.params.id);
+    if (!device) return res.status(404).json({ error: 'Device not found' });
+    res.json(listBackups(device.id));
+});
+
+// Tek yedeğin tam içeriği (görüntüleme/indirme)
+router.get('/switches/:id/config-backups/:timestamp', authenticate, requireAdmin, (req, res) => {
+    const device = store.getSwitch(req.params.id);
+    if (!device) return res.status(404).json({ error: 'Device not found' });
+    const b = getBackup(device.id, req.params.timestamp);
+    if (!b) return res.status(404).json({ error: 'Backup not found' });
+    res.json(b);
+});
+
+// Manuel yedek al (kart üzerindeki "Şimdi yedekle" butonu)
+router.post('/switches/:id/config-backups/run', authenticate, requireAdmin, async (req, res) => {
+    const device = store.getSwitch(req.params.id);
+    if (!device) return res.status(404).json({ error: 'Device not found' });
+    if (!device.sshUsername || !device.sshPassword) return res.status(400).json({ error: 'SSH credentials missing' });
+    if (isBlockedIP(device.ip)) return res.status(403).json({ error: 'Connection to this IP is not allowed' });
+    try {
+        const ok = await backupDevice(device);
+        if (!ok) return res.status(502).json({ error: 'Backup failed (SSH error or empty config)' });
+        res.json({ success: true, backups: listBackups(device.id) });
+    } catch (e) {
+        res.status(500).json({ error: 'Backup failed' });
+    }
 });
 
 // SSH komutu çalıştır (show run vb.)

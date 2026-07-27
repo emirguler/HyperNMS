@@ -266,4 +266,4 @@ async function ipSlaViaSsh(device) {
     }
 }
 
-module.exports = { setupWebSocket, probeDevice, ipSlaViaSsh };
+module.exports = { setupWebSocket, probeDevice, ipSlaViaSsh, runShowCommand };

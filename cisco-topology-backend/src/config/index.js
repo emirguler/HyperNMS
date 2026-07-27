@@ -48,4 +48,6 @@ module.exports = {
     SMOOTHING_FACTOR: 0.3,
     JWT_EXPIRY: '8h',
     BCRYPT_ROUNDS: 12,
+    // Günlük config yedeği: her gün bu saatte (0-23, sunucu yerel saati) çalışır; cihaz başına son 7 tutulur
+    CONFIG_BACKUP_HOUR: (() => { const h = parseInt(process.env.CONFIG_BACKUP_HOUR); return (h >= 0 && h <= 23) ? h : 3; })(),
 };

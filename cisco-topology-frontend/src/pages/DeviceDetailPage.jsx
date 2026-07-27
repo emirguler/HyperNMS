@@ -6,6 +6,7 @@ import PingModal from '../components/PingModal';
 import PingIcon from '../components/PingIcon';
 import Gauge from '../components/Gauge';
 import PingHistoryChart from '../components/PingHistoryChart';
+import ConfigBackupCard from '../components/ConfigBackupCard';
 import { t } from '../i18n';
 
 export default function DeviceDetailPage() {
@@ -141,10 +142,11 @@ export default function DeviceDetailPage() {
         )}
       </div>
 
-      <div className="grid-detail-main" style={{ marginBottom: 24 }}>
+      <div className={`grid-detail-main${isAdmin ? ' with-backup' : ''}`} style={{ marginBottom: 24 }}>
         <PingHistoryChart deviceId={id} />
         <Gauge value={details.cpu || 0} label="CPU Load" color={(details.cpu || 0) > 80 ? 'var(--danger)' : 'var(--primary)'} />
         <Gauge value={details.ram || 0} label="RAM Usage" color={(details.ram || 0) > 80 ? 'var(--danger)' : '#8b5cf6'} />
+        {isAdmin && <ConfigBackupCard deviceId={id} deviceName={displayHostname} />}
       </div>
 
       {/* Show Run Kartı */}
