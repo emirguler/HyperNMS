@@ -33,3 +33,6 @@ npm-debug.log*
 # Backups
 *.backup
 *.bak
+
+# Local MCP config (makineye özel mutlak yol içerir — commit'lenmez)
+.mcp.json
