@@ -4,7 +4,7 @@ const { authenticate, requireAdmin } = require('../middleware/auth');
 const { validateSwitch, sanitizeSwitch, isBlockedIP, isValidIPv4 } = require('../utils/validation');
 const { encryptPassword, decryptPassword } = require('../utils/crypto');
 const { getDeviceDetails, discoverNeighbors, searchMAC, inventoryAll, ipSlaStatus } = require('../services/snmpService');
-const { probeDevice } = require('../services/sshService');
+const { probeDevice, ipSlaViaSsh } = require('../services/sshService');
 const { identifyFromSsh } = require('../utils/sshIdentify');
 const { logAction } = require('../services/auditLog');
 const { snmpCache } = require('../utils/cache');
@@ -712,7 +712,18 @@ router.get('/switches/:id/details', authenticate, async (req, res) => {
     res.json(details);
 });
 
-// IP SLA durumu (SNMP - CISCO-RTTMON-MIB) — her iki rol; cihazda IP SLA yoksa [] döner
+// IP SLA oku: önce SNMP (CISCO-RTTMON-MIB); boşsa ve SSH bilgisi varsa "show ip sla summary" SSH fallback.
+// (IE4010 gibi RTTMON MIB'i yayınlamayan cihazlar SNMP'de boş döner ama CLI'da IP SLA çalışır)
+async function readIpSla(device) {
+    if (!device || device.status !== 'UP') return [];
+    let list = await ipSlaStatus(device);
+    if ((!list || list.length === 0) && device.sshUsername && device.sshPassword) {
+        list = await ipSlaViaSsh(device);
+    }
+    return list || [];
+}
+
+// IP SLA durumu — her iki rol; cihazda IP SLA yoksa [] döner
 router.get('/switches/:id/ip-sla', authenticate, async (req, res) => {
     const device = store.getSwitch(req.params.id);
     if (!device) return res.status(404).json({ error: 'Device not found' });
@@ -720,7 +731,7 @@ router.get('/switches/:id/ip-sla', authenticate, async (req, res) => {
         const cacheKey = `ipsla:${device.id}`;
         const cached = snmpCache.get(cacheKey);
         if (cached) return res.json(cached);
-        const list = await ipSlaStatus(device);
+        const list = await readIpSla(device);
         snmpCache.set(cacheKey, list, 15000); // 15 sn kısa cache (poll yükünü sınırla)
         res.json(list);
     } catch (e) {

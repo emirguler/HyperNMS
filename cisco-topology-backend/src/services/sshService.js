@@ -192,4 +192,78 @@ function setupWebSocket(server) {
     return wss;
 }
 
-module.exports = { setupWebSocket, probeDevice };
+// --- IP SLA via SSH ---
+// IE4010 gibi CISCO-RTTMON-MIB'i SNMP'de yayınlamayan cihazlar için:
+// "show ip sla summary" çıktısını SSH ile alıp Return Code'u parse eder.
+const IPSLA_SSH_ALGORITHMS = {
+    kex: ["ecdh-sha2-nistp256", "ecdh-sha2-nistp384", "ecdh-sha2-nistp521", "diffie-hellman-group-exchange-sha256", "diffie-hellman-group14-sha1"],
+    cipher: ["aes128-ctr", "aes192-ctr", "aes256-ctr", "aes128-cbc"],
+    serverHostKey: ["ssh-rsa", "ecdsa-sha2-nistp256", "ecdsa-sha2-nistp384"]
+};
+
+function runShowCommand(device, command) {
+    return new Promise((resolve, reject) => {
+        const conn = new ssh2();
+        let result = '';
+        let dataTimeout = null;
+        const hardTimeout = setTimeout(() => { try { conn.end(); } catch (e) {} resolve(result); }, 15000);
+        conn.on('ready', () => {
+            conn.shell((err, stream) => {
+                if (err) { clearTimeout(hardTimeout); try { conn.end(); } catch (e) {} return reject(err); }
+                stream.on('data', (data) => {
+                    result += data.toString();
+                    if (dataTimeout) clearTimeout(dataTimeout);
+                    dataTimeout = setTimeout(() => { clearTimeout(hardTimeout); try { stream.end(); conn.end(); } catch (e) {} resolve(result); }, 1500);
+                });
+                stream.on('close', () => { clearTimeout(hardTimeout); if (dataTimeout) clearTimeout(dataTimeout); try { conn.end(); } catch (e) {} resolve(result); });
+                stream.write('terminal length 0\n');
+                setTimeout(() => stream.write(command + '\n'), 500);
+            });
+        }).on('error', (err) => { clearTimeout(hardTimeout); reject(err); }).connect({
+            host: device.ip, port: 22,
+            username: device.sshUsername,
+            password: decryptPassword(device.sshPassword),
+            readyTimeout: 8000,
+            algorithms: IPSLA_SSH_ALGORITHMS
+        });
+    });
+}
+
+// "show ip sla summary" satırlarını parse et → [{ id, type, target, rtt, sense, status }]
+const SSH_CODE_MAP = [
+    [/\bOK\b/i, 'ok', 1], [/timeout/i, 'timeout', 4], [/disconnected/i, 'disconnected', 2],
+    [/over ?threshold/i, 'overThreshold', 3], [/busy/i, 'busy', 5], [/no ?connection/i, 'notConnected', 6],
+    [/dropped/i, 'dropped', 7],
+];
+function parseIpSlaSummary(text) {
+    const out = [];
+    const lines = String(text || '').replace(/\r/g, '').split('\n');
+    for (const line of lines) {
+        // Veri satırı: opsiyonel *,^,~ işareti + operasyon numarası ile başlar
+        const m = line.match(/^\s*[*^~]?\s*(\d+)\s+(\S+)\s+(\S+)\s+(.*)$/);
+        if (!m) continue;
+        const rest = m[4]; // RTT + Return Code + Last Run
+        let status = null, sense = 0;
+        for (const [re, st, sn] of SSH_CODE_MAP) { if (re.test(rest)) { status = st; sense = sn; break; } }
+        // Bilinen kod yoksa: sadece "last run" (ago/never) işareti varsa yine de kayıt say (non-ok)
+        if (!status) {
+            if (!/\bago\b|\bnever\b/i.test(rest)) continue; // muhtemelen başlık/gürültü satırı
+            status = 'other';
+        }
+        const rttM = rest.match(/RTT\s*=\s*(\d+)/i);
+        out.push({ id: m[1], type: m[2], target: m[3], rtt: rttM ? Number(rttM[1]) : null, sense, status });
+    }
+    return out;
+}
+
+async function ipSlaViaSsh(device) {
+    if (!device || !device.sshUsername || !device.sshPassword || isBlockedIP(device.ip)) return [];
+    try {
+        const raw = await runShowCommand(device, 'show ip sla summary');
+        return parseIpSlaSummary(raw);
+    } catch (e) {
+        return [];
+    }
+}
+
+module.exports = { setupWebSocket, probeDevice, ipSlaViaSsh };
