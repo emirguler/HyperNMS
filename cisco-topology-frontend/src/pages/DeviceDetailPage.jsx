@@ -229,7 +229,6 @@ const DlIcon = ({ size = 14 }) => (
 function ImportableBackupCard({ deviceId, hostname }) {
   const { isAdmin, authFetch } = useAuth();
   const [text, setText] = useState('');
-  const [source, setSource] = useState(null);   // 'backup' | 'live' | 'template'
   const [status, setStatus] = useState('loading'); // 'loading' | 'ready' | 'error'
   const [copied, setCopied] = useState(false);
 
@@ -239,8 +238,7 @@ function ImportableBackupCard({ deviceId, hostname }) {
       const res = await authFetch(`/switches/${deviceId}/importable-config`);
       if (res && res.ok) {
         const d = await res.json();
-        setText(d.text || '');
-        setSource(d.source || null);
+        setText(d.text || '');   // yedegi/erisimi olmayan cihazda '' -> kart bos gorunur
         setStatus('ready');
       } else { setStatus('error'); }
     } catch (e) { setStatus('error'); }
@@ -282,12 +280,7 @@ function ImportableBackupCard({ deviceId, hostname }) {
   return (
     <div className="chart-container" style={{ height: 400, display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}>
       <div style={{ padding: '13px 16px', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-        <h3 style={{ margin: 0, fontSize: '1rem', color: 'var(--primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
-          {t('importableBackup')}
-          {status === 'ready' && source === 'template' && (
-            <span style={{ fontSize: '0.66rem', fontWeight: 400, color: 'var(--text-muted)', marginLeft: 6 }}>{t('templateTag')}</span>
-          )}
-        </h3>
+        <h3 style={{ margin: 0, fontSize: '1rem', color: 'var(--primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{t('importableBackup')}</h3>
         <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
           <button className="btn btn-ghost btn-sm" onClick={load} disabled={busy} title={t('resetTemplate')} style={{ fontSize: '0.85rem', padding: '4px 8px', lineHeight: 1 }}>↺</button>
           <button className="btn btn-ghost btn-sm" onClick={download} disabled={busy || !text} title={t('download')} style={{ padding: '4px 8px', display: 'inline-flex', alignItems: 'center' }}><DlIcon /></button>
@@ -309,6 +302,7 @@ function ImportableBackupCard({ deviceId, hostname }) {
           onChange={(e) => setText(e.target.value)}
           spellCheck={false}
           wrap="off"
+          placeholder={t('noImportableConfig')}
           style={{
             flex: 1, minHeight: 0, width: '100%', boxSizing: 'border-box', resize: 'none',
             border: 'none', outline: 'none', background: 'transparent', color: 'var(--text-main)',

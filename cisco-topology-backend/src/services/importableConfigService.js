@@ -132,93 +132,6 @@ function buildFromParsed(device, p) {
     return L.join('\n');
 }
 
-// Yedegi/canli config'i olmayan cihazlar icin genel ornek sablon (elle duzenlenir).
-function exampleTemplate(device) {
-    const host = device.snmpHostname || device.name || 'SW-HOSTNAME';
-    const community = device.snmpCommunity || '<COMMUNITY>';
-    const sshUser = device.sshUsername || 'admin';
-    return `license right-to-use activate ipservices acceptEULA
-!
-conf t
-hostname ${host}
-!
-username ${sshUser} priv 15 pass <PAROLA>
-!
-enable password <ENABLE_PAROLA>
-!
-no ip cef optimize neighbor resolution
-!
-ip domain name isuscada.local
-!
-lldp run
-!
-service password-encryption
-no err dete cau link-flap
-!
-crypto key generate rsa modulus 1024
-!
-ip ssh ver 2
-!
-line vty 0 4
-login local
-transport input ssh
-exit
-!
-snmp-server community ${community} RO
-snmp-server host 11.1.3.43 ${community}
-ip ssh server algorithm mac hmac-sha2-256
-ip ssh server algorithm kex diffie-hellman-group14-sha1 diffie-hellman-group16-sha512
-
-!
-ip routing
-!
-vlan 5
-name TTVPN
-vlan 7
-name KAMERA
-vlan 8
-name OTOMASYON
-vlan 9
-name MODEM
-vlan 73
-name ANTEN
-vlan 130
-name MGMT
-exit
-!
-interface vlan 5
-ip add 192.168.14.9 255.255.255.0
-no sh
-interface vlan 7
-ip add 10.37.7.254 255.255.255.0
-no sh
-interface vlan 8
-ip add 10.37.8.126 255.255.255.128
-no sh
-interface vlan 9
-ip add 10.37.8.200 255.255.255.128
-no sh
-interface vlan 130
-ip add 10.36.100.8 255.255.255.0
-no sh
-exit
-!
-ip route 0.0.0.0 0.0.0.0 10.36.100.1
-!
-ip sla 1
- icmp-echo 11.1.1.1 source-ip 10.36.100.8
- frequency 5
-ip sla schedule 1 life forever start-time now
-!
-track 1 ip sla 1 reachability
-!
-ip route 11.1.0.0 255.255.0.0 192.168.14.1 track 1
-ip route 10.60.60.0 255.255.255.0 192.168.14.1 track 1
-!
-end
-!`;
-}
-
 // Cihaz icin importable config metnini uret. Once en yeni yedek; yoksa canli cek (best-effort).
 async function getImportableConfig(device) {
     let cfg = null, source = 'template', timestamp = null;
@@ -240,12 +153,10 @@ async function getImportableConfig(device) {
 
     if (cfg) {
         const parsed = parseRunningConfig(cfg);
-        // En azindan SVI ya da rota bulunduysa gercekten parse edilmis kabul et; degilse ornege dus.
-        if (parsed.svis.some(s => s.ip) || parsed.routes.length || parsed.vlans.length) {
-            return { text: buildFromParsed(device, parsed), source, timestamp };
-        }
+        return { text: buildFromParsed(device, parsed), source, timestamp };
     }
-    return { text: exampleTemplate(device), source: 'template', timestamp: null };
+    // Yedegi/erisimi olmayan cihazlarda kart bos gorunur (ornek sablon gosterilmez).
+    return { text: '', source: 'none', timestamp: null };
 }
 
-module.exports = { parseRunningConfig, buildFromParsed, exampleTemplate, getImportableConfig };
+module.exports = { parseRunningConfig, buildFromParsed, getImportableConfig };

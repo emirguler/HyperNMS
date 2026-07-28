@@ -118,7 +118,7 @@ const translations = {
     copyConfig: 'Copy',
     copied: 'Copied',
     resetTemplate: 'Reset',
-    templateTag: '(example)',
+    noImportableConfig: 'No backup for this device',
     save: 'Save',
     add: 'Add',
 
@@ -309,7 +309,7 @@ const translations = {
     copyConfig: 'Kopyala',
     copied: 'Kopyalandı',
     resetTemplate: 'Sıfırla',
-    templateTag: '(örnek)',
+    noImportableConfig: 'Bu cihaz için yedek yok',
     save: 'Kaydet',
     add: 'Ekle',
 
