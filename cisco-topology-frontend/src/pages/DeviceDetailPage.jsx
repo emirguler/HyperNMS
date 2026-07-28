@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
@@ -154,7 +154,7 @@ export default function DeviceDetailPage() {
         <div className="grid-detail-main" style={{ marginBottom: 24 }}>
           <PingHistoryChart deviceId={id} />
           <ConfigBackupCard deviceId={id} deviceName={displayHostname} />
-          <ImportableBackupCard details={details} hostname={displayHostname} />
+          <ImportableBackupCard deviceId={id} hostname={displayHostname} />
         </div>
       ) : (
         <div style={{ marginBottom: 24 }}>
@@ -216,127 +216,6 @@ export default function DeviceDetailPage() {
   );
 }
 
-// Yeni bir switch'e yapistirilabilir hazir provizyon sablonu olusturur.
-// Cihazin bilinen gercek degerleri (hostname, SNMP community, SSH kullanici adi) otomatik doldurulur.
-// GUVENLIK: parolalar yer tutucu birakilir; repo'ya gercek parola YAZILMAZ. IP'ler ornek olup elle duzenlenir.
-function buildImportableConfig(details, hostname) {
-  const host = String(hostname || details?.name || 'SW-HOSTNAME').trim();
-  const community = String(details?.snmpCommunity || '<COMMUNITY>').trim();
-  const sshUser = String(details?.sshUsername || 'admin').trim();
-  return `license right-to-use activate ipservices acceptEULA
-!
-conf t
-hostname ${host}
-!
-username ${sshUser} priv 15 pass <PAROLA>
-!
-enable password <ENABLE_PAROLA>
-!
-no ip cef optimize neighbor resolution
-!
-ip domain name isuscada.local
-!
-lldp run
-!
-service password-encryption
-no err dete cau link-flap
-!
-crypto key generate rsa modulus 1024
-!
-ip ssh ver 2
-!
-line vty 0 4
-login local
-transport input ssh
-exit
-!
-snmp-server community ${community} RO
-snmp-server host 11.1.3.43 ${community}
-ip ssh server algorithm mac hmac-sha2-256
-ip ssh server algorithm kex diffie-hellman-group14-sha1 diffie-hellman-group16-sha512
-
-!
-ip routing
-!
-vlan 5
-name TTVPN
-vlan 7
-name KAMERA
-vlan 8
-name OTOMASYON
-vlan 9
-name MODEM
-vlan 73
-name ANTEN
-vlan 130
-name MGMT
-exit
-!
-inter vlan 5
-ip add 192.168.14.9 255.255.255.0
-no sh
-interface vlan 7
-ip add 10.37.7.254 255.255.255.0
-no sh
-interface vlan 8
-ip add 10.37.8.126 255.255.255.128
-no sh
-interface vlan 9
-ip add 10.37.8.200 255.255.255.128
-no sh
-interface vlan 130
-ip add 10.36.100.8 255.255.255.0
-no sh
-exit
-!
-ip route 0.0.0.0 0.0.0.0 10.36.100.1
-!
-!
-!
-ip sla 1
- icmp-echo 11.1.1.1 source-ip 10.36.100.8
- frequency 5
-ip sla schedule 1 life forever start-time now
-!
-track 1 ip sla 1 reachability
-exit
-!
-ip route 11.1.0.0 255.255.0.0 192.168.14.1 track 1
-ip route 10.60.60.0 255.255.255.0 192.168.14.1 track 1
-ip route 11.1.0.0 255.255.0.0 10.37.8.130 10
-ip route 10.60.60.0 255.255.255.0 10.37.8.130 10
-ip route 11.1.1.1 255.255.255.255 192.168.14.1
-ip route 11.1.220.1 255.255.255.255 10.36.100.1
-ip route 11.1.220.11 255.255.255.255 10.36.100.1
-ip route 11.1.220.12 255.255.255.255 10.36.100.1
-ip route 11.1.220.13 255.255.255.255 10.36.100.1
-ip route 11.1.220.14 255.255.255.255 10.36.100.1
-!
-
-
-inter range gi1/3-4
-sw mode trunk
-sw trunk all vlan 1,5,73,130
-sw trunk native vlan 73
-!
-inter gi1/5
-sw mode acc
-sw acc vlan
-span portf
-inter gi1/6
-sw mode acc
-sw acc vlan 104
-span portf
-end
-!
-inter range gi1/7-10
-sw mode acc
-sw acc vlan 62
-span portf
-end
-!`;
-}
-
 const DlIcon = ({ size = 14 }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -345,22 +224,32 @@ const DlIcon = ({ size = 14 }) => (
   </svg>
 );
 
-// Importable Backup karti: yeni switch'e kopyala-yapistir provizyon konfigi (duzenlenebilir).
-function ImportableBackupCard({ details, hostname }) {
-  const { isAdmin } = useAuth();
-  const [text, setText] = useState(() => buildImportableConfig(details, hostname));
+// Importable Backup karti: cihazin GERCEK running-config'inden uretilen, yeni switch'e
+// kopyala-yapistir provizyon konfigi. Backend LAN/IP/route'lari cihaza gore doldurur; kart duzenlenebilir.
+function ImportableBackupCard({ deviceId, hostname }) {
+  const { isAdmin, authFetch } = useAuth();
+  const [text, setText] = useState('');
+  const [source, setSource] = useState(null);   // 'backup' | 'live' | 'template'
+  const [status, setStatus] = useState('loading'); // 'loading' | 'ready' | 'error'
   const [copied, setCopied] = useState(false);
-  // Cihaz degisince (baska cihaza gecilirse) sablonu tazele; ayni cihazda kullanici duzenlemesini koru.
-  const sig = `${details?.ip || ''}|${hostname || ''}`;
-  const lastSig = useRef(sig);
-  useEffect(() => {
-    if (lastSig.current !== sig) {
-      lastSig.current = sig;
-      setText(buildImportableConfig(details, hostname));
-    }
-  }, [sig, details, hostname]);
+
+  const load = useCallback(async () => {
+    setStatus('loading');
+    try {
+      const res = await authFetch(`/switches/${deviceId}/importable-config`);
+      if (res && res.ok) {
+        const d = await res.json();
+        setText(d.text || '');
+        setSource(d.source || null);
+        setStatus('ready');
+      } else { setStatus('error'); }
+    } catch (e) { setStatus('error'); }
+  }, [deviceId, authFetch]);
+
+  useEffect(() => { load(); }, [load]);
 
   const copy = async () => {
+    if (!text) return;
     try {
       if (navigator.clipboard && window.isSecureContext) {
         await navigator.clipboard.writeText(text);
@@ -376,6 +265,7 @@ function ImportableBackupCard({ details, hostname }) {
   };
 
   const download = () => {
+    if (!text) return;
     const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -385,35 +275,48 @@ function ImportableBackupCard({ details, hostname }) {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
-  const reset = () => setText(buildImportableConfig(details, hostname));
-
   // Yalnizca admin (parent zaten admin blogunda render ediyor; savunma amacli tekrar).
   if (!isAdmin) return null;
 
+  const busy = status === 'loading';
   return (
     <div className="chart-container" style={{ height: 400, display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}>
       <div style={{ padding: '13px 16px', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-        <h3 style={{ margin: 0, fontSize: '1rem', color: 'var(--primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{t('importableBackup')}</h3>
+        <h3 style={{ margin: 0, fontSize: '1rem', color: 'var(--primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
+          {t('importableBackup')}
+          {status === 'ready' && source === 'template' && (
+            <span style={{ fontSize: '0.66rem', fontWeight: 400, color: 'var(--text-muted)', marginLeft: 6 }}>{t('templateTag')}</span>
+          )}
+        </h3>
         <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-          <button className="btn btn-ghost btn-sm" onClick={reset} title={t('resetTemplate')} style={{ fontSize: '0.85rem', padding: '4px 8px', lineHeight: 1 }}>↺</button>
-          <button className="btn btn-ghost btn-sm" onClick={download} title={t('download')} style={{ padding: '4px 8px', display: 'inline-flex', alignItems: 'center' }}><DlIcon /></button>
-          <button className="btn btn-primary btn-sm" onClick={copy} style={{ fontSize: '0.7rem', padding: '4px 10px', minWidth: 84 }}>
+          <button className="btn btn-ghost btn-sm" onClick={load} disabled={busy} title={t('resetTemplate')} style={{ fontSize: '0.85rem', padding: '4px 8px', lineHeight: 1 }}>↺</button>
+          <button className="btn btn-ghost btn-sm" onClick={download} disabled={busy || !text} title={t('download')} style={{ padding: '4px 8px', display: 'inline-flex', alignItems: 'center' }}><DlIcon /></button>
+          <button className="btn btn-primary btn-sm" onClick={copy} disabled={busy || !text} style={{ fontSize: '0.7rem', padding: '4px 10px', minWidth: 84 }}>
             {copied ? `✓ ${t('copied')}` : t('copyConfig')}
           </button>
         </div>
       </div>
-      <textarea
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        spellCheck={false}
-        wrap="off"
-        style={{
-          flex: 1, minHeight: 0, width: '100%', boxSizing: 'border-box', resize: 'none',
-          border: 'none', outline: 'none', background: 'transparent', color: 'var(--text-main)',
-          fontFamily: 'monospace', fontSize: '0.72rem', lineHeight: 1.5, padding: '12px 16px',
-          whiteSpace: 'pre', overflow: 'auto'
-        }}
-      />
+      {status === 'loading' ? (
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>…</div>
+      ) : status === 'error' ? (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+          {t('loadFailed')}
+          <button className="btn btn-ghost btn-sm" onClick={load}>{t('resetTemplate')}</button>
+        </div>
+      ) : (
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          spellCheck={false}
+          wrap="off"
+          style={{
+            flex: 1, minHeight: 0, width: '100%', boxSizing: 'border-box', resize: 'none',
+            border: 'none', outline: 'none', background: 'transparent', color: 'var(--text-main)',
+            fontFamily: 'monospace', fontSize: '0.72rem', lineHeight: 1.5, padding: '12px 16px',
+            whiteSpace: 'pre', overflow: 'auto'
+          }}
+        />
+      )}
     </div>
   );
 }

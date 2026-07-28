@@ -6,6 +6,7 @@ const { encryptPassword, decryptPassword } = require('../utils/crypto');
 const { getDeviceDetails, discoverNeighbors, searchMAC, inventoryAll, ipSlaStatus } = require('../services/snmpService');
 const { probeDevice, ipSlaViaSsh } = require('../services/sshService');
 const { listBackups, getBackup, backupDevice } = require('../services/configBackupService');
+const { getImportableConfig } = require('../services/importableConfigService');
 const { identifyFromSsh } = require('../utils/sshIdentify');
 const { logAction } = require('../services/auditLog');
 const { snmpCache } = require('../utils/cache');
@@ -807,6 +808,18 @@ router.post('/switches/:id/config-backups/run', authenticate, requireAdmin, asyn
         res.json({ success: true, backups: listBackups(device.id) });
     } catch (e) {
         res.status(500).json({ error: 'Backup failed' });
+    }
+});
+
+// Importable Backup: cihazin gercek running-config'inden yeni switch'e yapistirilabilir sablon
+router.get('/switches/:id/importable-config', authenticate, requireAdmin, async (req, res) => {
+    const device = store.getSwitch(req.params.id);
+    if (!device) return res.status(404).json({ error: 'Device not found' });
+    try {
+        const result = await getImportableConfig(device);
+        res.json(result);
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to build importable config' });
     }
 });
 
