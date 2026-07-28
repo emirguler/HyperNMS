@@ -114,6 +114,10 @@ const translations = {
     runningConfig: 'Running Config',
     loadFailed: 'Failed to load',
     linesShort: 'lines',
+    importableBackup: 'Importable Backup',
+    copyConfig: 'Copy',
+    copied: 'Copied',
+    resetTemplate: 'Reset',
     save: 'Save',
     add: 'Add',
 
@@ -300,6 +304,10 @@ const translations = {
     runningConfig: 'Running Config',
     loadFailed: 'Yüklenemedi',
     linesShort: 'satır',
+    importableBackup: 'İçe Aktarılabilir Yedek',
+    copyConfig: 'Kopyala',
+    copied: 'Kopyalandı',
+    resetTemplate: 'Sıfırla',
     save: 'Kaydet',
     add: 'Ekle',
 

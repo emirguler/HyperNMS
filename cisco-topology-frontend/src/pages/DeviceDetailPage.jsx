@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
@@ -86,15 +86,17 @@ export default function DeviceDetailPage() {
             <PingIcon size={16} /> {t('pingTool')}
           </button>
         )}
-        {slaBadge && (
-          <span className="status-badge" title="IP SLA" style={{ marginLeft: 'auto', background: slaBadge.bg, color: slaBadge.color, border: `1px solid ${slaBadge.border}` }}>{slaBadge.label}</span>
-        )}
-        <span className={`status-badge ${details.status === 'UP' ? 'status-up' : 'status-down'}`} style={{ marginLeft: slaBadge ? 0 : 'auto' }}>{details.status}</span>
       </div>
 
       {/* SATIR 1: Bilgi kartı (daraltıldı, 2 sütun) + CPU + RAM (küçültülmüş) */}
       <div className="grid-detail-main" style={{ marginBottom: 24 }}>
         <div className="chart-container" style={{ padding: '20px 24px' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+            {slaBadge && (
+              <span className="status-badge" title="IP SLA" style={{ background: slaBadge.bg, color: slaBadge.color, border: `1px solid ${slaBadge.border}` }}>{slaBadge.label}</span>
+            )}
+            <span className={`status-badge ${details.status === 'UP' ? 'status-up' : 'status-down'}`}>{details.status}</span>
+          </div>
           <div className="grid-stats" style={{ gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px 20px', marginBottom: details.sshPasswordSet !== undefined ? 16 : 0 }}>
             {[
               { label: 'Real Hostname', value: displayHostname, color: 'var(--primary)' },
@@ -152,7 +154,7 @@ export default function DeviceDetailPage() {
         <div className="grid-detail-main" style={{ marginBottom: 24 }}>
           <PingHistoryChart deviceId={id} />
           <ConfigBackupCard deviceId={id} deviceName={displayHostname} />
-          <ShowRunCard deviceId={id} />
+          <ImportableBackupCard details={details} hostname={displayHostname} />
         </div>
       ) : (
         <div style={{ marginBottom: 24 }}>
@@ -214,62 +216,204 @@ export default function DeviceDetailPage() {
   );
 }
 
-function ShowRunCard({ deviceId }) {
-  const { isAdmin, authFetch } = useAuth();
-  const [output, setOutput] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+// Yeni bir switch'e yapistirilabilir hazir provizyon sablonu olusturur.
+// Cihazin bilinen gercek degerleri (hostname, SNMP community, SSH kullanici adi) otomatik doldurulur.
+// GUVENLIK: parolalar yer tutucu birakilir; repo'ya gercek parola YAZILMAZ. IP'ler ornek olup elle duzenlenir.
+function buildImportableConfig(details, hostname) {
+  const host = String(hostname || details?.name || 'SW-HOSTNAME').trim();
+  const community = String(details?.snmpCommunity || '<COMMUNITY>').trim();
+  const sshUser = String(details?.sshUsername || 'admin').trim();
+  return `license right-to-use activate ipservices acceptEULA
+!
+conf t
+hostname ${host}
+!
+username ${sshUser} priv 15 pass <PAROLA>
+!
+enable password <ENABLE_PAROLA>
+!
+no ip cef optimize neighbor resolution
+!
+ip domain name isuscada.local
+!
+lldp run
+!
+service password-encryption
+no err dete cau link-flap
+!
+crypto key generate rsa modulus 1024
+!
+ip ssh ver 2
+!
+line vty 0 4
+login local
+transport input ssh
+exit
+!
+snmp-server community ${community} RO
+snmp-server host 11.1.3.43 ${community}
+ip ssh server algorithm mac hmac-sha2-256
+ip ssh server algorithm kex diffie-hellman-group14-sha1 diffie-hellman-group16-sha512
 
-  const fetchShowRun = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const res = await authFetch(`/switches/${deviceId}/exec`, {
-        method: 'POST',
-        body: JSON.stringify({ command: 'show running-config' })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setOutput(data.output || 'No output');
-      } else {
-        const data = await res.json().catch(() => ({}));
-        setError(data.error || 'Failed');
-      }
-    } catch (e) {
-      setError('Connection failed');
-    } finally {
-      setLoading(false);
+!
+ip routing
+!
+vlan 5
+name TTVPN
+vlan 7
+name KAMERA
+vlan 8
+name OTOMASYON
+vlan 9
+name MODEM
+vlan 73
+name ANTEN
+vlan 130
+name MGMT
+exit
+!
+inter vlan 5
+ip add 192.168.14.9 255.255.255.0
+no sh
+interface vlan 7
+ip add 10.37.7.254 255.255.255.0
+no sh
+interface vlan 8
+ip add 10.37.8.126 255.255.255.128
+no sh
+interface vlan 9
+ip add 10.37.8.200 255.255.255.128
+no sh
+interface vlan 130
+ip add 10.36.100.8 255.255.255.0
+no sh
+exit
+!
+ip route 0.0.0.0 0.0.0.0 10.36.100.1
+!
+!
+!
+ip sla 1
+ icmp-echo 11.1.1.1 source-ip 10.36.100.8
+ frequency 5
+ip sla schedule 1 life forever start-time now
+!
+track 1 ip sla 1 reachability
+exit
+!
+ip route 11.1.0.0 255.255.0.0 192.168.14.1 track 1
+ip route 10.60.60.0 255.255.255.0 192.168.14.1 track 1
+ip route 11.1.0.0 255.255.0.0 10.37.8.130 10
+ip route 10.60.60.0 255.255.255.0 10.37.8.130 10
+ip route 11.1.1.1 255.255.255.255 192.168.14.1
+ip route 11.1.220.1 255.255.255.255 10.36.100.1
+ip route 11.1.220.11 255.255.255.255 10.36.100.1
+ip route 11.1.220.12 255.255.255.255 10.36.100.1
+ip route 11.1.220.13 255.255.255.255 10.36.100.1
+ip route 11.1.220.14 255.255.255.255 10.36.100.1
+!
+
+
+inter range gi1/3-4
+sw mode trunk
+sw trunk all vlan 1,5,73,130
+sw trunk native vlan 73
+!
+inter gi1/5
+sw mode acc
+sw acc vlan
+span portf
+inter gi1/6
+sw mode acc
+sw acc vlan 104
+span portf
+end
+!
+inter range gi1/7-10
+sw mode acc
+sw acc vlan 62
+span portf
+end
+!`;
+}
+
+const DlIcon = ({ size = 14 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <polyline points="7 10 12 15 17 10" />
+    <line x1="12" y1="15" x2="12" y2="3" />
+  </svg>
+);
+
+// Importable Backup karti: yeni switch'e kopyala-yapistir provizyon konfigi (duzenlenebilir).
+function ImportableBackupCard({ details, hostname }) {
+  const { isAdmin } = useAuth();
+  const [text, setText] = useState(() => buildImportableConfig(details, hostname));
+  const [copied, setCopied] = useState(false);
+  // Cihaz degisince (baska cihaza gecilirse) sablonu tazele; ayni cihazda kullanici duzenlemesini koru.
+  const sig = `${details?.ip || ''}|${hostname || ''}`;
+  const lastSig = useRef(sig);
+  useEffect(() => {
+    if (lastSig.current !== sig) {
+      lastSig.current = sig;
+      setText(buildImportableConfig(details, hostname));
     }
+  }, [sig, details, hostname]);
+
+  const copy = async () => {
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.focus(); ta.select();
+        document.execCommand('copy'); ta.remove();
+      }
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    } catch (e) { /* ignore */ }
   };
 
-  // Running config yalnızca admin'e. (Hook'lardan SONRA dönülüyor — hook sırası bozulmasın.)
-  // Backend'de de requireAdmin var: UI'ı gizlemek tek başına yetki denetimi değildir.
+  const download = () => {
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${String(hostname || 'switch').replace(/[^a-zA-Z0-9_.-]/g, '_')}-importable.cfg`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  const reset = () => setText(buildImportableConfig(details, hostname));
+
+  // Yalnizca admin (parent zaten admin blogunda render ediyor; savunma amacli tekrar).
   if (!isAdmin) return null;
 
   return (
     <div className="chart-container" style={{ height: 400, display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}>
-      <div style={{ padding: '13px 16px', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h3 style={{ margin: 0, fontSize: '1rem', color: 'var(--primary)' }}>Running Config</h3>
-        <button className="btn btn-primary btn-sm" onClick={fetchShowRun} disabled={loading} style={{ fontSize: '0.7rem', padding: '4px 10px' }}>
-          {loading ? '…' : output ? 'Refresh' : 'Load Config'}
-        </button>
+      <div style={{ padding: '13px 16px', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+        <h3 style={{ margin: 0, fontSize: '1rem', color: 'var(--primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{t('importableBackup')}</h3>
+        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+          <button className="btn btn-ghost btn-sm" onClick={reset} title={t('resetTemplate')} style={{ fontSize: '0.85rem', padding: '4px 8px', lineHeight: 1 }}>↺</button>
+          <button className="btn btn-ghost btn-sm" onClick={download} title={t('download')} style={{ padding: '4px 8px', display: 'inline-flex', alignItems: 'center' }}><DlIcon /></button>
+          <button className="btn btn-primary btn-sm" onClick={copy} style={{ fontSize: '0.7rem', padding: '4px 10px', minWidth: 84 }}>
+            {copied ? `✓ ${t('copied')}` : t('copyConfig')}
+          </button>
+        </div>
       </div>
-      <div style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
-        {error ? (
-          <div style={{ padding: 16, color: 'var(--danger)', fontSize: '0.85rem' }}>{error}</div>
-        ) : output ? (
-          <pre style={{
-            margin: 0, padding: '12px 16px', fontSize: '0.72rem', lineHeight: 1.5,
-            fontFamily: 'monospace', color: 'var(--text-main)', whiteSpace: 'pre'
-          }}>
-            {output}
-          </pre>
-        ) : (
-          <div style={{ padding: '28px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
-            {loading ? 'Yükleniyor…' : 'Yapılandırmayı görüntülemek için “Load Config”'}
-          </div>
-        )}
-      </div>
+      <textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        spellCheck={false}
+        wrap="off"
+        style={{
+          flex: 1, minHeight: 0, width: '100%', boxSizing: 'border-box', resize: 'none',
+          border: 'none', outline: 'none', background: 'transparent', color: 'var(--text-main)',
+          fontFamily: 'monospace', fontSize: '0.72rem', lineHeight: 1.5, padding: '12px 16px',
+          whiteSpace: 'pre', overflow: 'auto'
+        }}
+      />
     </div>
   );
 }
