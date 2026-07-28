@@ -92,65 +92,73 @@ export default function DeviceDetailPage() {
         <span className={`status-badge ${details.status === 'UP' ? 'status-up' : 'status-down'}`} style={{ marginLeft: slaBadge ? 0 : 'auto' }}>{details.status}</span>
       </div>
 
-      <div className="chart-container" style={{ marginBottom: 24, padding: '24px 32px' }}>
-        <div className="grid-stats" style={{ textAlign: 'center', marginBottom: details.snmpCommunity || details.sshUsername ? 20 : 0 }}>
-          {[
-            { label: 'Real Hostname', value: displayHostname, color: 'var(--primary)' },
-            { label: 'IP Address', value: details.ip, mono: true },
-            { label: 'System Uptime', value: details.uptime || '-' },
-            { label: 'Vendor', value: details.detectedVendor || '-' }
-          ].map((item, i) => (
-            <div key={i} style={i < 3 ? { borderRight: '1px solid var(--border-color)' } : {}}>
-              <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 1 }}>{item.label}</div>
-              <div style={{ fontSize: '1.2rem', fontWeight: 600, color: item.color, fontFamily: item.mono ? 'monospace' : undefined }}>{item.value}</div>
-            </div>
-          ))}
-        </div>
-        {details.sshPasswordSet !== undefined && (
-          <div style={{ display: 'flex', gap: 32, borderTop: '1px solid var(--border-color)', paddingTop: 16 }}>
-            <div>
-              <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>Topology Page</span>
-              <div style={{ fontSize: '0.9rem', marginTop: 4, color: 'var(--text-main)' }}>
-                🗺️ {topoTabs.find(t => t.id === details.topologyPage)?.name || details.topologyPage || 'Main Topology'}
+      {/* SATIR 1: Bilgi kartı (daraltıldı, 2 sütun) + CPU + RAM (küçültülmüş) */}
+      <div className="grid-detail-main" style={{ marginBottom: 24 }}>
+        <div className="chart-container" style={{ padding: '20px 24px' }}>
+          <div className="grid-stats" style={{ gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px 20px', marginBottom: details.sshPasswordSet !== undefined ? 16 : 0 }}>
+            {[
+              { label: 'Real Hostname', value: displayHostname, color: 'var(--primary)' },
+              { label: 'IP Address', value: details.ip, mono: true },
+              { label: 'System Uptime', value: details.uptime || '-' },
+              { label: 'Vendor', value: details.detectedVendor || '-' }
+            ].map((item, i) => (
+              <div key={i}>
+                <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>{item.label}</div>
+                <div style={{ fontSize: '1.05rem', fontWeight: 600, color: item.color, fontFamily: item.mono ? 'monospace' : undefined, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={String(item.value ?? '')}>{item.value}</div>
               </div>
-            </div>
-            <div>
-              <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>SNMP Community</span>
-              <div style={{ fontFamily: 'monospace', fontSize: '0.9rem', marginTop: 4, color: details.snmpCommunity ? 'var(--text-main)' : 'var(--danger)' }}>
-                {details.snmpCommunity || 'Not set  ✕'}
-              </div>
-            </div>
-            <div>
-              <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>SSH Username</span>
-              <div style={{ fontFamily: 'monospace', fontSize: '0.9rem', marginTop: 4, color: details.sshUsername ? 'var(--text-main)' : 'var(--danger)' }}>
-                {details.sshUsername || 'Not set  ✕'}
-              </div>
-            </div>
-            <div>
-              <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>SSH Password</span>
-              <div style={{ fontSize: '0.9rem', marginTop: 4, color: details.sshPasswordSet ? 'var(--success)' : 'var(--danger)' }}>
-                {details.sshPasswordSet ? '••••••••  ✓' : 'Not set  ✕'}
-              </div>
-            </div>
-            {details.model && (
-              <div>
-                <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>Model</span>
-                <div style={{ fontSize: '0.9rem', marginTop: 4 }}>{details.model}</div>
-              </div>
-            )}
+            ))}
           </div>
-        )}
-      </div>
-
-      <div className={`grid-detail-main${isAdmin ? ' with-backup' : ''}`} style={{ marginBottom: 24 }}>
-        <PingHistoryChart deviceId={id} />
+          {details.sshPasswordSet !== undefined && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px 24px', borderTop: '1px solid var(--border-color)', paddingTop: 14 }}>
+              <div>
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>Topology Page</span>
+                <div style={{ fontSize: '0.85rem', marginTop: 4, color: 'var(--text-main)' }}>
+                  🗺️ {topoTabs.find(t => t.id === details.topologyPage)?.name || details.topologyPage || 'Main Topology'}
+                </div>
+              </div>
+              <div>
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>SNMP Community</span>
+                <div style={{ fontFamily: 'monospace', fontSize: '0.85rem', marginTop: 4, color: details.snmpCommunity ? 'var(--text-main)' : 'var(--danger)' }}>
+                  {details.snmpCommunity || 'Not set  ✕'}
+                </div>
+              </div>
+              <div>
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>SSH Username</span>
+                <div style={{ fontFamily: 'monospace', fontSize: '0.85rem', marginTop: 4, color: details.sshUsername ? 'var(--text-main)' : 'var(--danger)' }}>
+                  {details.sshUsername || 'Not set  ✕'}
+                </div>
+              </div>
+              <div>
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>SSH Password</span>
+                <div style={{ fontSize: '0.85rem', marginTop: 4, color: details.sshPasswordSet ? 'var(--success)' : 'var(--danger)' }}>
+                  {details.sshPasswordSet ? '••••••••  ✓' : 'Not set  ✕'}
+                </div>
+              </div>
+              {details.model && (
+                <div>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>Model</span>
+                  <div style={{ fontSize: '0.85rem', marginTop: 4 }}>{details.model}</div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
         <Gauge value={details.cpu || 0} label="CPU Load" color={(details.cpu || 0) > 80 ? 'var(--danger)' : 'var(--primary)'} />
         <Gauge value={details.ram || 0} label="RAM Usage" color={(details.ram || 0) > 80 ? 'var(--danger)' : '#8b5cf6'} />
-        {isAdmin && <ConfigBackupCard deviceId={id} deviceName={displayHostname} />}
       </div>
 
-      {/* Show Run Kartı */}
-      <ShowRunCard deviceId={id} />
+      {/* SATIR 2: Ping + Config Backup + Running Config (eşit genişlik, ping ile aynı yükseklik) */}
+      {isAdmin ? (
+        <div className="grid-detail-main" style={{ marginBottom: 24 }}>
+          <PingHistoryChart deviceId={id} />
+          <ConfigBackupCard deviceId={id} deviceName={displayHostname} />
+          <ShowRunCard deviceId={id} />
+        </div>
+      ) : (
+        <div style={{ marginBottom: 24 }}>
+          <PingHistoryChart deviceId={id} />
+        </div>
+      )}
 
       <div className="chart-container" style={{ padding: 0, overflow: 'hidden', marginTop: 24 }}>
         <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border-color)' }}>
@@ -211,7 +219,6 @@ function ShowRunCard({ deviceId }) {
   const [output, setOutput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [expanded, setExpanded] = useState(false);
 
   const fetchShowRun = async () => {
     setLoading(true);
@@ -224,7 +231,6 @@ function ShowRunCard({ deviceId }) {
       if (res.ok) {
         const data = await res.json();
         setOutput(data.output || 'No output');
-        setExpanded(true);
       } else {
         const data = await res.json().catch(() => ({}));
         setError(data.error || 'Failed');
@@ -241,32 +247,29 @@ function ShowRunCard({ deviceId }) {
   if (!isAdmin) return null;
 
   return (
-    <div className="chart-container" style={{ marginTop: 24, padding: 0, overflow: 'hidden' }}>
-      <div style={{ padding: '12px 24px', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--primary)' }}>Running Configuration</h3>
-        <div style={{ display: 'flex', gap: 8 }}>
-          {output && (
-            <button className="btn btn-ghost btn-sm" onClick={() => setExpanded(!expanded)}>
-              {expanded ? 'Collapse' : 'Expand'}
-            </button>
-          )}
-          <button className="btn btn-primary btn-sm" onClick={fetchShowRun} disabled={loading}>
-            {loading ? 'Loading...' : output ? 'Refresh' : 'Load Config'}
-          </button>
-        </div>
+    <div className="chart-container" style={{ height: 400, display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}>
+      <div style={{ padding: '13px 16px', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h3 style={{ margin: 0, fontSize: '1rem', color: 'var(--primary)' }}>Running Config</h3>
+        <button className="btn btn-primary btn-sm" onClick={fetchShowRun} disabled={loading} style={{ fontSize: '0.7rem', padding: '4px 10px' }}>
+          {loading ? '…' : output ? 'Refresh' : 'Load Config'}
+        </button>
       </div>
-      {error && (
-        <div style={{ padding: '12px 24px', color: 'var(--danger)', fontSize: '0.85rem' }}>{error}</div>
-      )}
-      {expanded && output && (
-        <pre style={{
-          margin: 0, padding: '16px 24px', fontSize: '0.75rem', lineHeight: 1.5,
-          fontFamily: 'monospace', color: 'var(--text-main)', background: 'rgba(0,0,0,0.3)',
-          maxHeight: 500, overflowY: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-all'
-        }}>
-          {output}
-        </pre>
-      )}
+      <div style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
+        {error ? (
+          <div style={{ padding: 16, color: 'var(--danger)', fontSize: '0.85rem' }}>{error}</div>
+        ) : output ? (
+          <pre style={{
+            margin: 0, padding: '12px 16px', fontSize: '0.72rem', lineHeight: 1.5,
+            fontFamily: 'monospace', color: 'var(--text-main)', whiteSpace: 'pre'
+          }}>
+            {output}
+          </pre>
+        ) : (
+          <div style={{ padding: '28px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
+            {loading ? 'Yükleniyor…' : 'Yapılandırmayı görüntülemek için “Load Config”'}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
