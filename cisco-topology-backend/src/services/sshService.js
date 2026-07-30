@@ -266,4 +266,50 @@ async function ipSlaViaSsh(device) {
     }
 }
 
-module.exports = { setupWebSocket, probeDevice, ipSlaViaSsh, runShowCommand };
+// Toplu komut calistirma (Command-line sayfasi).
+//   config=false -> komutlar dogrudan exec modunda calisir (show/display).
+//   config=true  -> "configure terminal ... end" ile sarmalanip konfig satirlari gonderilir.
+// Ham shell ciktisini dondurur. GUVENLIK dogrulamasi (mod/denylist) ROUTE katmaninda yapilir.
+function runCommands(device, lines, { config = false, save = false, timeoutMs = 25000 } = {}) {
+    return new Promise((resolve, reject) => {
+        const conn = new ssh2();
+        let result = '';
+        let dataTimeout = null;
+        let closed = false;
+        const finish = () => { closed = true; clearTimeout(hardTimeout); if (dataTimeout) clearTimeout(dataTimeout); try { conn.end(); } catch (e) {} resolve(result); };
+        const hardTimeout = setTimeout(finish, timeoutMs);
+        conn.on('ready', () => {
+            conn.shell((err, stream) => {
+                if (err) { closed = true; clearTimeout(hardTimeout); try { conn.end(); } catch (e) {} return reject(err); }
+                stream.on('data', (data) => {
+                    result += data.toString();
+                    // Her veri geldiginde idle timer'i sifirla — 2sn veri gelmezse bitir
+                    if (dataTimeout) clearTimeout(dataTimeout);
+                    dataTimeout = setTimeout(() => { try { stream.end(); } catch (e) {} finish(); }, 2000);
+                });
+                stream.on('close', () => finish());
+                const script = ['terminal length 0'];
+                if (config) script.push('configure terminal');
+                for (const l of lines) script.push(l);
+                if (config && save) script.push('do write memory'); // config modunda kalarak startup-config'e kaydet
+                if (config) script.push('end');
+                // Satirlari araliklarla yaz — IOS input buffer'ini tasirmadan echo'yu bekle
+                let i = 0;
+                const writeNext = () => {
+                    if (closed || i >= script.length) return;
+                    try { stream.write(script[i++] + '\n'); } catch (e) {}
+                    setTimeout(writeNext, 200);
+                };
+                setTimeout(writeNext, 400);
+            });
+        }).on('error', (err) => { if (!closed) { closed = true; clearTimeout(hardTimeout); reject(err); } }).connect({
+            host: device.ip, port: 22,
+            username: device.sshUsername,
+            password: decryptPassword(device.sshPassword),
+            readyTimeout: 8000,
+            algorithms: IPSLA_SSH_ALGORITHMS
+        });
+    });
+}
+
+module.exports = { setupWebSocket, probeDevice, ipSlaViaSsh, runShowCommand, runCommands };

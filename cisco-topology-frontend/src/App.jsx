@@ -21,6 +21,7 @@ const UsersPage = lazy(() => import('./pages/UsersPage'));
 const AuditPage = lazy(() => import('./pages/AuditPage'));
 const GeoMapPage = lazy(() => import('./pages/GeoMapPage'));
 const MacSearchPage = lazy(() => import('./pages/MacSearchPage'));
+const CommandLinePage = lazy(() => import('./pages/CommandLinePage'));
 import { t, getLang, setLang, onLangChange } from './i18n';
 import { API_BASE } from './config';
 // topology tabs now come from AppContext
@@ -116,6 +117,7 @@ function AppLayout() {
             <Route path="/audit" element={<AuditPage />} />
             <Route path="/geomap" element={<GeoMapPage />} />
             <Route path="/mac-search" element={<MacSearchPage />} />
+            <Route path="/command-line" element={<CommandLinePage />} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>
           <TerminalPanel />

@@ -44,6 +44,7 @@ export default function Navbar({ onAddDevice }) {
             </div>
 
             <button className={cls('/mac-search')} onClick={() => go('/mac-search')}>MAC Search</button>
+            {isAdmin && <button className={cls('/command-line')} onClick={() => go('/command-line')}>Command-line</button>}
             {isAdmin && <button className={cls('/audit')} onClick={() => go('/audit')}>Audit Log</button>}
 
             {isAdmin && (path === '/devices' || path.startsWith('/topology')) && onAddDevice && (
@@ -75,6 +76,7 @@ export default function Navbar({ onAddDevice }) {
           <button className={cls('/topology')} onClick={() => go('/topology')}>Topology Map</button>
           <button className={cls('/geomap')} onClick={() => go('/geomap')}>Geographic Map</button>
           <button className={cls('/mac-search')} onClick={() => go('/mac-search')}>MAC Search</button>
+          {isAdmin && <button className={cls('/command-line')} onClick={() => go('/command-line')}>Command-line</button>}
           {isAdmin && <button className={cls('/audit')} onClick={() => go('/audit')}>Audit Log</button>}
           {isAdmin && <button className={cls('/users')} onClick={() => go('/users')}>Users</button>}
           {isAdmin && (path === '/devices' || path.startsWith('/topology')) && onAddDevice && (

@@ -4,7 +4,7 @@ const { authenticate, requireAdmin } = require('../middleware/auth');
 const { validateSwitch, sanitizeSwitch, isBlockedIP, isValidIPv4 } = require('../utils/validation');
 const { encryptPassword, decryptPassword } = require('../utils/crypto');
 const { getDeviceDetails, discoverNeighbors, searchMAC, inventoryAll, ipSlaStatus } = require('../services/snmpService');
-const { probeDevice, ipSlaViaSsh } = require('../services/sshService');
+const { probeDevice, ipSlaViaSsh, runCommands } = require('../services/sshService');
 const { listBackups, getBackup, backupDevice } = require('../services/configBackupService');
 const { getImportableConfig } = require('../services/importableConfigService');
 const { identifyFromSsh } = require('../utils/sshIdentify');
@@ -821,6 +821,108 @@ router.get('/switches/:id/importable-config', authenticate, requireAdmin, async 
     } catch (e) {
         res.status(500).json({ error: 'Failed to build importable config' });
     }
+});
+
+// --- Toplu komut gonderme (Command-line sayfasi) — job + polling ile canli akis ---
+// Yikici komutlar her iki modda da reddedilir (birden cok cihaza yanlislikla calistirmayi onler).
+const BULK_DENY = [
+    /\breload\b/i, /\berase\b/i, /\bwrite\s+erase\b/i, /\bwr\s+er/i, /\bdelete\b/i,
+    /\bformat\b/i, /\bboot\s+system\b/i, /\bconfig-register\b/i, /\bno\s+username\b/i,
+];
+const BULK_SHOW_REDIRECT = ['redirect', 'tee', 'tftp:', 'ftp:', 'scp:', 'http:', '>'];
+const BULK_CONCURRENCY = 8;
+
+// Toplu is kayitlari — sonuclar cihaz tamamlandikca doldurulur; frontend GET ile polling yapar (canli akis).
+const bulkJobs = new Map(); // jobId -> { mode, total, completed, results, done, startedAt, expiresAt, owner }
+const BULK_JOB_TTL_MS = 10 * 60 * 1000;
+function newBulkJobId() { return 'blk_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+function cleanupBulkJobs() { const now = Date.now(); for (const [id, j] of bulkJobs) { if (j.expiresAt && j.expiresAt < now) bulkJobs.delete(id); } }
+function summarizeJob(job) {
+    const ok = job.results.filter(r => r.ok).length;
+    const failed = job.results.filter(r => r.status !== 'pending' && !r.ok).length;
+    return { mode: job.mode, total: job.total, completed: job.completed, ok, failed, done: job.done, results: job.results };
+}
+
+// requireAdmin: cihazlarda serbest/konfig komut calistirir — yalnizca yonetici.
+// Is'i olusturup HEMEN jobId doner; komutlar arkaplanda calisir, sonuclar polling ile alinir.
+router.post('/switches/bulk-exec', authenticate, requireAdmin, async (req, res) => {
+    cleanupBulkJobs();
+    const { ids, commands, mode, saveAfter } = req.body || {};
+    if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'No devices selected' });
+    if (ids.length > 300) return res.status(400).json({ error: 'Too many devices (max 300)' });
+    if (mode !== 'show' && mode !== 'config') return res.status(400).json({ error: 'Invalid mode' });
+    if (typeof commands !== 'string' || !commands.trim()) return res.status(400).json({ error: 'No commands provided' });
+    if (commands.length > 6000) return res.status(400).json({ error: 'Command text too long (max 6000 chars)' });
+
+    const lines = commands.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    if (lines.length === 0) return res.status(400).json({ error: 'No commands provided' });
+    if (lines.length > 200) return res.status(400).json({ error: 'Too many command lines (max 200)' });
+
+    // Guvenlik dogrulamasi (satir bazli)
+    for (const line of lines) {
+        if (/[`]/.test(line) || /\$\(/.test(line)) return res.status(403).json({ error: `Blocked characters in: "${line}"` });
+        if (BULK_DENY.some(re => re.test(line))) return res.status(403).json({ error: `Destructive command blocked: "${line}"` });
+        if (mode === 'show') {
+            const lc = line.toLowerCase();
+            if (!(lc.startsWith('show ') || lc.startsWith('display '))) return res.status(403).json({ error: `Read-only mode allows only show/display: "${line}"` });
+            if (BULK_SHOW_REDIRECT.some(b => lc.includes(b))) return res.status(403).json({ error: `Output redirection not allowed: "${line}"` });
+        }
+    }
+
+    // Hedef cihazlari cozumle; calistirilamayanlari (SSH yok / engelli / bulunamadi) ayir
+    const targets = [];
+    const skipped = [];
+    for (const id of ids) {
+        const d = store.getSwitch(id);
+        if (!d) { skipped.push({ id: String(id), name: String(id), ok: false, error: 'Device not found', status: 'skipped' }); continue; }
+        if (!d.sshUsername || !d.sshPassword) { skipped.push({ id: d.id, name: d.name, ip: d.ip, ok: false, error: 'SSH credentials missing', status: 'skipped' }); continue; }
+        if (isBlockedIP(d.ip)) { skipped.push({ id: d.id, name: d.name, ip: d.ip, ok: false, error: 'Connection to this IP is not allowed', status: 'skipped' }); continue; }
+        targets.push(d);
+    }
+    if (targets.length === 0) return res.status(400).json({ error: 'No runnable devices (missing SSH credentials?)', results: skipped });
+
+    const doSave = mode === 'config' && !!saveAfter;
+    await logAction(req.user, 'BULK_EXEC', `${mode}${doSave ? '+save' : ''} on ${targets.length} device(s)`, { mode, count: targets.length, lines: lines.length, save: doSave, sample: lines.slice(0, 3) });
+
+    // Is olustur: hedefler 'pending', atlananlar 'skipped'. Hedefler results[] icinde ilk sirada.
+    const jobId = newBulkJobId();
+    const results = [
+        ...targets.map(d => ({ id: d.id, name: d.name, ip: d.ip, status: 'pending' })),
+        ...skipped
+    ];
+    const job = { mode, total: results.length, completed: skipped.length, results, done: false, startedAt: Date.now(), expiresAt: 0, owner: req.user && req.user.username };
+    bulkJobs.set(jobId, job);
+
+    // Arkaplan havuzu — response'tan SONRA calisir; job.results tamamlandikca guncellenir
+    const timeoutMs = mode === 'config' ? 30000 : 15000;
+    (async () => {
+        let idx = 0;
+        await Promise.all(Array.from({ length: Math.min(BULK_CONCURRENCY, targets.length) }, async () => {
+            while (idx < targets.length) {
+                const my = idx++;
+                const d = targets[my];
+                const t0 = Date.now();
+                try {
+                    const output = await runCommands(d, lines, { config: mode === 'config', save: doSave, timeoutMs });
+                    job.results[my] = { id: d.id, name: d.name, ip: d.ip, ok: true, durationMs: Date.now() - t0, output: String(output || '').replace(/\r/g, '').trim(), status: 'done' };
+                } catch (e) {
+                    job.results[my] = { id: d.id, name: d.name, ip: d.ip, ok: false, durationMs: Date.now() - t0, error: e.message || 'SSH error', status: 'done' };
+                }
+                job.completed++;
+            }
+        }));
+        job.done = true;
+        job.expiresAt = Date.now() + BULK_JOB_TTL_MS;
+    })().catch((err) => { job.done = true; job.error = err.message; job.expiresAt = Date.now() + BULK_JOB_TTL_MS; });
+
+    res.json({ jobId, ...summarizeJob(job) });
+});
+
+// Is durumu (canli akis): sonuclar cihaz tamamlandikca dolar, done=true olunca biter
+router.get('/switches/bulk-exec/:jobId', authenticate, requireAdmin, (req, res) => {
+    const job = bulkJobs.get(req.params.jobId);
+    if (!job) return res.status(404).json({ error: 'Job not found or expired' });
+    res.json({ jobId: req.params.jobId, ...summarizeJob(job) });
 });
 
 // SSH komutu çalıştır (show run vb.)
