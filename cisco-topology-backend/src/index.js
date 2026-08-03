@@ -13,6 +13,7 @@ const { encryptPassword } = require('./utils/crypto');
 const { startPingService, onStatusChange } = require('./services/pingService');
 const { setupWebSocket } = require('./services/sshService');
 const { startBackupScheduler } = require('./services/configBackupService');
+const { startVersionRefresh } = require('./services/versionRefreshService');
 const { setupHttps } = require('./middleware/httpsRedirect');
 const { setupNotificationWs, addNotification, getNotifications, flushNotifications } = require('./services/notificationService');
 const { authenticate } = require('./middleware/auth');
@@ -250,6 +251,7 @@ setupNotificationWs(server);
 initDB().then(() => {
     startPingService();
     startBackupScheduler(); // günlük config yedeği (03:00) + startup catch-up
+    startVersionRefresh();  // SNMP yazılım sürümlerini periyodik yenile (liste sıralaması için)
     server.listen(config.PORT, () => {
         console.log(`[SERVER] ${protocol.toUpperCase()} Port ${config.PORT}`);
     });

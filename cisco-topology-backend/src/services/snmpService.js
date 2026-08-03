@@ -156,18 +156,31 @@ async function getDeviceDetails(device) {
 
         const baseData = await getScalar(baseOids);
         let vendorConfig = { cpuOid: null };
+        let sysDescrStr = '';
 
         if (baseData) {
             if (!snmp.isVarbindError(baseData[0])) responseData.snmpHostname = baseData[0].value.toString();
             if (!snmp.isVarbindError(baseData[1])) responseData.uptime = formatUptime(baseData[1].value);
             if (!snmp.isVarbindError(baseData[2])) {
-                const sysDescr = baseData[2].value.toString();
-                vendorConfig = getVendorConfig(sysDescr);
+                sysDescrStr = baseData[2].value.toString();
+                vendorConfig = getVendorConfig(sysDescrStr);
                 responseData.detectedVendor = vendorConfig.vendor;
-                console.log(`[SNMP] ${device.ip} sysDescr: "${sysDescr.substring(0, 80)}" → vendor: ${vendorConfig.vendor}`);
+                console.log(`[SNMP] ${device.ip} sysDescr: "${sysDescrStr.substring(0, 80)}" → vendor: ${vendorConfig.vendor}`);
             }
         } else {
             console.log(`[SNMP] ${device.ip} base SNMP query returned null — community or connectivity issue`);
+        }
+
+        // Yazılım sürümü — ENTITY-MIB entPhysicalSoftwareRev (chassis öncelikli), yoksa sysDescr'den.
+        // probeVersion (arka plan yenileme) ile AYNI mantık → detay ve liste tutarlı olur.
+        // Boş dönerse (geçici SNMP hatası) kayıttan gelen (spread) son bilinen sürümü koru.
+        try {
+            const [entClassVbs, entSwVbs] = await Promise.all([getSubtree(ENT_CLASS), getSubtree(ENT_SW_REV)]);
+            const ver = pickVersion(entClassVbs, entSwVbs, sysDescrStr);
+            if (ver) responseData.version = ver;
+        } catch (e) {
+            const ver = imageVersionFromSysDescr(sysDescrStr);
+            if (ver) responseData.version = ver;
         }
 
         // 2. CPU (try primary OID, then fallback)
@@ -584,7 +597,7 @@ async function getDeviceDetails(device) {
         const cacheData = {
             interfaces: responseData.interfaces, snmpHostname: responseData.snmpHostname,
             uptime: responseData.uptime, cpu: responseData.cpu, ram: responseData.ram,
-            detectedVendor: responseData.detectedVendor
+            detectedVendor: responseData.detectedVendor, version: responseData.version
         };
         snmpCache.set(cacheKey, cacheData);
 
@@ -1121,6 +1134,42 @@ async function inventoryAll(devices, concurrency = 8) {
     return results;
 }
 
+// entPhysicalSoftwareRev (chassis == 3 öncelikli) + sysDescr yedeği → temiz sürüm string'i.
+// getDeviceDetails (canlı) ve probeVersion (arka plan) burada birleşir → tek kaynak, tutarlı sonuç.
+function pickVersion(entClassVbs, entSwVbs, sysDescr) {
+    const clean = (v) => v.toString().replace(/\x00/g, '').trim();
+    const ent = {};
+    for (const vb of entClassVbs || []) { const i = entIndex(ENT_CLASS, vb.oid);  (ent[i] || (ent[i] = {})).cls = parseSnmpInt(vb.value); }
+    for (const vb of entSwVbs || [])    { const i = entIndex(ENT_SW_REV, vb.oid); (ent[i] || (ent[i] = {})).sw = clean(vb.value); }
+    const idxs = Object.keys(ent).sort((a, b) => Number(a) - Number(b));
+    const pick = idxs.find(i => ent[i].cls === 3 && ent[i].sw) || idxs.find(i => ent[i].sw);
+    const sw = pick ? ent[pick].sw : '';
+    return (sw && sw.trim()) || imageVersionFromSysDescr(sysDescr) || '';
+}
+
+// Arka plan sürüm yenileme için hafif SNMP sorgusu (sysDescr + entPhysicalSoftwareRev).
+// ASLA throw etmez (havuz güvenliği), oturumu her durumda kapatır.
+async function probeVersion(device) {
+    if (!device || !device.snmpCommunity) return '';
+    let session;
+    try {
+        session = createSnmpSession(device.ip, device.snmpCommunity, device.snmpPort, device.snmpVersion);
+        const getScalar = (oids) => new Promise(r => session.get(oids, (e, vb) => r(e ? null : vb)));
+        const getSubtree = (oid) => new Promise(r => {
+            const o = [];
+            session.subtree(oid, 20, (vbs) => { for (const vb of vbs) o.push(vb); }, () => r(o));
+        });
+        const base = await getScalar([SYS_DESCR]);
+        const sysDescr = (base && !snmp.isVarbindError(base[0])) ? base[0].value.toString() : '';
+        const [cVbs, wVbs] = await Promise.all([getSubtree(ENT_CLASS), getSubtree(ENT_SW_REV)]);
+        return pickVersion(cVbs, wVbs, sysDescr);
+    } catch (e) {
+        return '';
+    } finally {
+        if (session) { try { session.close(); } catch (_) { /* ignore */ } }
+    }
+}
+
 // --- IP SLA (CISCO-RTTMON-MIB) ---
 // Cisco'nun "show ip sla summary" Return Code'unu SNMP ile okur.
 const RTTMON_SENSE  = '1.3.6.1.4.1.9.9.42.1.2.10.1.2'; // rttMonLatestRttOperSense (1=ok, 4=timeout, ...)
@@ -1199,5 +1248,5 @@ async function ipSlaStatus(device) {
 module.exports = {
     getDeviceDetails, getVendorConfig, discoverNeighbors, searchMAC,
     manufacturerFromSysDescr, imageVersionFromSysDescr, inventoryDevice, inventoryAll,
-    ipSlaStatus,
+    ipSlaStatus, probeVersion,
 };

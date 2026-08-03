@@ -101,8 +101,9 @@ export default function DeviceDetailPage() {
             {[
               { label: 'Real Hostname', value: displayHostname, color: 'var(--primary)' },
               { label: 'IP Address', value: details.ip, mono: true },
-              { label: 'System Uptime', value: details.uptime || '-' },
-              { label: 'Vendor', value: details.detectedVendor || '-' }
+              { label: 'Vendor', value: details.detectedVendor || '-' },
+              { label: 'Version', value: details.version || '-' },
+              { label: 'System Uptime', value: details.uptime || '-' }
             ].map((item, i) => (
               <div key={i}>
                 <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>{item.label}</div>

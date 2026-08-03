@@ -47,6 +47,10 @@ export default function DeviceListPage({ onEdit }) {
       } else if (sortConfig.key === 'topologyPage') {
         // id yerine okunabilir sayfa adına göre sırala
         valA = pageName(a.topologyPage).toLowerCase(); valB = pageName(b.topologyPage).toLowerCase();
+      } else if (sortConfig.key === 'version') {
+        // Sürüm: sayısal-duyarlı karşılaştırma ("9.3" < "17.6", düz metinde ters çıkardı)
+        const cmp = String(a.version ?? '').localeCompare(String(b.version ?? ''), undefined, { numeric: true, sensitivity: 'base' });
+        return sortConfig.dir === 'asc' ? cmp : -cmp;
       } else {
         valA = String(a[sortConfig.key] ?? '').toLowerCase(); valB = String(b[sortConfig.key] ?? '').toLowerCase();
       }
@@ -210,6 +214,7 @@ export default function DeviceListPage({ onEdit }) {
               <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('type')}>Type{sortIcon('type')}</th>
               <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('topologyPage')}>Page{sortIcon('topologyPage')}</th>
               <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('latency')}>Latency{sortIcon('latency')}</th>
+              <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('version')}>Version{sortIcon('version')}</th>
               <th>Tags</th>
               {isAdmin && <th style={{ textAlign: 'right', paddingRight: 32 }}>Actions</th>}
             </tr>
@@ -224,6 +229,7 @@ export default function DeviceListPage({ onEdit }) {
                 <td style={{ textTransform: 'capitalize' }}>{d.type}</td>
                 <td style={{ color: 'var(--text-muted)' }}>{pageName(d.topologyPage)}</td>
                 <td style={{ color: d.latency > 100 ? 'var(--danger)' : 'var(--text-muted)' }}>{d.latency > 0 ? d.latency + ' ms' : '-'}</td>
+                <td style={{ fontFamily: 'monospace', color: 'var(--text-muted)', fontSize: '0.82rem' }}>{d.version || '-'}</td>
                 <td>
                   {(d.tags || []).map(tag => (
                     <span key={tag} style={{ background: 'rgba(99,102,241,0.15)', color: 'var(--primary)', padding: '2px 8px', borderRadius: 12, fontSize: '0.7rem', marginRight: 4 }}>{tag}</span>
@@ -237,7 +243,7 @@ export default function DeviceListPage({ onEdit }) {
                 )}
               </tr>
             )) : (
-              <tr><td colSpan={isAdmin ? 9 : 7} style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
+              <tr><td colSpan={isAdmin ? 10 : 8} style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
                 {searchQuery || statusFilter !== 'all' ? t('noFilterResult') : t('noDevicesYet')}
               </td></tr>
             )}

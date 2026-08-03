@@ -56,7 +56,7 @@ router.get('/topology', authenticate, (req, res) => {
     const switches = store.getSwitches();
     const edges = store.getEdges();
     const isAdmin = req.user.role === 'Administrator';
-    const TOPOLOGY_ALLOWLIST = ['id', 'name', 'ip', 'type', 'status', 'latency', 'position', 'tags', 'topologyPage', 'lastLatency', 'healthIntervalSec', 'ipSlaEnabled', 'ipSlaOkLabel', 'ipSlaFailLabel'];
+    const TOPOLOGY_ALLOWLIST = ['id', 'name', 'ip', 'type', 'status', 'latency', 'position', 'tags', 'topologyPage', 'lastLatency', 'healthIntervalSec', 'ipSlaEnabled', 'ipSlaOkLabel', 'ipSlaFailLabel', 'version'];
     const safeSwitches = switches.map(({ sshPassword, ...s }) => {
         if (!isAdmin) {
             const filtered = {};
@@ -711,6 +711,10 @@ router.get('/switches/:id/details', authenticate, async (req, res) => {
     const device = store.getSwitch(req.params.id);
     if (!device) return res.status(404).send();
     const details = await getDeviceDetails(device);
+    // SNMP'den taze sürüm okunduysa cihaz kaydına yaz (liste sıralaması bu alanı kullanır).
+    if (details.version && details.version !== device.version) {
+        store.updateSwitch(device.id, { version: details.version });
+    }
     details.topologyPage = device.topologyPage || 'main'; // cihazın bulunduğu topoloji sayfası (id)
     // IP SLA rozet etiketleri (OK→birincil, Timeout→yedek). Boşsa varsayılan MD/GSM. Her iki rol görebilir.
     details.ipSlaOkLabel = device.ipSlaOkLabel || 'MD';
