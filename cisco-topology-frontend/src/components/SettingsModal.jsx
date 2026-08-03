@@ -1,178 +1,63 @@
-import { useState, useRef } from 'react';
-import { useAuth } from '../context/AuthContext';
-import { useApp } from '../context/AppContext';
-import { API_BASE } from '../config';
-import { showToast } from '../Toast';
+import { useState } from 'react';
+import AdSettingsCard from './AdSettingsCard';
+import BackupRestorePanel from './BackupRestorePanel';
+
+// Ayarlar hub'i: ikonlu kartlar. Bir karta tiklayinca ilgili ayar popup'i acilir.
+const TILES = [
+  { id: 'backup', icon: '📦', title: 'Backup & Restore', desc: 'Export or import the full configuration' },
+  { id: 'ad', icon: '🪪', title: 'Active Directory', desc: 'LDAP sign-in for AD users' },
+];
 
 export default function SettingsModal({ onClose }) {
-  const { authFetch } = useAuth();
-  const { fetchData } = useApp();
-  const [downloading, setDownloading] = useState(false);
-  const [restoring, setRestoring] = useState(false);
-  const [restorePreview, setRestorePreview] = useState(null);
-  const fileRef = useRef(null);
-
-  const handleBackup = async () => {
-    setDownloading(true);
-    try {
-      const res = await fetch(`${API_BASE}/backup`, { credentials: 'include' });
-      if (res.ok) {
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `netpulse-backup-${new Date().toISOString().slice(0, 10)}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
-        showToast('Backup downloaded', 'success');
-      } else {
-        showToast('Backup failed', 'error');
-      }
-    } catch {
-      showToast('Connection error', 'error');
-    } finally {
-      setDownloading(false);
-    }
-  };
-
-  const handleFileSelect = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      try {
-        const backup = JSON.parse(ev.target.result);
-        if (!backup.version || !backup.data) {
-          showToast('Invalid backup file', 'error');
-          return;
-        }
-        setRestorePreview({
-          backup,
-          filename: file.name,
-          timestamp: backup.timestamp,
-          devices: backup.data.switches?.length || 0,
-          edges: backup.data.edges?.length || 0,
-          users: backup.data.users?.length || 0,
-          tabs: backup.data.topoTabs?.length || 0,
-        });
-      } catch {
-        showToast('Could not parse backup file', 'error');
-      }
-    };
-    reader.readAsText(file);
-    e.target.value = '';
-  };
-
-  const handleRestore = async () => {
-    if (!restorePreview) return;
-    setRestoring(true);
-    try {
-      const res = await authFetch('/restore', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(restorePreview.backup),
-      });
-      if (res && res.ok) {
-        const data = await res.json();
-        const r = data.results;
-        showToast(`Restored: ${r.devices} devices, ${r.edges} connections, ${r.users} users`, 'success');
-        setRestorePreview(null);
-        fetchData();
-      } else {
-        const err = await res.json().catch(() => ({}));
-        showToast(err.error || 'Restore failed', 'error');
-      }
-    } catch {
-      showToast('Connection error', 'error');
-    } finally {
-      setRestoring(false);
-    }
-  };
-
-  const cardStyle = {
-    background: 'rgba(255,255,255,0.03)',
-    border: '1px solid var(--border-color)',
-    borderRadius: 12,
-    padding: 20,
-    marginBottom: 16,
-  };
+  const [panel, setPanel] = useState(null); // null | 'backup' | 'ad'
+  const meta = TILES.find(t => t.id === panel);
 
   return (
-    <div className="modal-overlay" onClick={onClose} onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
-      <div className="modal-content" style={{ width: 500 }} onClick={e => e.stopPropagation()}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-          <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 600, color: 'var(--text-main)' }}>Settings</h2>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '1.5rem', cursor: 'pointer' }}>&times;</button>
-        </div>
-
-        {/* Export Backup */}
-        <div style={cardStyle}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-            <span style={{ fontSize: '1.4rem' }}>📤</span>
-            <div>
-              <h3 style={{ margin: 0, fontSize: '1rem', color: 'var(--text-main)' }}>Export Backup</h3>
-              <p style={{ margin: '4px 0 0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                Download all devices, connections, topology pages and users
-              </p>
-            </div>
-          </div>
-          <button className="btn btn-primary" onClick={handleBackup} disabled={downloading} style={{ width: '100%' }}>
-            {downloading ? 'Downloading...' : 'Download Full Backup'}
-          </button>
-        </div>
-
-        {/* Import Backup */}
-        <div style={cardStyle}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-            <span style={{ fontSize: '1.4rem' }}>📥</span>
-            <div>
-              <h3 style={{ margin: 0, fontSize: '1rem', color: 'var(--text-main)' }}>Import Backup</h3>
-              <p style={{ margin: '4px 0 0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                Restore devices and connections from a backup file (duplicates skipped)
-              </p>
-            </div>
+    <>
+      {/* HUB — kart izgarasi */}
+      <div className="modal-overlay" onClick={onClose} onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
+        <div className="modal-content" style={{ width: 540 }} onClick={e => e.stopPropagation()}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 22 }}>
+            <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 600, color: 'var(--text-main)' }}>Settings</h2>
+            <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '1.5rem', cursor: 'pointer' }}>&times;</button>
           </div>
 
-          <input type="file" ref={fileRef} accept=".json" onChange={handleFileSelect} style={{ display: 'none' }} />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            {TILES.map(t => (
+              <button key={t.id} className="settings-tile" onClick={() => setPanel(t.id)}
+                style={{ textAlign: 'left', cursor: 'pointer', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', borderRadius: 12, padding: 18, display: 'flex', flexDirection: 'column', gap: 8, color: 'inherit' }}>
+                <span style={{ fontSize: '1.9rem', lineHeight: 1 }}>{t.icon}</span>
+                <span style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-main)' }}>{t.title}</span>
+                <span style={{ fontSize: '0.76rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>{t.desc}</span>
+              </button>
+            ))}
+          </div>
 
-          {!restorePreview ? (
-            <button className="btn" onClick={() => fileRef.current?.click()}
-              style={{ width: '100%', background: 'rgba(255,255,255,0.06)', border: '1px dashed var(--border-light)', color: 'var(--text-main)', padding: '12px', borderRadius: 8, cursor: 'pointer' }}>
-              Select Backup File (.json)
-            </button>
-          ) : (
-            <div>
-              <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: 8, padding: 14, marginBottom: 12, fontSize: '0.85rem' }}>
-                <div style={{ color: 'var(--text-muted)', marginBottom: 8 }}>
-                  <strong style={{ color: 'var(--text-main)' }}>{restorePreview.filename}</strong>
-                  {restorePreview.timestamp && (
-                    <span style={{ marginLeft: 8 }}>({new Date(restorePreview.timestamp).toLocaleDateString()})</span>
-                  )}
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 16px', color: 'var(--text-muted)' }}>
-                  <span>Devices: <strong style={{ color: 'var(--primary)' }}>{restorePreview.devices}</strong></span>
-                  <span>Connections: <strong style={{ color: 'var(--primary)' }}>{restorePreview.edges}</strong></span>
-                  <span>Users: <strong style={{ color: 'var(--primary)' }}>{restorePreview.users}</strong></span>
-                  <span>Topo Pages: <strong style={{ color: 'var(--primary)' }}>{restorePreview.tabs}</strong></span>
-                </div>
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button className="btn btn-ghost" onClick={() => setRestorePreview(null)} style={{ flex: 1 }}>
-                  Cancel
-                </button>
-                <button className="btn btn-primary" onClick={handleRestore} disabled={restoring} style={{ flex: 2 }}>
-                  {restoring ? 'Restoring...' : 'Restore Backup'}
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div style={{ textAlign: 'right', marginTop: 16 }}>
-          <button className="btn btn-ghost" onClick={onClose}>Close</button>
+          <div style={{ textAlign: 'right', marginTop: 20 }}>
+            <button className="btn btn-ghost" onClick={onClose}>Close</button>
+          </div>
         </div>
       </div>
-    </div>
+
+      {/* PANEL POPUP — secilen ayar (hub'in uzerinde acilir) */}
+      {panel && (
+        <div className="modal-overlay" style={{ zIndex: 2100 }} onClick={() => setPanel(null)} onKeyDown={e => { if (e.key === 'Escape') setPanel(null); }}>
+          <div className="modal-content" style={{ width: 560, maxHeight: '88vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, gap: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                <button className="btn btn-ghost btn-sm" onClick={() => setPanel(null)} title="Back" style={{ padding: '4px 10px', fontSize: '1rem', lineHeight: 1 }}>←</button>
+                <h2 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 600, color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <span style={{ marginRight: 8 }}>{meta.icon}</span>{meta.title}
+                </h2>
+              </div>
+              <button onClick={() => setPanel(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '1.5rem', cursor: 'pointer', lineHeight: 1 }}>&times;</button>
+            </div>
+
+            {panel === 'backup' && <BackupRestorePanel />}
+            {panel === 'ad' && <AdSettingsCard embedded />}
+          </div>
+        </div>
+      )}
+    </>
   );
 }

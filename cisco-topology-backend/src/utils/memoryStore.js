@@ -12,7 +12,8 @@ class MemoryStore {
             users: [],
             edges: [],
             history: [],
-            topoTabs: [{ id: 'main', name: 'Main Topology' }]
+            topoTabs: [{ id: 'main', name: 'Main Topology' }],
+            settings: {}   // uygulama ayarlari (AD/LDAP config vb.)
         };
         this.dirty = new Set(); // Hangi koleksiyonlar değişti
         this.writeTimer = null;
@@ -65,6 +66,14 @@ class MemoryStore {
         const savedTabs = this._readFile(config.DB_TOPO_TABS);
         if (savedTabs.length > 0) this.data.topoTabs = savedTabs;
         else this.data.topoTabs = [{ id: 'main', name: 'Main Topology' }];
+
+        // Ayarlar (obje) — AD config vb.
+        try {
+            if (fs.existsSync(config.DB_SETTINGS)) {
+                const s = JSON.parse(fs.readFileSync(config.DB_SETTINGS, 'utf8'));
+                if (s && typeof s === 'object' && !Array.isArray(s)) this.data.settings = s;
+            }
+        } catch (e) { console.error('[STORE] settings okunamadi:', e.message); }
 
         // Eski tek-dosya history'yi migrate et
         if (fs.existsSync(config.DB_HISTORY)) {
@@ -159,6 +168,14 @@ class MemoryStore {
     getUser(id) { return this.data.users.find(u => String(u.id) === String(id)); }
 
     getUserByUsername(username) { return this.data.users.find(u => u.username === username); }
+
+    // --- Settings (AD/LDAP config vb.) ---
+    getSettings() { return this.data.settings || {}; }
+    updateSettings(patch) {
+        this.data.settings = { ...(this.data.settings || {}), ...patch };
+        this._markDirty('settings');
+        return this.data.settings;
+    }
 
     addUser(user) {
         this.data.users.push(user);
@@ -427,7 +444,8 @@ class MemoryStore {
                 switches: config.DB_SWITCHES,
                 users: config.DB_USERS,
                 edges: config.DB_EDGES,
-                topoTabs: config.DB_TOPO_TABS
+                topoTabs: config.DB_TOPO_TABS,
+                settings: config.DB_SETTINGS
             };
             const file = fileMap[collection];
             if (file) {

@@ -82,9 +82,15 @@ function validateUser(data, isEdit = false) {
         errors.push('Username may only contain letters, numbers, dots, underscores, and hyphens');
     }
 
-    // H5: Strong password policy
-    const checkPw = !isEdit ? data.password : (data.password && data.password.length > 0 ? data.password : null);
-    if (!isEdit && !data.password) {
+    // AD kullanicilari icin yerel sifre yok (kimlik AD'de dogrulanir)
+    const isAd = data.authType === 'ad';
+    if (data.authType && !['local', 'ad'].includes(data.authType)) {
+        errors.push('Invalid auth type');
+    }
+
+    // H5: Strong password policy (yalnizca yerel kullanicilar icin)
+    const checkPw = isAd ? null : (!isEdit ? data.password : (data.password && data.password.length > 0 ? data.password : null));
+    if (!isEdit && !isAd && !data.password) {
         errors.push('Password is required');
     }
     if (checkPw) {
@@ -141,7 +147,7 @@ function sanitizeSwitch(data) {
 }
 
 function sanitizeUser(data) {
-    const allowed = ['username', 'password', 'role'];
+    const allowed = ['username', 'password', 'role', 'authType'];
     const clean = {};
     for (const key of allowed) {
         if (data[key] !== undefined) {

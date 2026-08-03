@@ -509,6 +509,16 @@ body {
   backdrop-filter: blur(4px);
 }
 
+/* Ayarlar hub'i — ikonlu tiklanabilir kartlar */
+.settings-tile {
+  transition: background .15s ease, border-color .15s ease, transform .15s ease;
+}
+.settings-tile:hover {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border-color: var(--primary) !important;
+  transform: translateY(-2px);
+}
+
 .modal-content {
   background: var(--bg-panel);
   padding: 32px;

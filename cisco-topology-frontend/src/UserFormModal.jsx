@@ -9,6 +9,7 @@ function UserFormModal({ mode, initialValues, onCancel, onSave }) {
     username: '',
     password: '',
     role: 'User',
+    authType: 'local', // 'local' | 'ad'
     allowedCommands: '', // textarea: her satıra bir komut
   });
 
@@ -18,6 +19,7 @@ function UserFormModal({ mode, initialValues, onCancel, onSave }) {
         username: initialValues.username || '',
         password: '',
         role: initialValues.role || 'User',
+        authType: initialValues.authType || 'local',
         allowedCommands: (initialValues.allowedCommands || []).join('\n'),
       });
     }
@@ -34,7 +36,10 @@ function UserFormModal({ mode, initialValues, onCancel, onSave }) {
     const allowedCommands = values.role === 'User'
       ? values.allowedCommands.split('\n').map(s => s.trim()).filter(Boolean)
       : [];
-    onSave({ ...values, allowedCommands });
+    const payload = { username: values.username, role: values.role, authType: values.authType, allowedCommands };
+    // AD kullanicisinda yerel sifre yok — yalnizca local'de gonder
+    if (values.authType === 'local') payload.password = values.password;
+    onSave(payload);
   };
 
   return (
@@ -51,32 +56,53 @@ function UserFormModal({ mode, initialValues, onCancel, onSave }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
 
             <div>
+              <label className="input-label" style={{display:'block', marginBottom:8, color:'#94a3b8'}}>{t('authTypeLabel')}</label>
+              <select
+                className="modern-input"
+                name="authType"
+                value={values.authType}
+                onChange={handleChange}
+                style={{ cursor: 'pointer' }}
+                disabled={isEdit && values.username === 'admin'}
+              >
+                <option value="local">{t('authTypeLocal')}</option>
+                <option value="ad">{t('authTypeAd')}</option>
+              </select>
+            </div>
+
+            <div>
               <label className="input-label" style={{display:'block', marginBottom:8, color:'#94a3b8'}}>{t('usernameCol')}</label>
               <input
                 className="modern-input"
                 name="username"
                 value={values.username}
                 onChange={handleChange}
-                placeholder={t('usernamePlaceholder')}
+                placeholder={values.authType === 'ad' ? 'sAMAccountName' : t('usernamePlaceholder')}
                 required
                 disabled={isEdit && values.username === 'admin'}
               />
             </div>
 
-            <div>
-              <label className="input-label" style={{display:'block', marginBottom:8, color:'#94a3b8'}}>
-                {isEdit ? t('newPasswordHint') : t('passwordLabel')}
-              </label>
-              <input
-                className="modern-input"
-                type="password"
-                name="password"
-                value={values.password}
-                onChange={handleChange}
-                placeholder="******"
-                required={!isEdit}
-              />
-            </div>
+            {values.authType === 'local' ? (
+              <div>
+                <label className="input-label" style={{display:'block', marginBottom:8, color:'#94a3b8'}}>
+                  {isEdit ? t('newPasswordHint') : t('passwordLabel')}
+                </label>
+                <input
+                  className="modern-input"
+                  type="password"
+                  name="password"
+                  value={values.password}
+                  onChange={handleChange}
+                  placeholder="******"
+                  required={!isEdit}
+                />
+              </div>
+            ) : (
+              <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', background: 'rgba(99,102,241,0.08)', border: '1px solid var(--border-color)', borderRadius: 8, padding: '10px 12px' }}>
+                {t('adUserHint')}
+              </div>
+            )}
 
             <div>
               <label className="input-label" style={{display:'block', marginBottom:8, color:'#94a3b8'}}>{t('roleLabel')}</label>

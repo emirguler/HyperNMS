@@ -25,6 +25,7 @@ const DB_HISTORY = path.join(DATA_DIR, 'ping_history.json');
 const DB_EDGES = path.join(DATA_DIR, 'edges.json');
 const DB_AUDIT = path.join(DATA_DIR, 'audit_log.json');
 const DB_TOPO_TABS = path.join(DATA_DIR, 'topology_tabs.json');
+const DB_SETTINGS = path.join(DATA_DIR, 'settings.json');
 
 module.exports = {
     ENCRYPTION_KEY,
@@ -39,6 +40,7 @@ module.exports = {
     DB_EDGES,
     DB_AUDIT,
     DB_TOPO_TABS,
+    DB_SETTINGS,
     PING_INTERVAL: 5000,
     // Klasik NMS flap damping: cihaz DOWN sayılmadan önce kaç ARDIŞIK ping kaybı gerekir.
     // Tek paket kaybı (özellikle kablosuz/anten linklerde normaldir) yanlış alarm üretmesin.

@@ -163,6 +163,10 @@ const translations = {
     roleLabel: 'Role / Permission',
     roleUser: 'User (View Only)',
     roleAdmin: 'Administrator (Full Access)',
+    authTypeLabel: 'Authentication',
+    authTypeLocal: 'Local (password)',
+    authTypeAd: 'Active Directory',
+    adUserHint: 'This user signs in with their Active Directory password (validated against AD). No local password is stored.',
     update: 'Update',
     create: 'Create',
 
@@ -386,6 +390,10 @@ const translations = {
     roleLabel: 'Rol / Yetki',
     roleUser: 'User (Sadece \u0130zleme)',
     roleAdmin: 'Administrator (Tam Yetki)',
+    authTypeLabel: 'Kimlik do\u011frulama',
+    authTypeLocal: 'Yerel (parola)',
+    authTypeAd: 'Active Directory',
+    adUserHint: 'Bu kullan\u0131c\u0131 Active Directory parolas\u0131yla giri\u015f yapar (AD \u00fczerinden do\u011frulan\u0131r). Yerel parola saklanmaz.',
     update: 'G\u00fcncelle',
     create: 'Olu\u015ftur',
 

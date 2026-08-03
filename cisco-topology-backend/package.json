@@ -22,6 +22,7 @@
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
+    "ldapts": "^9.0.0",
     "net-snmp": "^3.26.0",
     "ping": "^1.0.0",
     "reactflow": "^11.11.4",

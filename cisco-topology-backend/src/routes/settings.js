@@ -3,10 +3,26 @@ const crypto = require('crypto');
 const store = require('../utils/memoryStore');
 const { authenticate, requireAdmin } = require('../middleware/auth');
 const { validateSwitch, sanitizeSwitch } = require('../utils/validation');
-const { encryptPassword } = require('../utils/crypto');
+const { encryptPassword, decryptPassword } = require('../utils/crypto');
 const { logAction } = require('../services/auditLog');
+const { testAD } = require('../services/adService');
 
 const router = express.Router();
+
+// AD/LDAP ayarini disariya guvenli (bindPassword maskeli) dondurur
+function maskAd(ad) {
+    ad = ad || {};
+    return {
+        enabled: !!ad.enabled,
+        url: ad.url || '',
+        baseDN: ad.baseDN || '',
+        domain: ad.domain || '',
+        bindDN: ad.bindDN || '',
+        tlsRejectUnauthorized: ad.tlsRejectUnauthorized !== false,
+        timeoutMs: ad.timeoutMs || 8000,
+        bindPasswordSet: !!ad.bindPassword,
+    };
+}
 
 // Full config backup — includes encrypted credentials
 router.get('/backup', authenticate, requireAdmin, async (req, res) => {
@@ -245,6 +261,64 @@ router.post('/switches/bulk', authenticate, requireAdmin, async (req, res) => {
 
     await logAction(req.user, 'BULK_IMPORT', `${results.added} devices added`);
     res.json(results);
+});
+
+// --- Active Directory / LDAP ayarlari ---
+
+// Mevcut AD ayarini getir (bindPassword maskeli)
+router.get('/settings/ad', authenticate, requireAdmin, (req, res) => {
+    res.json(maskAd(store.getSettings().ad));
+});
+
+// AD ayarini kaydet. bindPassword sifreli saklanir; bos gonderilirse mevcut korunur.
+router.put('/settings/ad', authenticate, requireAdmin, async (req, res) => {
+    const b = req.body || {};
+    const cur = store.getSettings().ad || {};
+
+    const ad = {
+        enabled: !!b.enabled,
+        url: String(b.url || '').trim(),
+        baseDN: String(b.baseDN || '').trim(),
+        domain: String(b.domain || '').trim(),
+        bindDN: String(b.bindDN || '').trim(),
+        tlsRejectUnauthorized: b.tlsRejectUnauthorized !== false,
+        timeoutMs: Number(b.timeoutMs) > 0 ? Math.min(Number(b.timeoutMs), 30000) : 8000,
+        bindPassword: cur.bindPassword || '',
+    };
+    if (ad.enabled && !ad.url) return res.status(400).json({ error: 'LDAP URL is required when AD is enabled' });
+    if (ad.url && !/^ldaps?:\/\//i.test(ad.url)) return res.status(400).json({ error: 'LDAP URL must start with ldap:// or ldaps://' });
+
+    // Yeni bind sifresi verildiyse sifrele; verilmediyse mevcut korunur. bindDN yoksa sifreyi de temizle.
+    if (typeof b.bindPassword === 'string' && b.bindPassword.length > 0) ad.bindPassword = encryptPassword(b.bindPassword);
+    if (!ad.bindDN) ad.bindPassword = '';
+
+    store.updateSettings({ ad });
+    await logAction(req.user, 'AD_CONFIG_UPDATE', ad.enabled ? 'enabled' : 'disabled', { url: ad.url, bindDN: ad.bindDN });
+    res.json(maskAd(ad));
+});
+
+// AD baglantisini test et. Form config'i kullanir; test kullanicisi verilirse tam bind testi.
+router.post('/settings/ad/test', authenticate, requireAdmin, async (req, res) => {
+    const b = req.body || {};
+    const cur = store.getSettings().ad || {};
+    const cfg = {
+        url: String(b.url || '').trim(),
+        baseDN: String(b.baseDN || '').trim(),
+        domain: String(b.domain || '').trim(),
+        bindDN: String(b.bindDN || '').trim(),
+        tlsRejectUnauthorized: b.tlsRejectUnauthorized !== false,
+        timeoutMs: Number(b.timeoutMs) > 0 ? Math.min(Number(b.timeoutMs), 30000) : 8000,
+        // Formda yeni bindPassword yoksa kayitli (sifreli) olani coz
+        bindPassword: (typeof b.bindPassword === 'string' && b.bindPassword.length > 0)
+            ? b.bindPassword
+            : (cur.bindPassword ? decryptPassword(cur.bindPassword) : ''),
+    };
+    try {
+        const result = await testAD(cfg, b.testUsername, b.testPassword);
+        res.json(result);
+    } catch (e) {
+        res.status(400).json({ ok: false, error: e.message || 'AD test failed' });
+    }
 });
 
 module.exports = router;

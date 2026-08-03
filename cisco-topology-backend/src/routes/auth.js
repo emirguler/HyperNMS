@@ -6,6 +6,7 @@ const { SECRET_KEY, JWT_EXPIRY, BCRYPT_ROUNDS } = require('../config');
 const rateLimiter = require('../middleware/rateLimiter');
 const { authenticate, setTokenCookie, clearTokenCookie } = require('../middleware/auth');
 const { logAction } = require('../services/auditLog');
+const { authenticateAD } = require('../services/adService');
 
 const router = express.Router();
 
@@ -38,10 +39,20 @@ router.post('/login', async (req, res) => {
         return res.status(401).json({ error: INVALID_MSG });
     }
 
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-        await logAction({ username }, 'LOGIN_FAILED', username, { ip: req.ip });
-        return res.status(401).json({ error: INVALID_MSG });
+    if (user.authType === 'ad') {
+        // AD kullanicisi: kendi AD sifresiyle LDAP bind. Yalnizca store'da kayitli AD kullanicilari girebilir (allowlist).
+        try {
+            await authenticateAD(username, password);
+        } catch (e) {
+            await logAction({ username }, 'LOGIN_FAILED', username, { ip: req.ip, authType: 'ad', reason: e.message });
+            return res.status(401).json({ error: INVALID_MSG });
+        }
+    } else {
+        const isMatch = await bcrypt.compare(password, user.password);
+        if (!isMatch) {
+            await logAction({ username }, 'LOGIN_FAILED', username, { ip: req.ip });
+            return res.status(401).json({ error: INVALID_MSG });
+        }
     }
 
     const token = jwt.sign(
@@ -93,6 +104,7 @@ router.post('/change-password', authenticate, async (req, res) => {
 
     const user = store.getUser(req.user.id);
     if (!user) return res.status(404).json({ error: 'User not found' });
+    if (user.authType === 'ad') return res.status(400).json({ error: 'AD users manage their password in Active Directory' });
 
     // Current password check (except forced change)
     if (!user.mustChangePassword) {

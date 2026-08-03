@@ -45,6 +45,9 @@ export default function UsersPage() {
               <tr key={u.id}>
                 <td style={{ paddingLeft: 24 }}>
                   <span style={{ fontWeight: 600 }}>{u.username}</span>
+                  {u.authType === 'ad' && (
+                    <span title="Active Directory" style={{ marginLeft: 8, background: 'rgba(99,102,241,0.15)', color: 'var(--primary)', padding: '3px 9px', borderRadius: 20, fontSize: '0.7rem', fontWeight: 600, border: '1px solid rgba(99,102,241,0.3)', verticalAlign: 'middle' }}>AD</span>
+                  )}
                   {u.active && (
                     <span style={{ marginLeft: 8, display: 'inline-flex', alignItems: 'center', gap: 5, background: 'rgba(34,197,94,0.12)', color: 'var(--success)', padding: '3px 9px', borderRadius: 20, fontSize: '0.7rem', fontWeight: 600, border: '1px solid rgba(34,197,94,0.3)', verticalAlign: 'middle' }}>
                       <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--success)' }} />
