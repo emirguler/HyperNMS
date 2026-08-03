@@ -4,7 +4,7 @@ const { authenticate, requireAdmin } = require('../middleware/auth');
 const { validateSwitch, sanitizeSwitch, isBlockedIP, isValidIPv4 } = require('../utils/validation');
 const { encryptPassword, decryptPassword } = require('../utils/crypto');
 const { getDeviceDetails, discoverNeighbors, searchMAC, inventoryAll, ipSlaStatus } = require('../services/snmpService');
-const { probeDevice, ipSlaViaSsh, runCommands } = require('../services/sshService');
+const { probeDevice, ipSlaViaSsh, runCommands, kbAuth } = require('../services/sshService');
 const { listBackups, getBackup, backupDevice } = require('../services/configBackupService');
 const { getImportableConfig } = require('../services/importableConfigService');
 const { identifyFromSsh } = require('../utils/sshIdentify');
@@ -959,6 +959,7 @@ router.post('/switches/:id/exec', authenticate, requireAdmin, async (req, res) =
     if (cached) return res.json({ output: cached });
 
     try {
+        const execPw = decryptPassword(device.sshPassword);
         const output = await new Promise((resolve, reject) => {
             const conn = new ssh2();
             let result = '';
@@ -996,10 +997,11 @@ router.post('/switches/:id/exec', authenticate, requireAdmin, async (req, res) =
             }).on('error', (err) => {
                 clearTimeout(hardTimeout);
                 reject(err);
-            }).connect({
+            }).on('keyboard-interactive', kbAuth(execPw)).connect({
                 host: device.ip, port: 22,
                 username: device.sshUsername,
-                password: decryptPassword(device.sshPassword),
+                password: execPw,
+                tryKeyboard: true,   // Nexus/NX-OS keyboard-interactive icin
                 algorithms: {
                     kex: ["ecdh-sha2-nistp256", "ecdh-sha2-nistp384", "ecdh-sha2-nistp521", "diffie-hellman-group-exchange-sha256", "diffie-hellman-group14-sha1"],
                     cipher: ["aes128-ctr", "aes192-ctr", "aes256-ctr", "aes128-cbc"],

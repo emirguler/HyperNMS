@@ -18,6 +18,13 @@ const PROBE_ALGORITHMS = {
     serverHostKey: { append: ['ssh-rsa', 'ssh-dss'] },
 };
 
+// ssh2 keyboard-interactive yaniti. Cisco Nexus/NX-OS gibi cihazlar cogu zaman "password"
+// metodunu degil "keyboard-interactive"i sunar; bu handler + connect'te tryKeyboard:true olmadan
+// ssh2 "All configured authentication methods failed" hatasi verir. Tum prompt'lara sifreyle yanit veririz.
+function kbAuth(password) {
+    return (name, instructions, lang, prompts, cb) => cb(prompts.map(() => password));
+}
+
 function classifyErr(err) {
     if (err && err.level === 'client-authentication') return 'auth_failed';
     const code = err && err.code;
@@ -48,6 +55,7 @@ function probeDevice(ip, username, password) {
         conn.on('error', (err) => finish({ status: classifyErr(err) }));
         conn.on('timeout', () => { try { conn.destroy(); } catch (e) { /* ignore */ } });
         conn.on('close', () => finish({ status: output ? 'ok' : 'unreachable' }));
+        conn.on('keyboard-interactive', kbAuth(password)); // Nexus/NX-OS
 
         conn.on('ready', () => {
             try {
@@ -74,6 +82,7 @@ function probeDevice(ip, username, password) {
             conn.connect({
                 host: ip, port: 22, username, password,
                 readyTimeout: 6000,   // gerçek bağlantı bütçesi
+                tryKeyboard: true,    // Nexus/NX-OS keyboard-interactive icin
                 algorithms: PROBE_ALGORITHMS,
             });
         } catch (e) { finish({ status: 'error' }); } // connect() senkron throw edebilir
@@ -131,6 +140,7 @@ function setupWebSocket(server) {
             try { if (ws.readyState === WebSocket.OPEN) ws.send(data); } catch (e) { /* ignore */ }
         };
 
+        const sshPass = decryptPassword(device.sshPassword);
         const conn = new ssh2();
         conn.on('ready', () => {
             console.log(`[SSH] Connected to ${device.name} (${device.ip}) as ${user.username} [${isAdmin ? 'full' : 'restricted'}]`);
@@ -167,11 +177,12 @@ function setupWebSocket(server) {
         }).on('error', (err) => {
             console.log(`[SSH] Error ${device.name}: ${err.message}`);
             safeSend(JSON.stringify({ type: 'error', message: 'SSH Failed: ' + err.message }));
-        }).connect({
+        }).on('keyboard-interactive', kbAuth(sshPass)).connect({
             host: device.ip,
             port: 22,
             username: device.sshUsername,
-            password: decryptPassword(device.sshPassword),
+            password: sshPass,
+            tryKeyboard: true,   // Nexus/NX-OS keyboard-interactive icin
             algorithms: {
                 kex: [
                     "ecdh-sha2-nistp256", "ecdh-sha2-nistp384", "ecdh-sha2-nistp521",
@@ -204,6 +215,7 @@ const IPSLA_SSH_ALGORITHMS = {
 function runShowCommand(device, command) {
     return new Promise((resolve, reject) => {
         const conn = new ssh2();
+        const pw = decryptPassword(device.sshPassword);
         let result = '';
         let dataTimeout = null;
         const hardTimeout = setTimeout(() => { try { conn.end(); } catch (e) {} resolve(result); }, 15000);
@@ -219,11 +231,12 @@ function runShowCommand(device, command) {
                 stream.write('terminal length 0\n');
                 setTimeout(() => stream.write(command + '\n'), 500);
             });
-        }).on('error', (err) => { clearTimeout(hardTimeout); reject(err); }).connect({
+        }).on('error', (err) => { clearTimeout(hardTimeout); reject(err); }).on('keyboard-interactive', kbAuth(pw)).connect({
             host: device.ip, port: 22,
             username: device.sshUsername,
-            password: decryptPassword(device.sshPassword),
+            password: pw,
             readyTimeout: 8000,
+            tryKeyboard: true,   // Nexus/NX-OS keyboard-interactive icin
             algorithms: IPSLA_SSH_ALGORITHMS
         });
     });
@@ -273,6 +286,7 @@ async function ipSlaViaSsh(device) {
 function runCommands(device, lines, { config = false, save = false, timeoutMs = 25000 } = {}) {
     return new Promise((resolve, reject) => {
         const conn = new ssh2();
+        const pw = decryptPassword(device.sshPassword);
         let result = '';
         let dataTimeout = null;
         let closed = false;
@@ -302,14 +316,15 @@ function runCommands(device, lines, { config = false, save = false, timeoutMs = 
                 };
                 setTimeout(writeNext, 400);
             });
-        }).on('error', (err) => { if (!closed) { closed = true; clearTimeout(hardTimeout); reject(err); } }).connect({
+        }).on('error', (err) => { if (!closed) { closed = true; clearTimeout(hardTimeout); reject(err); } }).on('keyboard-interactive', kbAuth(pw)).connect({
             host: device.ip, port: 22,
             username: device.sshUsername,
-            password: decryptPassword(device.sshPassword),
+            password: pw,
             readyTimeout: 8000,
+            tryKeyboard: true,   // Nexus/NX-OS keyboard-interactive icin
             algorithms: IPSLA_SSH_ALGORITHMS
         });
     });
 }
 
-module.exports = { setupWebSocket, probeDevice, ipSlaViaSsh, runShowCommand, runCommands };
+module.exports = { setupWebSocket, probeDevice, ipSlaViaSsh, runShowCommand, runCommands, kbAuth };
