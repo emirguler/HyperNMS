@@ -9,15 +9,17 @@ export default function GeneralSettingsCard({ embedded }) {
   const { authFetch, isAdmin } = useAuth();
 
   const cometOn = general.cometAnimation !== false;
+  const wirelessOn = general.wirelessAnimation !== false;
 
-  const setComet = async (on) => {
+  // Tek bir ayar alanini aninda uygula + kaydet; basarisiz olursa geri al.
+  const save = async (patch) => {
     const prev = general;
-    setGeneral(g => ({ ...g, cometAnimation: on })); // aninda uygula (comet canli acilir/kapanir)
+    setGeneral(g => ({ ...g, ...patch })); // aninda uygula (animasyon canli acilir/kapanir)
     try {
       const res = await authFetch('/settings/general', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cometAnimation: on }),
+        body: JSON.stringify(patch),
       });
       if (res && res.ok) {
         setGeneral(await res.json());
@@ -41,16 +43,30 @@ export default function GeneralSettingsCard({ embedded }) {
         Device-wide display &amp; behavior for the whole system. Applies to every user.
       </p>
 
-      {/* Comet animasyonu */}
+      {/* Kablolu comet animasyonu */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '14px 0', borderTop: '1px solid var(--border-color)' }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)' }}>Wired link comet animation</div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 3, lineHeight: 1.45 }}>
-            The sliding light that travels along active wired connections on the topology map.
+            The sliding light that travels along active wired connections. Turn off to reduce CPU on large maps.
           </div>
         </div>
         <label className="toggle-switch" title={isAdmin ? '' : 'Administrators only'} style={{ flexShrink: 0 }}>
-          <input type="checkbox" checked={cometOn} disabled={!isAdmin} onChange={e => setComet(e.target.checked)} />
+          <input type="checkbox" checked={cometOn} disabled={!isAdmin} onChange={e => save({ cometAnimation: e.target.checked })} />
+          <span className="toggle-slider" />
+        </label>
+      </div>
+
+      {/* Kablosuz (anten) animasyonu */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '14px 0', borderTop: '1px solid var(--border-color)' }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)' }}>Wireless link animation</div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 3, lineHeight: 1.45 }}>
+            The flowing dashes on active antenna-to-antenna links. Turn off to reduce CPU on large maps.
+          </div>
+        </div>
+        <label className="toggle-switch" title={isAdmin ? '' : 'Administrators only'} style={{ flexShrink: 0 }}>
+          <input type="checkbox" checked={wirelessOn} disabled={!isAdmin} onChange={e => save({ wirelessAnimation: e.target.checked })} />
           <span className="toggle-slider" />
         </label>
       </div>

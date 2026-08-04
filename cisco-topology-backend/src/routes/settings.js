@@ -353,7 +353,8 @@ router.post('/settings/ad/test', authenticate, requireAdmin, async (req, res) =>
 function readGeneral() {
     const g = store.getSettings().general || {};
     return {
-        cometAnimation: g.cometAnimation !== false, // varsayılan açık
+        cometAnimation: g.cometAnimation !== false,     // kablolu comet — varsayılan açık
+        wirelessAnimation: g.wirelessAnimation !== false, // kablosuz (anten) akış — varsayılan açık
     };
 }
 
@@ -367,6 +368,7 @@ router.put('/settings/general', authenticate, requireAdmin, (req, res) => {
     const b = req.body || {};
     const patch = {};
     if (typeof b.cometAnimation === 'boolean') patch.cometAnimation = b.cometAnimation;
+    if (typeof b.wirelessAnimation === 'boolean') patch.wirelessAnimation = b.wirelessAnimation;
     const current = store.getSettings().general || {};
     store.updateSettings({ general: { ...current, ...patch } });
     res.json(readGeneral());

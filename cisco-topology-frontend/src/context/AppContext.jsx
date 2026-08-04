@@ -12,7 +12,7 @@ export function AppProvider({ children }) {
   const [topoTabs, setTopoTabs] = useState([{ id: 'main', name: 'Main Topology' }]);
   const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark');
   // Genel (cihaz geneli) ayarlar — sistem geneli; admin ayarlar, herkes okur
-  const [general, setGeneral] = useState({ cometAnimation: true });
+  const [general, setGeneral] = useState({ cometAnimation: true, wirelessAnimation: true });
 
   // SSH Sessions
   const [sshSessions, setSshSessions] = useState([]);
@@ -79,9 +79,10 @@ export function AppProvider({ children }) {
     return () => { active = false; };
   }, [isAuthenticated, authFetch]);
 
-  // Comet animasyonu kapalıysa body'ye sınıf ekle → CSS .cable-comet'i gizler (tüm bağlantılar)
+  // Animasyon kapatma sınıfları → CSS ilgili edge animasyonunu durdurur (CPU tasarrufu)
   useEffect(() => {
     document.body.classList.toggle('comet-off', general.cometAnimation === false);
+    document.body.classList.toggle('wireless-off', general.wirelessAnimation === false);
   }, [general]);
 
   const toggleTheme = useCallback(() => {
