@@ -169,6 +169,16 @@ router.post('/switches/bulk', authenticate, requireAdmin, async (req, res) => {
 
     const results = { added: 0, skipped: 0, errors: [], pagesCreated: 0 };
     const existing = store.getSwitches();
+    const added = []; // başarıyla eklenenler — sonrasında IP'ye göre dikey (alt alta) dizmek için
+
+    // Import ÖNCESİ her sayfadaki mevcut cihazların en sağ X'i — yeni IP-sıralı sütunu
+    // mevcut cihazların üstüne bindirmeden onların sağına yerleştirmek için.
+    const preMaxXByPage = {};
+    for (const s of existing) {
+        const pg = s.topologyPage || 'main';
+        const x = (s.position && typeof s.position.x === 'number') ? s.position.x : 0;
+        preMaxXByPage[pg] = Math.max(preMaxXByPage[pg] ?? -Infinity, x);
+    }
 
     // CSV'deki tip değerini normalize et: büyük/küçük harf, kısaltma ve
     // görünen etiketleri (ör. "Network Switch") kanonik değere eşle.
@@ -245,7 +255,7 @@ router.post('/switches/bulk', authenticate, requireAdmin, async (req, res) => {
         const newSwitch = {
             id: Date.now().toString() + crypto.randomBytes(4).toString('hex'),
             status: 'DOWN', latency: 0,
-            position: { x: Math.random() * 800, y: Math.random() * 600 },
+            position: { x: 0, y: 0 }, // gerçek konum aşağıda IP'ye göre atanır
             tags: [],
             type: 'switch',
             ...payload
@@ -253,10 +263,27 @@ router.post('/switches/bulk', authenticate, requireAdmin, async (req, res) => {
 
         if (store.addSwitch(newSwitch)) {
             results.added++;
+            added.push({ id: newSwitch.id, ip: newSwitch.ip, topologyPage: newSwitch.topologyPage || 'main' });
         } else {
             results.errors.push(`${payload.ip} duplicate detected, skipped`);
             results.skipped++;
         }
+    }
+
+    // İçe aktarılan cihazları topoloji haritasında IP adresine göre ALT ALTA (dikey sütun) diz.
+    // Her topoloji sayfası kendi sütununu alır; sayfada mevcut cihaz varsa sütun onların sağına gelir.
+    const ipToNum = (ip) => {
+        const p = String(ip || '').split('.');
+        return p.length === 4 ? p.reduce((a, o) => a * 256 + (parseInt(o, 10) || 0), 0) : 0;
+    };
+    const IMPORT_START_X = 120, IMPORT_START_Y = 80, IMPORT_ROW_H = 90, IMPORT_COL_GAP = 260;
+    const byPage = {};
+    for (const a of added) (byPage[a.topologyPage] || (byPage[a.topologyPage] = [])).push(a);
+    for (const [pg, list] of Object.entries(byPage)) {
+        list.sort((a, b) => ipToNum(a.ip) - ipToNum(b.ip));
+        const preMax = preMaxXByPage[pg];
+        const baseX = (preMax !== undefined && isFinite(preMax)) ? preMax + IMPORT_COL_GAP : IMPORT_START_X;
+        list.forEach((a, i) => store.updateSwitch(a.id, { position: { x: baseX, y: IMPORT_START_Y + i * IMPORT_ROW_H } }));
     }
 
     await logAction(req.user, 'BULK_IMPORT', `${results.added} devices added`);
