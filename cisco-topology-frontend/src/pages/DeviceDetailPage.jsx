@@ -24,17 +24,19 @@ export default function DeviceDetailPage() {
   const [reveal, setReveal] = useState(false);          // 4sn güvenlik: veri gelmese de sayfayı aç
   const [slas, setSlas] = useState(null); // IP SLA durumu (MD/GSM rozeti + IP SLA kartı)
 
-  // Bağlamdan (Devices/topoloji zaten yüklü) anında tohumla: SNMP/SSH verisi gelene kadar
-  // temel bilgiler (ad/ip/durum/sürüm/etiket) hemen görünür — sayfa boş beklemez.
-  // Kimlik alanları (snmpCommunity/sshPasswordSet) bilinçli olarak tohumlanmaz; onlar
-  // /details'ten gelir, böylece "Not set ✕" kırmızısı yanıp sönmez.
+  // Bağlamdan (Devices/topoloji zaten yüklü) anında tohumla: SNMP verisi gelene kadar
+  // KAYIT-tabanlı tüm alanlar (ad/ip/durum/sürüm/etiket + snmpCommunity/sshUsername/
+  // sshPasswordSet/model) hemen görünür. Bunlar SNMP'den değil cihaz kaydından gelir; admin
+  // için /topology yanıtında zaten mevcut → /details'in yavaş SNMP turunu beklemesine gerek yok.
   useEffect(() => {
     if (snmpLoaded) return;
     const s = rawDevices.find(dev => dev.id === id);
     if (s) setDetailsData(prev => ({
-      ...prev, // /details'ten gelen zengin alanlar (cpu/ram/interfaces...) korunur
+      ...prev, // /details'ten gelen SNMP alanları (cpu/ram/interfaces/vendor/uptime...) korunur
       name: s.name, ip: s.ip, status: s.status, type: s.type,
       topologyPage: s.topologyPage, tags: s.tags, version: s.version, latency: s.latency,
+      snmpCommunity: s.snmpCommunity, sshUsername: s.sshUsername,
+      sshPasswordSet: s.sshPasswordSet, model: s.model,
     }));
   }, [rawDevices, id, snmpLoaded]);
 
