@@ -50,6 +50,7 @@ const translations = {
 
     // Device detail
     loadingDetails: 'Loading device details...',
+    loadingSnmpData: 'Loading SNMP data…',
     noData: 'Could not retrieve data. Is the backend running?',
     goBack: '← Go Back',
     noPortsFound: 'No physical ports found or SNMP error.',
@@ -277,6 +278,7 @@ const translations = {
 
     // Device detail
     loadingDetails: 'Cihaz detaylar\u0131 y\u00fckleniyor...',
+    loadingSnmpData: 'SNMP verileri y\u00fckleniyor\u2026',
     noData: 'Veri al\u0131namad\u0131. Backend \u00e7al\u0131\u015f\u0131yor mu?',
     goBack: '\u2190 Geri D\u00f6n',
     noPortsFound: 'Fiziksel port bulunamad\u0131 veya SNMP hatas\u0131.',

@@ -14,43 +14,73 @@ export default function DeviceDetailPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { authFetch, isAdmin, allowedCommands } = useAuth();
-  const { openSshSession, topoTabs } = useApp();
+  const { openSshSession, topoTabs, rawDevices } = useApp();
   const [showPing, setShowPing] = useState(false);
   // Geri dön: gelinen sayfaya (topoloji sekmesi / Devices / Dashboard ...).
   // Doğrudan link ile açıldıysa (state yok) Devices'a düş.
   const backTo = location.state?.from || '/devices';
-  const [details, setDetails] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [detailsData, setDetailsData] = useState(null); // /details yanıtı (SNMP zengin verisi)
+  const [snmpLoaded, setSnmpLoaded] = useState(false);  // /details en az bir kez döndü mü
+  const [reveal, setReveal] = useState(false);          // 4sn güvenlik: veri gelmese de sayfayı aç
   const [slas, setSlas] = useState(null); // IP SLA durumu (MD/GSM rozeti + IP SLA kartı)
 
+  // Bağlamdan (Devices/topoloji zaten yüklü) anında tohumla: SNMP/SSH verisi gelene kadar
+  // temel bilgiler (ad/ip/durum/sürüm/etiket) hemen görünür — sayfa boş beklemez.
+  // Kimlik alanları (snmpCommunity/sshPasswordSet) bilinçli olarak tohumlanmaz; onlar
+  // /details'ten gelir, böylece "Not set ✕" kırmızısı yanıp sönmez.
   useEffect(() => {
+    if (snmpLoaded) return;
+    const s = rawDevices.find(dev => dev.id === id);
+    if (s) setDetailsData(prev => ({
+      ...prev, // /details'ten gelen zengin alanlar (cpu/ram/interfaces...) korunur
+      name: s.name, ip: s.ip, status: s.status, type: s.type,
+      topologyPage: s.topologyPage, tags: s.tags, version: s.version, latency: s.latency,
+    }));
+  }, [rawDevices, id, snmpLoaded]);
+
+  // /details — arka planda; gelince SNMP verisini birleştir. In-flight guard yavaş SNMP'de
+  // isteklerin yığılmasını önler (ölü SNMP'de tek istek ~30sn sürebilir).
+  useEffect(() => {
+    let active = true, inFlight = false;
     const f = async () => {
+      if (inFlight) return; inFlight = true;
       try {
         const res = await authFetch(`/switches/${id}/details`);
-        if (res && res.ok) setDetails(await res.json());
-      } catch (e) { /* ignore */ } finally { setLoading(false); }
+        if (active && res && res.ok) {
+          const fresh = await res.json();
+          setDetailsData(prev => ({ ...prev, ...fresh }));
+          setSnmpLoaded(true);
+        }
+      } catch (e) { /* ignore */ } finally { inFlight = false; }
     };
     f();
     const i = setInterval(f, 5000);
-    return () => clearInterval(i);
+    return () => { active = false; clearInterval(i); };
   }, [id, authFetch]);
 
-  // IP SLA — 30 sn'de bir (MD/GSM rozeti ve IP SLA kartı bunu kullanır)
+  // 4 saniye sonra ne olursa olsun sayfa iskeletini göster (tohum yoksa bile).
+  useEffect(() => { setReveal(false); const tm = setTimeout(() => setReveal(true), 4000); return () => clearTimeout(tm); }, [id]);
+
+  // IP SLA — 30 sn'de bir (MD/GSM rozeti ve IP SLA kartı bunu kullanır). SSH fallback yavaş
+  // olabildiği için burada da in-flight guard var.
   useEffect(() => {
-    let active = true;
+    let active = true, inFlight = false;
     const f = async () => {
+      if (inFlight) return; inFlight = true;
       try {
         const res = await authFetch(`/switches/${id}/ip-sla`);
         if (active && res && res.ok) { const d = await res.json(); setSlas(Array.isArray(d) ? d : []); }
-      } catch (e) { /* ignore */ }
+      } catch (e) { /* ignore */ } finally { inFlight = false; }
     };
     f();
     const i = setInterval(f, 30000);
     return () => { active = false; clearInterval(i); };
   }, [id, authFetch]);
 
-  if (loading && !details) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>{t('loadingDetails')}</div>;
-  if (!details) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--danger)' }}>{t('noData')}</div>;
+  // İlk açılış kapısı: elde tohum/veri VARSA hemen render; hiç yoksa en geç 4sn sonra iskeletle.
+  if (!detailsData && !reveal) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>{t('loadingDetails')}</div>;
+  // detailsData null olsa bile (tohumsuz + 4sn geçti) sayfa çökmeden gelsin diye stub.
+  const details = detailsData || { id, name: id, ip: '-', status: 'UNKNOWN', tags: [] };
 
   const displayHostname = details.snmpHostname || details.name || 'Unknown';
   // IP SLA OK (tüm operasyonlar ok) → birincil etiket (varsayılan MD), aksi halde yedek etiket (varsayılan GSM).
@@ -146,8 +176,8 @@ export default function DeviceDetailPage() {
             </div>
           )}
         </div>
-        <Gauge value={details.cpu || 0} label="CPU Load" color={(details.cpu || 0) > 80 ? 'var(--danger)' : 'var(--primary)'} />
-        <Gauge value={details.ram || 0} label="RAM Usage" color={(details.ram || 0) > 80 ? 'var(--danger)' : '#8b5cf6'} />
+        <Gauge value={details.cpu || 0} label="CPU Load" color={(details.cpu || 0) > 80 ? 'var(--danger)' : 'var(--primary)'} loading={!snmpLoaded} />
+        <Gauge value={details.ram || 0} label="RAM Usage" color={(details.ram || 0) > 80 ? 'var(--danger)' : '#8b5cf6'} loading={!snmpLoaded} />
       </div>
 
       {/* SATIR 2: Ping + Config Backup + Running Config (eşit genişlik, ping ile aynı yükseklik) */}
@@ -203,7 +233,7 @@ export default function DeviceDetailPage() {
               </tr>
             )) : (
               <tr><td colSpan="5" style={{ textAlign: 'center', padding: 30, color: 'var(--text-muted)' }}>
-                {details.status === 'UP' ? t('noPortsFound') : t('deviceDown')}
+                {!snmpLoaded ? t('loadingSnmpData') : (details.status === 'UP' ? t('noPortsFound') : t('deviceDown'))}
               </td></tr>
             )}
           </tbody>

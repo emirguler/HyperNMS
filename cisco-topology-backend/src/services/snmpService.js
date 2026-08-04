@@ -173,14 +173,17 @@ async function getDeviceDetails(device) {
 
         // Yazılım sürümü — ENTITY-MIB entPhysicalSoftwareRev (chassis öncelikli), yoksa sysDescr'den.
         // probeVersion (arka plan yenileme) ile AYNI mantık → detay ve liste tutarlı olur.
-        // Boş dönerse (geçici SNMP hatası) kayıttan gelen (spread) son bilinen sürümü koru.
-        try {
-            const [entClassVbs, entSwVbs] = await Promise.all([getSubtree(ENT_CLASS), getSubtree(ENT_SW_REV)]);
-            const ver = pickVersion(entClassVbs, entSwVbs, sysDescrStr);
-            if (ver) responseData.version = ver;
-        } catch (e) {
-            const ver = imageVersionFromSysDescr(sysDescrStr);
-            if (ver) responseData.version = ver;
+        // Yalnızca SNMP yanıt veriyorsa (baseData) dene; ölü SNMP'de subtree'ler boşuna timeout
+        // ekler (sayfa gecikmesinin ana kaynağı). Boş dönerse kayıttaki son bilinen sürüm korunur.
+        if (baseData) {
+            try {
+                const [entClassVbs, entSwVbs] = await Promise.all([getSubtree(ENT_CLASS), getSubtree(ENT_SW_REV)]);
+                const ver = pickVersion(entClassVbs, entSwVbs, sysDescrStr);
+                if (ver) responseData.version = ver;
+            } catch (e) {
+                const ver = imageVersionFromSysDescr(sysDescrStr);
+                if (ver) responseData.version = ver;
+            }
         }
 
         // 2. CPU (try primary OID, then fallback)
@@ -1160,7 +1163,8 @@ async function probeVersion(device) {
             session.subtree(oid, 20, (vbs) => { for (const vb of vbs) o.push(vb); }, () => r(o));
         });
         const base = await getScalar([SYS_DESCR]);
-        const sysDescr = (base && !snmp.isVarbindError(base[0])) ? base[0].value.toString() : '';
+        if (!base) return ''; // SNMP yanıt vermiyor → subtree'lerde boşuna timeout bekleme
+        const sysDescr = !snmp.isVarbindError(base[0]) ? base[0].value.toString() : '';
         const [cVbs, wVbs] = await Promise.all([getSubtree(ENT_CLASS), getSubtree(ENT_SW_REV)]);
         return pickVersion(cVbs, wVbs, sysDescr);
     } catch (e) {
