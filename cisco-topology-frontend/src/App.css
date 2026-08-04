@@ -691,6 +691,9 @@ select.modern-input option {
   pointer-events: none;
 }
 
+/* Genel ayar: comet animasyonu kapalıyken tüm kablolu bağlantılarda gizle */
+body.comet-off .cable-comet { display: none; }
+
 /* ============================================
    TOAST NOTIFICATIONS
    ============================================ */

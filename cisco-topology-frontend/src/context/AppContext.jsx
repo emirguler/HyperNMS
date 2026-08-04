@@ -11,6 +11,8 @@ export function AppProvider({ children }) {
   const [edges, setEdges] = useState([]);
   const [topoTabs, setTopoTabs] = useState([{ id: 'main', name: 'Main Topology' }]);
   const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark');
+  // Genel (cihaz geneli) ayarlar — sistem geneli; admin ayarlar, herkes okur
+  const [general, setGeneral] = useState({ cometAnimation: true });
 
   // SSH Sessions
   const [sshSessions, setSshSessions] = useState([]);
@@ -65,6 +67,22 @@ export function AppProvider({ children }) {
     document.body.setAttribute('data-theme', theme);
     localStorage.setItem('theme', theme);
   }, [theme]);
+
+  // Genel ayarları giriş yapınca çek (topoloji comet'i buna göre çizilir)
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    let active = true;
+    authFetch('/settings/general')
+      .then(r => (r && r.ok ? r.json() : null))
+      .then(d => { if (active && d) setGeneral(d); })
+      .catch(() => { /* ignore */ });
+    return () => { active = false; };
+  }, [isAuthenticated, authFetch]);
+
+  // Comet animasyonu kapalıysa body'ye sınıf ekle → CSS .cable-comet'i gizler (tüm bağlantılar)
+  useEffect(() => {
+    document.body.classList.toggle('comet-off', general.cometAnimation === false);
+  }, [general]);
 
   const toggleTheme = useCallback(() => {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
@@ -152,12 +170,14 @@ export function AppProvider({ children }) {
     rawDevices, users, edges, setEdges,
     topoTabs, setTopoTabs,
     theme, toggleTheme,
+    general, setGeneral,
     fetchData, fetchUsers,
     sshSessions, activeSshTabId, setActiveSshTabId, terminalHeight, setTerminalHeight,
     openSshSession, closeSshSession, closeAllSessions,
     notifications, unreadCount, markNotificationsRead
   }), [
     rawDevices, users, edges, setEdges, topoTabs, setTopoTabs, theme, toggleTheme,
+    general, setGeneral,
     fetchData, fetchUsers, sshSessions, activeSshTabId, setActiveSshTabId,
     terminalHeight, setTerminalHeight, openSshSession, closeSshSession, closeAllSessions,
     notifications, unreadCount, markNotificationsRead

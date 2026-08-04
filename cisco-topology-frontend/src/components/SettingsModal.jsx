@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import AdSettingsCard from './AdSettingsCard';
 import BackupRestorePanel from './BackupRestorePanel';
+import GeneralSettingsCard from './GeneralSettingsCard';
 
 // Ayarlar hub'i: ikonlu kartlar. Bir karta tiklayinca ilgili ayar popup'i acilir.
 const TILES = [
+  { id: 'general', icon: '🎛️', title: 'General', desc: 'Device-wide display & behavior' },
   { id: 'backup', icon: '📦', title: 'Backup & Restore', desc: 'Export or import the full configuration' },
   { id: 'ad', icon: '🪪', title: 'Active Directory', desc: 'LDAP sign-in for AD users' },
 ];
@@ -53,6 +55,7 @@ export default function SettingsModal({ onClose }) {
               <button onClick={() => setPanel(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '1.5rem', cursor: 'pointer', lineHeight: 1 }}>&times;</button>
             </div>
 
+            {panel === 'general' && <GeneralSettingsCard embedded />}
             {panel === 'backup' && <BackupRestorePanel />}
             {panel === 'ad' && <AdSettingsCard embedded />}
           </div>

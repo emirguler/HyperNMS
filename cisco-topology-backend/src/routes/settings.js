@@ -348,4 +348,28 @@ router.post('/settings/ad/test', authenticate, requireAdmin, async (req, res) =>
     }
 });
 
+// --- Genel (cihaz geneli görünüm/davranış) ayarları ---
+// Sistem geneli; admin ayarlar, tüm oturumlar okur (topoloji görünümünü etkiler).
+function readGeneral() {
+    const g = store.getSettings().general || {};
+    return {
+        cometAnimation: g.cometAnimation !== false, // varsayılan açık
+    };
+}
+
+// Okuma: her kimliği doğrulanmış kullanıcı (topoloji comet'i buna göre çizilir)
+router.get('/settings/general', authenticate, (req, res) => {
+    res.json(readGeneral());
+});
+
+// Yazma: yalnızca admin
+router.put('/settings/general', authenticate, requireAdmin, (req, res) => {
+    const b = req.body || {};
+    const patch = {};
+    if (typeof b.cometAnimation === 'boolean') patch.cometAnimation = b.cometAnimation;
+    const current = store.getSettings().general || {};
+    store.updateSettings({ general: { ...current, ...patch } });
+    res.json(readGeneral());
+});
+
 module.exports = router;
