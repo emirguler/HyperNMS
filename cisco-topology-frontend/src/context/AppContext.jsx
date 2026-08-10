@@ -165,6 +165,12 @@ export function AppProvider({ children }) {
     setActiveSshTabId(null);
   }, []);
 
+  // Yeniden bağlan: reconnectNonce'ı artır → TerminalPane remount olur (yeni WS/SSH), tab kapanmaz
+  const reconnectSshSession = useCallback((id) => {
+    setSshSessions(prev => prev.map(s => s.id === id ? { ...s, reconnectNonce: (s.reconnectNonce || 0) + 1 } : s));
+    setActiveSshTabId(id);
+  }, []);
+
   // Context value'yu memoize et — alakasız provider render'ları (theme/ssh) value
   // kimliğini değiştirip tüm tüketicileri yeniden render etmesin
   const value = useMemo(() => ({
@@ -174,13 +180,13 @@ export function AppProvider({ children }) {
     general, setGeneral,
     fetchData, fetchUsers,
     sshSessions, activeSshTabId, setActiveSshTabId, terminalHeight, setTerminalHeight,
-    openSshSession, closeSshSession, closeAllSessions,
+    openSshSession, closeSshSession, closeAllSessions, reconnectSshSession,
     notifications, unreadCount, markNotificationsRead
   }), [
     rawDevices, users, edges, setEdges, topoTabs, setTopoTabs, theme, toggleTheme,
     general, setGeneral,
     fetchData, fetchUsers, sshSessions, activeSshTabId, setActiveSshTabId,
-    terminalHeight, setTerminalHeight, openSshSession, closeSshSession, closeAllSessions,
+    terminalHeight, setTerminalHeight, openSshSession, closeSshSession, closeAllSessions, reconnectSshSession,
     notifications, unreadCount, markNotificationsRead
   ]);
 

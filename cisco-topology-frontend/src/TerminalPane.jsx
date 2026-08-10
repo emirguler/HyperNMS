@@ -6,11 +6,14 @@ import { WS_BASE } from './config';
 import { useAuth } from './context/AuthContext';
 import { t } from './i18n';
 
-function TerminalPane({ switchId, switchName, active = true }) {
+function TerminalPane({ switchId, switchName, active = true, onStatus }) {
   const containerRef = useRef(null);
   const fitAddonRef = useRef(null);
   const socketRef = useRef(null);
   const termRef = useRef(null);
+  // En güncel onStatus'a eriş (mount effect'i eski closure'a takılmasın)
+  const onStatusRef = useRef(onStatus);
+  onStatusRef.current = onStatus;
   const { userRole, allowedCommands } = useAuth();
 
   // Administrator = tam kontrol; diğer roller = salt-izle (klavye kapalı, sadece butonlar)
@@ -48,6 +51,7 @@ function TerminalPane({ switchId, switchName, active = true }) {
     socketRef.current = ws;
 
     ws.onopen = () => {
+      onStatusRef.current?.(true);
       term.write(`*** SSH connection opening ***\r\n`);
     };
 
@@ -70,10 +74,12 @@ function TerminalPane({ switchId, switchName, active = true }) {
     };
 
     ws.onclose = (event) => {
-      term.write(`\r\n*** WebSocket closed (code: ${event.code}, reason: ${event.reason || 'none'}) ***\r\n`);
+      onStatusRef.current?.(false);
+      term.write(`\r\n*** SSH disconnected (code: ${event.code}${event.reason ? ', ' + event.reason : ''}) — sekmeye sağ tıklayıp Reconnect ile yeniden bağlanın ***\r\n`);
     };
 
     ws.onerror = (event) => {
+      onStatusRef.current?.(false);
       term.write(`\r\n*** WebSocket error ***\r\n`);
     };
 
