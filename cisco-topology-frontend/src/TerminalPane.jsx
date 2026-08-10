@@ -77,24 +77,47 @@ function TerminalPane({ switchId, switchName, active = true }) {
       term.write(`\r\n*** WebSocket error ***\r\n`);
     };
 
-    // Klavye girişini yalnızca tam kontrol (admin) oturumlarında ilet
+    // SecureCRT gibi kopyala/yapıştır: fareyle seçince otomatik kopyala, sağ tık → yapıştır.
+    // Kopyalama https'te Clipboard API, http'te textarea+execCommand ile → her iki durumda çalışır.
+    const copyText = (text) => {
+      if (!text) return;
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).catch(() => {});
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = text; ta.style.position = 'fixed'; ta.style.top = '-1000px'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.focus(); ta.select();
+        try { document.execCommand('copy'); } catch (err) { /* ignore */ }
+        ta.remove();
+        try { term.focus(); } catch (err) { /* ignore */ }
+      }
+    };
+    const onMouseUp = () => { const sel = term.getSelection(); if (sel) copyText(sel); };
+    const el = containerRef.current;
+    el.addEventListener('mouseup', onMouseUp);
+
+    let onContextMenu = null;
+    // Klavye girişi + yapıştırma yalnızca tam kontrol (admin) oturumlarında
     if (!restricted) {
-      // Ctrl+C: metin seçiliyse kopyala; seçim yoksa interrupt (\x03) gönder — SecureCRT gibi
-      // çalışan komutu (ping/traceroute vb.) kesebilmek için. Tarayıcının "kopyala"ya
-      // kaçmasını da engeller (xterm/tarayıcı varsayılanına güvenmeyip açıkça gönderiyoruz).
+      // Ctrl+C: çalışan komutu kes (interrupt, \x03) — SecureCRT gibi. Kopyalama artık seçimle
+      // otomatik yapıldığından Ctrl+C her zaman interrupt gönderir (kopya için Ctrl+Shift+C).
       term.attachCustomKeyEventHandler((e) => {
         if (e.type === 'keydown' && e.ctrlKey && !e.shiftKey && !e.altKey && e.code === 'KeyC') {
-          // Kopyalama yalnızca clipboard API varken (https). http'de/ seçim yokken → interrupt.
-          if (term.hasSelection() && navigator.clipboard) {
-            const sel = term.getSelection();
-            if (sel) navigator.clipboard.writeText(sel).catch(() => {});
-            return false; // seçimi kopyaladık; interrupt gönderme
-          }
           if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'data', data: '\x03' }));
-          return false; // interrupt gönderdik; xterm/ tarayıcı varsayılanını durdur (çift olmasın)
+          return false;
         }
         return true;
       });
+
+      // Sağ tık → yapıştır. https'te doğrudan (Clipboard API); http'te pano okunamadığından
+      // tarayıcının kendi sağ-tık menüsüne (Paste) bırakılır (ya da Ctrl+V ile yapıştırılır).
+      onContextMenu = (e) => {
+        if (navigator.clipboard && navigator.clipboard.readText && window.isSecureContext) {
+          e.preventDefault();
+          navigator.clipboard.readText().then(text => { if (text) term.paste(text); }).catch(() => {});
+        }
+      };
+      el.addEventListener('contextmenu', onContextMenu);
 
       term.onData((data) => {
         if (ws.readyState === WebSocket.OPEN) {
@@ -105,6 +128,8 @@ function TerminalPane({ switchId, switchName, active = true }) {
 
     return () => {
       try { ws.close(); } catch (e) {}
+      try { el.removeEventListener('mouseup', onMouseUp); } catch (e) {}
+      try { if (onContextMenu) el.removeEventListener('contextmenu', onContextMenu); } catch (e) {}
       termRef.current = null;
       term.dispose();
     };
