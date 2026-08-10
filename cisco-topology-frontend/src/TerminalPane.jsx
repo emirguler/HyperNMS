@@ -79,6 +79,23 @@ function TerminalPane({ switchId, switchName, active = true }) {
 
     // Klavye girişini yalnızca tam kontrol (admin) oturumlarında ilet
     if (!restricted) {
+      // Ctrl+C: metin seçiliyse kopyala; seçim yoksa interrupt (\x03) gönder — SecureCRT gibi
+      // çalışan komutu (ping/traceroute vb.) kesebilmek için. Tarayıcının "kopyala"ya
+      // kaçmasını da engeller (xterm/tarayıcı varsayılanına güvenmeyip açıkça gönderiyoruz).
+      term.attachCustomKeyEventHandler((e) => {
+        if (e.type === 'keydown' && e.ctrlKey && !e.shiftKey && !e.altKey && e.code === 'KeyC') {
+          // Kopyalama yalnızca clipboard API varken (https). http'de/ seçim yokken → interrupt.
+          if (term.hasSelection() && navigator.clipboard) {
+            const sel = term.getSelection();
+            if (sel) navigator.clipboard.writeText(sel).catch(() => {});
+            return false; // seçimi kopyaladık; interrupt gönderme
+          }
+          if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'data', data: '\x03' }));
+          return false; // interrupt gönderdik; xterm/ tarayıcı varsayılanını durdur (çift olmasın)
+        }
+        return true;
+      });
+
       term.onData((data) => {
         if (ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: 'data', data }));
