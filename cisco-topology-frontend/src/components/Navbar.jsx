@@ -5,6 +5,8 @@ import NotificationBell from './NotificationBell';
 import SettingsModal from './SettingsModal';
 import PingModal from './PingModal';
 import PingIcon from './PingIcon';
+import TraceModal from './TraceModal';
+import TraceIcon from './TraceIcon';
 import SettingsIcon from './SettingsIcon';
 
 export default function Navbar({ onAddDevice }) {
@@ -14,6 +16,7 @@ export default function Navbar({ onAddDevice }) {
   const path = location.pathname;
   const [showSettings, setShowSettings] = useState(false);
   const [showPing, setShowPing] = useState(false);
+  const [showTrace, setShowTrace] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const go = (p) => { navigate(p); setMobileOpen(false); };
@@ -56,6 +59,7 @@ export default function Navbar({ onAddDevice }) {
         {/* Right — bell always visible; details on desktop, hamburger on mobile */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <button className="btn btn-primary btn-sm" onClick={() => setShowPing(true)} title="Ping"><PingIcon size={16} /> Ping</button>
+          <button className="btn btn-primary btn-sm" onClick={() => setShowTrace(true)} title="Trace"><TraceIcon size={16} /> Trace</button>
           <NotificationBell />
 
           <span className="nav-desktop-right" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -91,6 +95,7 @@ export default function Navbar({ onAddDevice }) {
       </header>
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
       {showPing && <PingModal onClose={() => setShowPing(false)} />}
+      {showTrace && <TraceModal onClose={() => setShowTrace(false)} />}
     </>
   );
 }

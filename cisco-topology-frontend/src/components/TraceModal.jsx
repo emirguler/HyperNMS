@@ -28,23 +28,32 @@ export default function TraceModal({ ip: initialIp = '', lockIp = false, onClose
     if (!IPV4_RE.test(target)) return;
     const myGen = ++genRef.current;
     setRunning(true); setHops(null); setError('');
+    let all;
     try {
       const res = await authFetch('/traceroute', { method: 'POST', body: JSON.stringify({ ip: target }) });
       const data = res ? await res.json().catch(() => null) : null;
       if (genRef.current !== myGen) return; // iptal edildi
       if (res && res.ok && data && Array.isArray(data.hops)) {
-        setHops(data.hops);
+        all = data.hops;
       } else {
         setError((data && data.error) || t('traceFailed'));
-        setHops([]);
+        setHops([]); setRunning(false);
+        return;
       }
     } catch {
       if (genRef.current !== myGen) return;
       setError(t('traceFailed'));
-      setHops([]);
-    } finally {
-      if (genRef.current === myGen) setRunning(false);
+      setHops([]); setRunning(false);
+      return;
     }
+    // Hop'ları 1 sn arayla tek tek göster (ping aracı gibi canlı akış hissi)
+    setHops([]);
+    for (let i = 0; i < all.length; i++) {
+      if (genRef.current !== myGen) return; // modal kapandı / yeni çalışma başladı
+      setHops(prev => [...(prev || []), all[i]]);
+      if (i < all.length - 1) await new Promise(r => setTimeout(r, 1000));
+    }
+    if (genRef.current === myGen) setRunning(false);
   };
 
   return (
@@ -69,7 +78,7 @@ export default function TraceModal({ ip: initialIp = '', lockIp = false, onClose
         </div>
         <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginBottom: 16 }}>{t('traceHint')}</div>
 
-        {running && (
+        {running && (!hops || hops.length === 0) && (
           <div style={{ padding: 18, textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>⏳ {t('traceRunning')}</div>
         )}
 
@@ -83,7 +92,7 @@ export default function TraceModal({ ip: initialIp = '', lockIp = false, onClose
           <div style={{ padding: 16, textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>{t('traceNoHops')}</div>
         )}
 
-        {!running && hops && hops.length > 0 && (
+        {hops && hops.length > 0 && (
           <div style={{ border: '1px solid var(--border-color)', borderRadius: 8, overflow: 'hidden', maxHeight: 360, overflowY: 'auto' }}>
             {hops.map(h => (
               <div key={h.hop} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 14px', borderBottom: '1px solid rgba(255,255,255,0.05)', fontSize: '0.85rem' }}>
@@ -98,6 +107,12 @@ export default function TraceModal({ ip: initialIp = '', lockIp = false, onClose
                 )}
               </div>
             ))}
+            {running && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 14px', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                <span style={{ width: 28, textAlign: 'right' }}>⏳</span>
+                <span style={{ flex: 1 }}>{t('traceRunning')}</span>
+              </div>
+            )}
           </div>
         )}
       </div>
