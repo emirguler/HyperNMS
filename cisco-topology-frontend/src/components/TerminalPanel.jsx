@@ -3,7 +3,7 @@ import TerminalPane from '../TerminalPane';
 import { useApp } from '../context/AppContext';
 import { t } from '../i18n';
 
-const TAB_BAR_HEIGHT = 40;
+const TAB_BAR_HEIGHT = 30;
 
 export default function TerminalPanel() {
   const {
@@ -59,7 +59,7 @@ export default function TerminalPanel() {
       {!minimized && (
         <div onMouseDown={startResizing} style={{ width: '100%', height: '6px', cursor: 'row-resize', background: 'transparent', position: 'absolute', top: -3, zIndex: 2001 }} />
       )}
-      <div style={{ background: '#1e293b', display: 'flex', alignItems: 'center', borderBottom: '1px solid var(--border-color)', overflowX: 'auto', height: 40, flexShrink: 0 }}>
+      <div style={{ background: '#1e293b', display: 'flex', alignItems: 'center', borderBottom: '1px solid var(--border-color)', overflowX: 'auto', height: 30, flexShrink: 0 }}>
         {sshSessions.map(session => (
           <div key={session.id} onClick={() => { setActiveSshTabId(session.id); if (minimized) setMinimized(false); }}
             onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setTabMenu({ id: session.id, left: e.clientX, bottom: window.innerHeight - e.clientY }); }}
