@@ -18,6 +18,9 @@ RUN npm run build
 FROM node:20-alpine
 WORKDIR /app
 
+# Trace aracı için traceroute (Alpine'da varsayılan gelmez; ping busybox'ta mevcut)
+RUN apk add --no-cache traceroute
+
 # Backend
 COPY --from=backend /app/backend ./backend
 

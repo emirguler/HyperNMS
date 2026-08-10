@@ -4,6 +4,8 @@ import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
 import PingModal from '../components/PingModal';
 import PingIcon from '../components/PingIcon';
+import TraceModal from '../components/TraceModal';
+import TraceIcon from '../components/TraceIcon';
 import Gauge from '../components/Gauge';
 import PingHistoryChart from '../components/PingHistoryChart';
 import ConfigBackupCard from '../components/ConfigBackupCard';
@@ -16,6 +18,7 @@ export default function DeviceDetailPage() {
   const { authFetch, isAdmin, allowedCommands } = useAuth();
   const { openSshSession, topoTabs, rawDevices } = useApp();
   const [showPing, setShowPing] = useState(false);
+  const [showTrace, setShowTrace] = useState(false);
   // Geri dön: gelinen sayfaya (topoloji sekmesi / Devices / Dashboard ...).
   // Doğrudan link ile açıldıysa (state yok) Devices'a düş.
   const backTo = location.state?.from || '/devices';
@@ -116,6 +119,11 @@ export default function DeviceDetailPage() {
         {details.ip && (
           <button className="btn btn-primary btn-sm" onClick={() => setShowPing(true)}>
             <PingIcon size={16} /> {t('pingTool')}
+          </button>
+        )}
+        {details.ip && (
+          <button className="btn btn-primary btn-sm" onClick={() => setShowTrace(true)}>
+            <TraceIcon size={16} /> {t('traceTool')}
           </button>
         )}
       </div>
@@ -244,6 +252,9 @@ export default function DeviceDetailPage() {
 
       {showPing && details.ip && (
         <PingModal ip={details.ip} lockIp onClose={() => setShowPing(false)} />
+      )}
+      {showTrace && details.ip && (
+        <TraceModal ip={details.ip} lockIp onClose={() => setShowTrace(false)} />
       )}
     </div>
   );

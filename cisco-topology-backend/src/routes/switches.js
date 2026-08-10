@@ -13,6 +13,7 @@ const { snmpCache } = require('../utils/cache');
 const rateLimiter = require('../middleware/rateLimiter');
 const ping = require('ping');
 const ssh2 = require('ssh2').Client;
+const { spawn } = require('child_process');
 
 const router = express.Router();
 
@@ -50,6 +51,72 @@ router.post('/ping', authenticate, pingToolLimiter, async (req, res) => {
         console.error('[PING-TOOL] Hata:', e.message);
         res.status(500).json({ error: 'Ping failed' });
     }
+});
+
+// --- Traceroute (Trace aracı) — hem admin hem User rolüne açık, ping ile aynı SSRF koruması ---
+// tracert (Windows) / traceroute (Linux/Alpine) çıktısını satır satır ayrıştırır:
+// her hop için { hop, ip, rtt(ms|null), timedOut }. Her iki formatı da destekler
+// (Win: "1  <1 ms  10.0.0.1", Linux -n: "1  10.0.0.1  0.1 ms").
+function parseTrace(output) {
+    const hops = [];
+    // Windows tracert CRLF verir; \r kalırsa regex'teki $ hop satırlarını yakalayamaz → \r?\n ile böl
+    for (const line of String(output || '').split(/\r?\n/)) {
+        const m = line.match(/^\s*(\d+)\s+(.*)$/);
+        if (!m) continue; // başlık/altbilgi satırları
+        const rest = m[2];
+        const ipm = rest.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/);
+        const rtts = [...rest.matchAll(/<?\s*([\d.]+)\s*ms/gi)].map(x => parseFloat(x[1])).filter(n => Number.isFinite(n));
+        const hopIp = ipm ? ipm[1] : null;
+        hops.push({
+            hop: parseInt(m[1], 10),
+            ip: hopIp,
+            rtt: rtts.length ? Math.min(...rtts) : null,
+            timedOut: !hopIp && /\*/.test(rest),
+        });
+    }
+    return hops;
+}
+
+const traceLimiter = rateLimiter({ windowMs: 60000, max: 20, message: 'Too many trace requests, please slow down' });
+router.post('/traceroute', authenticate, traceLimiter, (req, res) => {
+    const ip = String((req.body && req.body.ip) || '').trim();
+    // SSRF: ping ile aynı — yalnızca geçerli IPv4, bloklu aralıklar hariç
+    if (!isValidIPv4(ip) || isBlockedIP(ip)) {
+        return res.status(400).json({ error: 'Valid IP address required' });
+    }
+    const isWin = process.platform === 'win32';
+    const MAX_HOPS = 20;
+    // Argümanlar dizi olarak veriliyor (shell yok) → enjeksiyon yok. IP zaten doğrulandı.
+    const cmd = isWin ? 'tracert' : 'traceroute';
+    const args = isWin
+        ? ['-d', '-h', String(MAX_HOPS), '-w', '2000', ip]         // -d: DNS çözme yok
+        : ['-n', '-m', String(MAX_HOPS), '-w', '2', '-q', '1', ip]; // -n: numeric, -q 1: hop başına 1 prob
+
+    let child;
+    try {
+        child = spawn(cmd, args, { windowsHide: true });
+    } catch (e) {
+        return res.status(500).json({ error: 'traceroute not available on server' });
+    }
+
+    let out = '';
+    let done = false;
+    const finish = (payload, code = 200) => {
+        if (done) return;
+        done = true;
+        clearTimeout(killer);
+        res.status(code).json(payload);
+    };
+    // 45 sn'de bitmezse süreci öldür → 'close' o ana kadarki hop'ları döndürür
+    const killer = setTimeout(() => { try { child.kill(); } catch (e) { /* ignore */ } }, 45000);
+
+    child.stdout.on('data', d => { out += d.toString(); if (out.length > 65536) out = out.slice(-65536); });
+    child.stderr.on('data', d => { out += d.toString(); });
+    child.on('error', (e) => {
+        // ENOENT → komut yüklü değil (ör. Alpine'da traceroute paketi eksik)
+        finish({ error: e.code === 'ENOENT' ? 'traceroute not installed on server' : 'Trace failed' }, 500);
+    });
+    child.on('close', () => finish({ ip, hops: parseTrace(out) }));
 });
 
 router.get('/topology', authenticate, (req, res) => {
