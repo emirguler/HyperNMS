@@ -77,8 +77,29 @@ function parseTrace(output) {
     return hops;
 }
 
+// Tek traceroute çalıştırması → { hops, err }. ASLA reject etmez. 45sn'de süreç öldürülür.
+function spawnTrace(cmd, args) {
+    return new Promise((resolve) => {
+        let child;
+        try {
+            child = spawn(cmd, args, { windowsHide: true });
+        } catch (e) {
+            return resolve({ hops: [], err: 'failed' });
+        }
+        let out = '';
+        let settled = false;
+        const done = (r) => { if (settled) return; settled = true; clearTimeout(killer); resolve(r); };
+        const killer = setTimeout(() => { try { child.kill(); } catch (e) { /* ignore */ } }, 45000);
+        child.stdout.on('data', d => { out += d.toString(); if (out.length > 65536) out = out.slice(-65536); });
+        child.stderr.on('data', d => { out += d.toString(); });
+        // ENOENT → komut yüklü değil (ör. Alpine'da traceroute paketi eksik)
+        child.on('error', (e) => done({ hops: [], err: e.code === 'ENOENT' ? 'notinstalled' : 'failed' }));
+        child.on('close', () => done({ hops: parseTrace(out), err: null }));
+    });
+}
+
 const traceLimiter = rateLimiter({ windowMs: 60000, max: 20, message: 'Too many trace requests, please slow down' });
-router.post('/traceroute', authenticate, traceLimiter, (req, res) => {
+router.post('/traceroute', authenticate, traceLimiter, async (req, res) => {
     const ip = String((req.body && req.body.ip) || '').trim();
     // SSRF: ping ile aynı — yalnızca geçerli IPv4, bloklu aralıklar hariç
     if (!isValidIPv4(ip) || isBlockedIP(ip)) {
@@ -87,36 +108,24 @@ router.post('/traceroute', authenticate, traceLimiter, (req, res) => {
     const isWin = process.platform === 'win32';
     const MAX_HOPS = 20;
     // Argümanlar dizi olarak veriliyor (shell yok) → enjeksiyon yok. IP zaten doğrulandı.
-    const cmd = isWin ? 'tracert' : 'traceroute';
-    const args = isWin
-        ? ['-d', '-h', String(MAX_HOPS), '-w', '2000', ip]         // -d: DNS çözme yok
-        : ['-n', '-m', String(MAX_HOPS), '-w', '2', '-q', '1', ip]; // -n: numeric, -q 1: hop başına 1 prob
 
-    let child;
-    try {
-        child = spawn(cmd, args, { windowsHide: true });
-    } catch (e) {
-        return res.status(500).json({ error: 'traceroute not available on server' });
+    if (isWin) {
+        // Windows tracert zaten ICMP echo → temiz sonuç
+        const r = await spawnTrace('tracert', ['-d', '-h', String(MAX_HOPS), '-w', '2000', ip]);
+        if (r.err === 'notinstalled') return res.status(500).json({ error: 'traceroute not installed on server' });
+        return res.json({ ip, hops: r.hops });
     }
 
-    let out = '';
-    let done = false;
-    const finish = (payload, code = 200) => {
-        if (done) return;
-        done = true;
-        clearTimeout(killer);
-        res.status(code).json(payload);
-    };
-    // 45 sn'de bitmezse süreci öldür → 'close' o ana kadarki hop'ları döndürür
-    const killer = setTimeout(() => { try { child.kill(); } catch (e) { /* ignore */ } }, 45000);
-
-    child.stdout.on('data', d => { out += d.toString(); if (out.length > 65536) out = out.slice(-65536); });
-    child.stderr.on('data', d => { out += d.toString(); });
-    child.on('error', (e) => {
-        // ENOENT → komut yüklü değil (ör. Alpine'da traceroute paketi eksik)
-        finish({ error: e.code === 'ENOENT' ? 'traceroute not installed on server' : 'Trace failed' }, 500);
-    });
-    child.on('close', () => finish({ ip, hops: parseTrace(out) }));
+    // Linux: ÖNCE ICMP (-I) — Windows tracert ile aynı, temiz. Linux traceroute varsayılanı
+    // UDP'dir ve firewall/hedef UDP probe'una cevap vermeyince timeout'a düşer.
+    let r = await spawnTrace('traceroute', ['-I', '-n', '-m', String(MAX_HOPS), '-w', '2', ip]);
+    if (r.err === 'notinstalled') return res.status(500).json({ error: 'traceroute not installed on server' });
+    // ICMP hiç hop döndürmediyse (ör. raw-soket izni yoksa) UDP'ye düş → araç yine de çalışsın
+    if (!r.hops.length) {
+        const udp = await spawnTrace('traceroute', ['-n', '-m', String(MAX_HOPS), '-w', '2', ip]);
+        if (udp.hops.length) r = udp;
+    }
+    return res.json({ ip, hops: r.hops });
 });
 
 router.get('/topology', authenticate, (req, res) => {
