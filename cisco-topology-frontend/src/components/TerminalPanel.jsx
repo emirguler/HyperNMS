@@ -75,7 +75,7 @@ export default function TerminalPanel() {
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden', background: '#000' }}>
         {sshSessions.map(session => (
           <div key={session.id} style={{ display: activeSshTabId === session.id ? 'block' : 'none', height: '100%', width: '100%' }}>
-            <TerminalPane switchId={session.deviceId || session.id} switchName={session.name} />
+            <TerminalPane switchId={session.deviceId || session.id} switchName={session.name} active={activeSshTabId === session.id} />
           </div>
         ))}
       </div>

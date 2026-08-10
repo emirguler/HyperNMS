@@ -6,10 +6,11 @@ import { WS_BASE } from './config';
 import { useAuth } from './context/AuthContext';
 import { t } from './i18n';
 
-function TerminalPane({ switchId, switchName }) {
+function TerminalPane({ switchId, switchName, active = true }) {
   const containerRef = useRef(null);
   const fitAddonRef = useRef(null);
   const socketRef = useRef(null);
+  const termRef = useRef(null);
   const { userRole, allowedCommands } = useAuth();
 
   // Administrator = tam kontrol; diğer roller = salt-izle (klavye kapalı, sadece butonlar)
@@ -37,6 +38,7 @@ function TerminalPane({ switchId, switchName }) {
 
     term.open(containerRef.current);
     fitAddon.fit();
+    termRef.current = term;
     if (!restricted) term.focus();
     term.write(`Connecting to switch ${switchId} (${switchName})...\r\n`);
 
@@ -86,9 +88,21 @@ function TerminalPane({ switchId, switchName }) {
 
     return () => {
       try { ws.close(); } catch (e) {}
+      termRef.current = null;
       term.dispose();
     };
   }, [switchId, switchName, restricted]);
+
+  // Sekme aktif olunca terminali odakla + boyutu tazele. display:none iken odak/fit çalışmaz,
+  // bu yüzden görünür olduktan sonra (rAF) yap → sekmeye tıklayınca içine tıklamadan yazılır.
+  useEffect(() => {
+    if (!active || restricted) return;
+    const id = requestAnimationFrame(() => {
+      try { fitAddonRef.current?.fit(); } catch (e) { /* ignore */ }
+      try { termRef.current?.focus(); } catch (e) { /* ignore */ }
+    });
+    return () => cancelAnimationFrame(id);
+  }, [active, restricted]);
 
   useEffect(() => {
     if (!containerRef.current) return;
