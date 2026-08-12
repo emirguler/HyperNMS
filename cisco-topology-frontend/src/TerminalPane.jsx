@@ -6,7 +6,7 @@ import { WS_BASE } from './config';
 import { useAuth } from './context/AuthContext';
 import { t } from './i18n';
 
-function TerminalPane({ switchId, switchName, active = true, onStatus }) {
+function TerminalPane({ switchId, switchName, active = true, minimized = false, onStatus }) {
   const containerRef = useRef(null);
   const fitAddonRef = useRef(null);
   const socketRef = useRef(null);
@@ -30,7 +30,8 @@ function TerminalPane({ switchId, switchName, active = true, onStatus }) {
       disableStdin: restricted, // kısıtlı kullanıcı klavyeyle giriş yapamaz
       theme: {
         background: '#000000',
-        foreground: '#e5e7eb',
+        foreground: '#ffd60a', // SecureCRT tarzı sarı terminal yazısı
+        cursor: '#ffd60a',
       },
       cursorBlink: !restricted,
     });
@@ -141,16 +142,18 @@ function TerminalPane({ switchId, switchName, active = true, onStatus }) {
     };
   }, [switchId, switchName, restricted]);
 
-  // Sekme aktif olunca terminali odakla + boyutu tazele. display:none iken odak/fit çalışmaz,
-  // bu yüzden görünür olduktan sonra (rAF) yap → sekmeye tıklayınca içine tıklamadan yazılır.
+  // Sekme aktif olunca (veya panel küçük bardan yeniden büyütülünce) terminali odakla + boyutu tazele.
+  // display:none / küçültülmüş (transform ile ekran altına) iken odak/fit güvenilmez; görünür olunca (rAF) yap.
+  // 'minimized' bağımlılığı: küçük bardayken zaten aktif olan sekmeye basıp büyütünce active değişmese de
+  // efekt yeniden koşar → içine ayrıca tıklamadan yazılır.
   useEffect(() => {
-    if (!active || restricted) return;
+    if (!active || restricted || minimized) return;
     const id = requestAnimationFrame(() => {
       try { fitAddonRef.current?.fit(); } catch (e) { /* ignore */ }
       try { termRef.current?.focus(); } catch (e) { /* ignore */ }
     });
     return () => cancelAnimationFrame(id);
-  }, [active, restricted]);
+  }, [active, restricted, minimized]);
 
   useEffect(() => {
     if (!containerRef.current) return;

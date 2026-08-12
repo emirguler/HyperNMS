@@ -98,6 +98,7 @@ export default function TerminalPanel() {
               switchId={session.deviceId || session.id}
               switchName={session.name}
               active={activeSshTabId === session.id}
+              minimized={minimized}
               onStatus={(ok) => setConnStatus(prev => (prev[session.id] === ok ? prev : { ...prev, [session.id]: ok }))}
             />
           </div>
