@@ -10,8 +10,8 @@ import { t } from './i18n';
 // Cisco çıktıyı renksiz (düz metin) gönderir; renklendirmeyi istemcide yapıyoruz.
 // Gelen metni ANSI escape dizileri ↔ düz metin parçalarına ayırıp YALNIZCA düz metin
 // parçalarındaki tanınan kelimeleri renk koduyla sarıyoruz → imleç/ekran kontrol
-// dizileri (cursor move, clear) bozulmadan geçer. Temel yazı rengi sarı; her kelimeden
-// sonra SGR 39 (varsayılan ön-plan) ile sarıya geri döneriz.
+// dizileri (cursor move, clear) bozulmadan geçer. Temel yazı rengi beyaz; her kelimeden
+// sonra SGR 39 (varsayılan ön-plan) ile beyaza geri döneriz.
 const C_GREEN = '\x1b[38;2;80;250;123m';  // komut fiilleri + "iyi" durum (up, permit...)
 const C_CYAN  = '\x1b[38;2;120;190;255m'; // nesne/konu (interface, ip, vlan...)
 const C_RED   = '\x1b[38;2;255;95;95m';   // olumsuz/tehlike/"kötü" durum (no, shutdown, down...)
@@ -70,8 +70,7 @@ function TerminalPane({ switchId, switchName, active = true, minimized = false, 
       disableStdin: restricted, // kısıtlı kullanıcı klavyeyle giriş yapamaz
       theme: {
         background: '#000000',
-        foreground: '#ffd60a', // SecureCRT tarzı sarı terminal yazısı
-        cursor: '#ffd60a',
+        foreground: '#e5e7eb', // varsayılan yazı: beyaz (renklendirme yalnızca anahtar kelimelerde)
       },
       cursorBlink: !restricted,
     });
