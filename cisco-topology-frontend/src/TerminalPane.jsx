@@ -6,6 +6,46 @@ import { WS_BASE } from './config';
 import { useAuth } from './context/AuthContext';
 import { t } from './i18n';
 
+// ── Cisco IOS anahtar-kelime renklendirme (SecureCRT "Keyword Highlighting" tarzı) ──
+// Cisco çıktıyı renksiz (düz metin) gönderir; renklendirmeyi istemcide yapıyoruz.
+// Gelen metni ANSI escape dizileri ↔ düz metin parçalarına ayırıp YALNIZCA düz metin
+// parçalarındaki tanınan kelimeleri renk koduyla sarıyoruz → imleç/ekran kontrol
+// dizileri (cursor move, clear) bozulmadan geçer. Temel yazı rengi sarı; her kelimeden
+// sonra SGR 39 (varsayılan ön-plan) ile sarıya geri döneriz.
+const C_GREEN = '\x1b[38;2;80;250;123m';  // komut fiilleri + "iyi" durum (up, permit...)
+const C_CYAN  = '\x1b[38;2;120;190;255m'; // nesne/konu (interface, ip, vlan...)
+const C_RED   = '\x1b[38;2;255;95;95m';   // olumsuz/tehlike/"kötü" durum (no, shutdown, down...)
+const C_RESET = '\x1b[39m';
+
+const KW_GROUPS = [
+  { c: C_GREEN, words: ['show','sh','ping','traceroute','trace','write','wr','copy','reload','configure','conf','config','terminal','enable','disable','exit','end','clear','debug','undebug','telnet','ssh','dir','more','commit','up','connected','active','established','permit','forwarding','enabled','reachable','complete','success'] },
+  { c: C_CYAN,  words: ['interface','int','ip','ipv6','vlan','router','ospf','eigrp','bgp','rip','route','access-list','acl','spanning-tree','switchport','hostname','description','desc','line','vrf','nat','dhcp','ntp','logging','snmp-server','aaa','crypto','username','banner','standby','channel-group','duplex','speed','bandwidth','mtu','running-config','startup-config','run','version','brief','br','status','summary','neighbors','database','mac','cdp','lldp','inventory','processes','cpu','memory','users','trunk','native','encapsulation','dot1q','protocol','address'] },
+  { c: C_RED,   words: ['no','shutdown','shut','down','err-disabled','deny','denied','failed','disabled','administratively','notconnect','error','invalid','incomplete','unreachable','drop','drops'] },
+];
+const KW_MAP = (() => {
+  const m = new Map();
+  for (const g of KW_GROUPS) for (const w of g.words) m.set(w, g.c);
+  return m;
+})();
+// Escape dizisi (CSI / OSC / bazı 2-3 baytlıklar) — split için tek yakalama grubu
+const ANSI_SPLIT = /(\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[()#][0-9A-Za-z]|\x1b[=>78Mc])/;
+const WORD = /[A-Za-z][A-Za-z0-9_-]*/g;
+
+function highlightCisco(text) {
+  if (!text || !/[A-Za-z]/.test(text)) return text;      // harf yoksa dokunma
+  const parts = text.split(ANSI_SPLIT);
+  for (let i = 0; i < parts.length; i++) {
+    if (i % 2 === 1) continue;                             // tek indeks = escape dizisi, atla
+    const seg = parts[i];
+    if (!seg) continue;
+    parts[i] = seg.replace(WORD, (w) => {
+      const c = KW_MAP.get(w.toLowerCase());
+      return c ? c + w + C_RESET : w;
+    });
+  }
+  return parts.join('');
+}
+
 function TerminalPane({ switchId, switchName, active = true, minimized = false, onStatus }) {
   const containerRef = useRef(null);
   const fitAddonRef = useRef(null);
@@ -60,7 +100,7 @@ function TerminalPane({ switchId, switchName, active = true, minimized = false, 
       try {
         const msg = JSON.parse(event.data);
         if (msg.type === 'data') {
-          term.write(msg.data);
+          term.write(highlightCisco(msg.data));
         } else if (msg.type === 'info') {
           term.write(msg.message);
         } else if (msg.type === 'mode') {
