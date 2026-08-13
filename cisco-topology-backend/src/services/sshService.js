@@ -1,5 +1,6 @@
 const WebSocket = require('ws');
 const ssh2 = require('ssh2').Client;
+const net = require('net');
 const store = require('../utils/memoryStore');
 const { decryptPassword } = require('../utils/crypto');
 const { authenticateWs } = require('../middleware/auth');
@@ -94,6 +95,7 @@ function setupWebSocket(server) {
 
     server.on('upgrade', (req, socket, head) => {
         if (req.url.startsWith('/ws/terminal')) {
+            socket.setNoDelay(true); // Nagle'ı kapat → tuş/echo paketleri beklemeden gider (interaktif gecikmeyi önler)
             wss.handleUpgrade(req, socket, head, (ws) => {
                 wss.emit('connection', ws, req);
             });
@@ -142,6 +144,11 @@ function setupWebSocket(server) {
 
         const sshPass = decryptPassword(device.sshPassword);
         const conn = new ssh2();
+        // Cihaza giden TCP soketinde Nagle'ı kapat (PuTTY de TCP_NODELAY yapar). ssh2 bunu kendi
+        // soketinde yapmadığından soketi biz açıp 'sock' olarak veriyoruz → interaktif yazım gecikmesi biter.
+        const deviceSock = net.connect({ host: device.ip, port: 22 });
+        deviceSock.setNoDelay(true);
+        deviceSock.on('error', () => { /* asıl hata conn 'error' ile ele alınır; burada yalnızca çökmeyi önle */ });
         conn.on('ready', () => {
             console.log(`[SSH] Connected to ${device.name} (${device.ip}) as ${user.username} [${isAdmin ? 'full' : 'restricted'}]`);
             safeSend(JSON.stringify({ type: 'info', message: 'SSH Connection Established.\r\n' }));
@@ -178,8 +185,7 @@ function setupWebSocket(server) {
             console.log(`[SSH] Error ${device.name}: ${err.message}`);
             safeSend(JSON.stringify({ type: 'error', message: 'SSH Failed: ' + err.message }));
         }).on('keyboard-interactive', kbAuth(sshPass)).connect({
-            host: device.ip,
-            port: 22,
+            sock: deviceSock,    // NoDelay'li kendi soketimiz (host/port bunun içinde)
             username: device.sshUsername,
             password: sshPass,
             tryKeyboard: true,   // Nexus/NX-OS keyboard-interactive icin
