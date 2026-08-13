@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import PingIcon from './PingIcon';
+import PlayStopButton from './PlayStopButton';
 import { t } from '../i18n';
 
 const IPV4_RE = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
@@ -83,11 +84,7 @@ export default function PingModal({ ip: initialIp = '', lockIp = false, onClose 
               onChange={e => setIp(e.target.value)} placeholder="10.0.0.1" autoComplete="off"
               onKeyDown={e => { if (e.key === 'Enter') runPing(); }} autoFocus />
           )}
-          <button className="btn btn-primary" onClick={running ? stop : runPing}
-            disabled={!running && !valid} title={running ? t('stopBtn') : t('startBtn')}
-            style={{ minWidth: 52, fontSize: '1rem', lineHeight: 1, ...(running ? { background: 'var(--danger)', borderColor: 'var(--danger)', color: '#fff' } : {}) }}>
-            {running ? '■' : '▶'}
-          </button>
+          <PlayStopButton running={running} onStart={runPing} onStop={stop} disabled={!valid} />
         </div>
 
         {results.length > 0 && (

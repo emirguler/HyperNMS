@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import TraceIcon from './TraceIcon';
+import PlayStopButton from './PlayStopButton';
 import { t } from '../i18n';
 
 const IPV4_RE = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
@@ -82,11 +83,7 @@ export default function TraceModal({ ip: initialIp = '', lockIp = false, onClose
               onChange={e => setIp(e.target.value)} placeholder="10.0.0.1" autoComplete="off"
               onKeyDown={e => { if (e.key === 'Enter') runTrace(); }} autoFocus />
           )}
-          <button className="btn btn-primary" onClick={running ? stop : runTrace}
-            disabled={!running && !valid} title={running ? t('stopBtn') : t('startBtn')}
-            style={{ minWidth: 52, fontSize: '1rem', lineHeight: 1, ...(running ? { background: 'var(--danger)', borderColor: 'var(--danger)', color: '#fff' } : {}) }}>
-            {running ? '■' : '▶'}
-          </button>
+          <PlayStopButton running={running} onStart={runTrace} onStop={stop} disabled={!valid} />
         </div>
         <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginBottom: 16 }}>{t('traceHint')}</div>
 

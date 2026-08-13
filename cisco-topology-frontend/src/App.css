@@ -694,6 +694,10 @@ select.modern-input option {
 /* Genel ayar: comet animasyonu kapalıyken tüm kablolu bağlantılarda gizle */
 body.comet-off .cable-comet { display: none; }
 
+/* Ping/Trace play-stop butonu hover/aktif geri bildirimi */
+.playstop-btn:hover:not(:disabled) { filter: brightness(1.1); }
+.playstop-btn:active:not(:disabled) { filter: brightness(0.95); }
+
 /* Genel ayar: kablosuz (anten) akış animasyonu kapalıyken durdur (CPU tasarrufu).
    Kaynak kuralda !important var → burada da !important + daha yüksek özgüllük gerekir. */
 body.wireless-off .wireless-edge path { animation: none !important; }
