@@ -7,41 +7,58 @@ import { useAuth } from './context/AuthContext';
 import { t } from './i18n';
 
 // ── Cisco IOS anahtar-kelime renklendirme (SecureCRT "Keyword Highlighting" tarzı) ──
-// Cisco çıktıyı renksiz (düz metin) gönderir; renklendirmeyi istemcide yapıyoruz.
-// Gelen metni ANSI escape dizileri ↔ düz metin parçalarına ayırıp YALNIZCA düz metin
-// parçalarındaki tanınan kelimeleri renk koduyla sarıyoruz → imleç/ekran kontrol
-// dizileri (cursor move, clear) bozulmadan geçer. Temel yazı rengi beyaz; her kelimeden
-// sonra SGR 39 (varsayılan ön-plan) ile beyaza geri döneriz.
-const C_GREEN = '\x1b[38;2;80;250;123m';  // komut fiilleri + "iyi" durum (up, permit...)
-const C_CYAN  = '\x1b[38;2;120;190;255m'; // nesne/konu (interface, ip, vlan...)
-const C_RED   = '\x1b[38;2;255;95;95m';   // olumsuz/tehlike/"kötü" durum (no, shutdown, down...)
-const C_RESET = '\x1b[39m';
+// Cisco çıktıyı renksiz gönderir; renklendirmeyi istemcide yapıyoruz. Gelen metni ANSI
+// escape dizileri ↔ düz metin parçalarına ayırıp YALNIZCA düz metne dokunuyoruz → imleç/
+// ekran kontrol dizileri bozulmadan geçer. Temel yazı beyaz; her eşleşmeden sonra SGR 39
+// ile beyaza döneriz. Renkler kullanıcının SecureCRT şemasına göre ayarlandı.
+const C_GREEN  = '\x1b[38;2;64;200;64m';   // arayüz adları, IP, "iyi" durum (up, on, connected)
+const C_RED    = '\x1b[38;2;255;85;85m';   // olumsuz/"kötü" (no, not, down, disabled, failure, reload)
+const C_CYAN   = '\x1b[38;2;90;190;255m';  // uptime, local, active
+const C_ORANGE = '\x1b[38;2;255;170;60m';  // Version, trunk, %SYSLOG-etiketleri
+const C_RESET  = '\x1b[39m';
 
-const KW_GROUPS = [
-  { c: C_GREEN, words: ['show','sh','ping','traceroute','trace','write','wr','copy','reload','configure','conf','config','terminal','enable','disable','exit','end','clear','debug','undebug','telnet','ssh','dir','more','commit','up','connected','active','established','permit','forwarding','enabled','reachable','complete','success'] },
-  { c: C_CYAN,  words: ['interface','int','ip','ipv6','vlan','router','ospf','eigrp','bgp','rip','route','access-list','acl','spanning-tree','switchport','hostname','description','desc','line','vrf','nat','dhcp','ntp','logging','snmp-server','aaa','crypto','username','banner','standby','channel-group','duplex','speed','bandwidth','mtu','running-config','startup-config','run','version','brief','br','status','summary','neighbors','database','mac','cdp','lldp','inventory','processes','cpu','memory','users','trunk','native','encapsulation','dot1q','protocol','address'] },
-  { c: C_RED,   words: ['no','shutdown','shut','down','err-disabled','deny','denied','failed','disabled','administratively','notconnect','error','invalid','incomplete','unreachable','drop','drops'] },
-];
+// Sabit kelime → renk. (Arayüz adı / IP / syslog etiketi sabit değil; aşağıda regex ile.)
 const KW_MAP = (() => {
   const m = new Map();
-  for (const g of KW_GROUPS) for (const w of g.words) m.set(w, g.c);
+  const put = (c, ws) => ws.forEach(w => m.set(w, c));
+  put(C_GREEN,  ['up','on','connected','permit','forwarding','enabled','reachable','established','success','complete']);
+  put(C_RED,    ['no','not','down','disabled','failure','reload','shutdown','shut','err-disabled','deny','denied','failed','unreachable','notconnect','error','invalid','incomplete','drop','drops','administratively']);
+  put(C_CYAN,   ['uptime','local','active','inactive']);
+  put(C_ORANGE, ['version','trunk']);
   return m;
 })();
+
+// Arayüz adı önekleri (uzun → kısa). 2-harfli kısa önekler yalnızca hemen ardından rakam
+// gelirse eşleşir → "Power/Send/Local" gibi kelimeleri yanlışlıkla boyamaz.
+const IFACE = 'GigabitEthernet|TenGigabitEthernet|TwentyFiveGigE|HundredGigE|FortyGigE|FastEthernet|TenGigE|Port-channel|Ethernet|Loopback|Tunnel|Serial|Vlan|Eth|Gi|Fa|Te|Tw|Fo|Hu|Po|Vl|Lo|Tu|Se';
+// Tek geçişte sıra: %SYSLOG etiketi | arayüz adı | IPv4 | genel kelime
+const RULE_RE = new RegExp(
+  '%[A-Z][A-Z0-9_]*-\\d+-[A-Z0-9_]+' +          // 1: %CDP-4-DUPLEX_MISMATCH → turuncu
+  '|\\b(?:' + IFACE + ')\\d[\\d/.:]*' +          // 2: Gi1/0/1, Vlan1, Te1/1/3 → yeşil
+  '|\\b\\d{1,3}(?:\\.\\d{1,3}){3}\\b' +          // 3: 172.16.128.246 → yeşil
+  '|[A-Za-z][A-Za-z0-9_-]*',                     // 4: kelime → KW_MAP
+  'g'
+);
+const IFACE_HEAD = new RegExp('^(?:' + IFACE + ')\\d');
 // Escape dizisi (CSI / OSC / bazı 2-3 baytlıklar) — split için tek yakalama grubu
 const ANSI_SPLIT = /(\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[()#][0-9A-Za-z]|\x1b[=>78Mc])/;
-const WORD = /[A-Za-z][A-Za-z0-9_-]*/g;
+
+function colorToken(tok) {
+  if (tok[0] === '%') return C_ORANGE + tok + C_RESET;                 // syslog etiketi
+  if (tok[0] >= '0' && tok[0] <= '9') return C_GREEN + tok + C_RESET;  // IPv4 (rakamla başlar)
+  if (IFACE_HEAD.test(tok)) return C_GREEN + tok + C_RESET;            // arayüz adı
+  const c = KW_MAP.get(tok.toLowerCase());                             // sabit kelime
+  return c ? c + tok + C_RESET : tok;
+}
 
 function highlightCisco(text) {
-  if (!text || !/[A-Za-z]/.test(text)) return text;      // harf yoksa dokunma
+  if (!text || !/[A-Za-z0-9]/.test(text)) return text;   // harf/rakam yoksa dokunma
   const parts = text.split(ANSI_SPLIT);
   for (let i = 0; i < parts.length; i++) {
     if (i % 2 === 1) continue;                             // tek indeks = escape dizisi, atla
     const seg = parts[i];
     if (!seg) continue;
-    parts[i] = seg.replace(WORD, (w) => {
-      const c = KW_MAP.get(w.toLowerCase());
-      return c ? c + w + C_RESET : w;
-    });
+    parts[i] = seg.replace(RULE_RE, colorToken);
   }
   return parts.join('');
 }
@@ -63,7 +80,8 @@ function TerminalPane({ switchId, switchName, active = true, minimized = false, 
 
   useEffect(() => {
     const term = new Terminal({
-      fontSize: 13,
+      fontFamily: '"Cascadia Mono", Consolas, "Lucida Console", "Courier New", monospace',
+      fontSize: 14,
       rows: 24,
       cols: 120,
       scrollback: 2000,
