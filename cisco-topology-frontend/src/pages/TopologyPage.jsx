@@ -104,28 +104,38 @@ function TopologyInner({ onEdit, onClone }) {
     });
   }, [rawDevices, activeTabId]);
 
-  // Focus (?zoom=): kullanıcının önerdiği sıra — önce sayfanın normal fitView'ı OTURSUN,
-  // hemen ardından sağ-tık "Zoom Here" ile birebir aynı setCenter uygulansın. Node bu tab'de
-  // render edilince (localNodes) fitView'ın bitmesi için kısa bir tampon sonra setCenter yaparız
-  // → setCenter oturmuş/ölçülmüş viewport'ta çalışır, fitView ezmesi olmaz. Tek-sefer guard'ı
-  // 4sn poll'de geri zıplatmaz.
+  // Focus (?zoom=): kullanıcının önerdiği sıra — fitView otursun, HEMEN ARDINDAN sağ-tık
+  // "Zoom Here" ile birebir aynı setCenter uygulansın.
+  // KÖK NEDEN (önceki hatalar): efekt rawDevices/localNodes'a da bağlıydı; mount'taki ilk fetchData
+  // ~100-200ms sonra rawDevices'ı güncelleyip efekti YENİDEN çalıştırıyor, cleanup bekleyen
+  // setTimeout'u iptal ediyor, tek-sefer guard'ı da yeniden kurulmasını engelliyordu → setCenter
+  // hiç ateşlenmiyordu. Çözüm: efekt yalnızca [searchParams, setCenter]'a bağlı (kararlı); en güncel
+  // veriyi ref'ten okuyup node bu sekmede görünene kadar kısa aralıklarla deniyoruz → iptal olmaz.
+  const localNodesRef = useRef(localNodes); localNodesRef.current = localNodes;
+  const rawDevicesRef = useRef(rawDevices); rawDevicesRef.current = rawDevices;
   const zoomedRef = useRef(null);
   useEffect(() => {
     const zoomTo = searchParams.get('zoom');
-    if (!zoomTo) { zoomedRef.current = null; return; }   // param yoksa sıfırla (yeni Focus'a hazır)
-    if (zoomedRef.current === zoomTo) return;             // bu hedef için zaten yapıldı
-    if (!localNodes.some(n => n.id === zoomTo)) return;   // node bu tab'de henüz render edilmedi
-    const pos = rawDevices.find(d => d.id === zoomTo)?.position
-              || localNodes.find(n => n.id === zoomTo)?.position;
-    if (!pos) return;
-    zoomedRef.current = zoomTo;
-    // fitView otursun, hemen ardından zoom. İki kez uygula: ilki normalde kazanır; geç biten bir
-    // fitView araya girerse ikincisi (aynı hedefe) düzeltir — aynı noktaya olduğundan sıçrama olmaz.
-    const doCenter = () => { try { setCenter(pos.x + 65, pos.y + 40, { zoom: 2, duration: 500 }); } catch (e) { /* ignore */ } };
-    const t1 = setTimeout(doCenter, 500);
-    const t2 = setTimeout(doCenter, 950);
-    return () => { clearTimeout(t1); clearTimeout(t2); };
-  }, [searchParams, rawDevices, localNodes, setCenter]);
+    if (!zoomTo) { zoomedRef.current = null; return; }
+    if (zoomedRef.current === zoomTo) return;
+    let centerTimer = null;
+    const start = Date.now();
+    const tryFocus = () => {
+      if (zoomedRef.current === zoomTo) return true;
+      const found = localNodesRef.current.find(n => n.id === zoomTo);
+      const pos = rawDevicesRef.current.find(d => d.id === zoomTo)?.position || found?.position;
+      if (!found || !pos) return false;                   // node bu sekmede henüz yok → tekrar dene
+      zoomedRef.current = zoomTo;
+      centerTimer = setTimeout(() => {
+        console.log('[FOCUS] setCenter', pos);            // (geçici) çalıştığını doğrulamak için
+        try { setCenter(pos.x + 65, pos.y + 40, { zoom: 2, duration: 500 }); } catch (e) { /* ignore */ }
+      }, 400);                                            // fitView otursun, hemen ardından zoom
+      return true;
+    };
+    const iv = setInterval(() => { if (tryFocus() || Date.now() - start > 6000) clearInterval(iv); }, 150);
+    if (tryFocus()) clearInterval(iv);                    // node zaten yüklüyse beklemeden
+    return () => { clearInterval(iv); if (centerTimer) clearTimeout(centerTimer); };
+  }, [searchParams, setCenter]);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
