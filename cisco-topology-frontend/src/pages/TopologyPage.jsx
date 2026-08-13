@@ -39,11 +39,9 @@ function TopologyInner({ onEdit, onClone }) {
   const { tabs, addTab, removeTab, renameTab, reorderTabs } = useTopologyTabs();
 
   const activeTabId = tabId || 'main';
-  // Focus (?zoom=): ReactFlow'un mount'taki otomatik fitView'ı bizim fitView'ımızı ezmesin →
-  // hedef cihaz BU tab'deyken auto-fit'i kapat (aksi halde normal fitView davranışı korunur).
+  // Focus (?zoom=): sağ-tık "Zoom Here" ile AYNI iş. Mount'taki otomatik fitView setCenter'ı
+  // ezmesin diye zoom paramı varken auto-fit'i kapatıyoruz (odaklama efekti aşağıda).
   const focusZoomId = searchParams.get('zoom');
-  const focusDev = focusZoomId ? rawDevices.find(d => d.id === focusZoomId) : null;
-  const focusOnThisTab = !!focusDev && (focusDev.topologyPage || 'main') === activeTabId;
   const [menu, setMenu] = useState(null);
   const [edgeMenu, setEdgeMenu] = useState(null);
   const [tabMenu, setTabMenu] = useState(null);
@@ -109,21 +107,32 @@ function TopologyInner({ onEdit, onClone }) {
     });
   }, [rawDevices, activeTabId]);
 
-  // URL'den zoom-to-device (Focus). Node BU tab'de render edilince bir KEZ o node'a fitView yap.
-  // localNodes'a bakarız (kayıtlı konum olmasa da render konumu vardır); tek-sefer guard'ı
-  // sayesinde 4sn'lik poll geri zıplatmaz. fitView({nodes}) zoom'u otomatik hesaplar.
+  // Focus (?zoom=): sağ-tık "Zoom Here" ile birebir aynı — node bu tab'de localNodes'a
+  // düşünce bir KEZ setCenter(pos.x+65, pos.y+40, {zoom:2}). Tek-sefer guard'ı 4sn poll'de
+  // geri zıplatmaz; auto-fit kapalı olduğundan setCenter ezilmez.
   const zoomedRef = useRef(null);
   useEffect(() => {
     const zoomTo = searchParams.get('zoom');
     if (!zoomTo) { zoomedRef.current = null; return; } // param yoksa sıfırla (yeni Focus'a hazır)
     if (zoomedRef.current === zoomTo) return;           // bu hedef için zaten yapıldı
-    if (!localNodes.some(n => n.id === zoomTo)) return; // node henüz yüklenmedi → sonraki güncellemede
+    const pos = localNodes.find(n => n.id === zoomTo)?.position;
+    if (!pos) return;                                   // node henüz yüklenmedi → localNodes değişince tekrar
     zoomedRef.current = zoomTo;
     const tid = setTimeout(() => {
-      try { fitView({ nodes: [{ id: zoomTo }], duration: 800, maxZoom: 1.6, minZoom: 0.4 }); } catch (e) { /* ignore */ }
-    }, 250);
+      try { setCenter(pos.x + 65, pos.y + 40, { zoom: 2, duration: 500 }); } catch (e) { /* ignore */ }
+    }, 350);
     return () => clearTimeout(tid);
-  }, [searchParams, localNodes, fitView]);
+  }, [searchParams, localNodes, setCenter]);
+
+  // Güvenlik ağı: Focus hedefi bu tab'de hiç bulunamazsa (silinmiş/yanlış sayfa) haritayı yine göster.
+  useEffect(() => {
+    const zoomTo = searchParams.get('zoom');
+    if (!zoomTo) return;
+    const t = setTimeout(() => {
+      if (zoomedRef.current !== zoomTo) { try { fitView({ duration: 300 }); } catch (e) { /* ignore */ } }
+    }, 1500);
+    return () => clearTimeout(t);
+  }, [searchParams, fitView]);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -378,7 +387,7 @@ function TopologyInner({ onEdit, onClone }) {
           connectionMode="loose"
           selectionOnDrag={isAdmin}
           multiSelectionKeyCode="Shift"
-          fitView={!(focusZoomId && focusOnThisTab)}
+          fitView={!focusZoomId}
         >
           <Background color="var(--primary)" gap={25} size={1} style={{ opacity: 0.1 }} />
           <Controls style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-color)', borderRadius: 8 }} />
