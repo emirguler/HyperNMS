@@ -12,6 +12,8 @@ import BatchEditModal from '../components/BatchEditModal';
 import ConfirmModal from '../components/ConfirmModal';
 import PingModal from '../components/PingModal';
 import PingIcon from '../components/PingIcon';
+import TraceModal from '../components/TraceModal';
+import TraceIcon from '../components/TraceIcon';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { API_BASE } from '../config';
@@ -44,6 +46,7 @@ function TopologyInner({ onEdit, onClone }) {
   const [selMenu, setSelMenu] = useState(null); // çoklu seçim sağ-tık menüsü {ids, top, left}
   const [confirmState, setConfirmState] = useState(null); // tema uyumlu onay {title, message, onConfirm}
   const [pingIp, setPingIp] = useState(null); // cihaz bazlı ping (IP kilitli)
+  const [traceIp, setTraceIp] = useState(null); // cihaz bazlı trace (IP kilitli)
   const [dragTabId, setDragTabId] = useState(null);       // sürüklenen sekme
   const [dragOverTabId, setDragOverTabId] = useState(null); // üzerine gelinen sekme
   const [localNodes, setLocalNodes] = useState([]);
@@ -101,14 +104,17 @@ function TopologyInner({ onEdit, onClone }) {
     });
   }, [rawDevices, activeTabId]);
 
-  // URL'den zoom-to-device
+  // URL'den zoom-to-device (Focus). Tek-sefer: hedef bulununca bir kez merkezle;
+  // rawDevices 4sn'de bir güncellendiğinden aksi halde kullanıcı kaydırsa da geri zıplardı.
+  const zoomedRef = useRef(null);
   useEffect(() => {
     const zoomTo = searchParams.get('zoom');
-    if (zoomTo) {
-      const device = rawDevices.find(d => d.id === zoomTo);
-      if (device?.position) {
-        setTimeout(() => setCenter(device.position.x + 65, device.position.y + 40, { zoom: 1.5, duration: 800 }), 300);
-      }
+    if (!zoomTo) { zoomedRef.current = null; return; } // param yoksa sıfırla (yeni Focus'a hazır)
+    if (zoomedRef.current === zoomTo) return;           // bu hedef için zaten merkezlendi
+    const device = rawDevices.find(d => d.id === zoomTo);
+    if (device?.position) {
+      zoomedRef.current = zoomTo;
+      setTimeout(() => setCenter(device.position.x + 65, device.position.y + 40, { zoom: 1.5, duration: 800 }), 300);
     }
   }, [searchParams, rawDevices, setCenter]);
 
@@ -402,6 +408,7 @@ function TopologyInner({ onEdit, onClone }) {
               setMenu(null);
             }}>📊 Details</div>
             {menu.data?.ip && <div className="context-menu-item" onClick={() => { setPingIp(menu.data.ip); setMenu(null); }} style={{ display: 'flex', alignItems: 'center', gap: 8 }}><PingIcon size={15} /> Ping</div>}
+            {menu.data?.ip && <div className="context-menu-item" onClick={() => { setTraceIp(menu.data.ip); setMenu(null); }} style={{ display: 'flex', alignItems: 'center', gap: 8 }}><TraceIcon size={15} /> Trace</div>}
             {isAdmin && <div className="context-menu-item" onClick={() => { onEdit(rawDevices.find(d => d.id === menu.id)); setMenu(null); }}>✏️ Edit</div>}
             {isAdmin && <div className="context-menu-item" onClick={() => { onClone(rawDevices.find(d => d.id === menu.id)); setMenu(null); }}>⧉ Clone</div>}
             {(isAdmin || allowedCommands.length > 0) && <div className="context-menu-item" onClick={() => { openSshSession(menu.id, menu.label); setMenu(null); }}>💻 SSH Terminal</div>}
@@ -514,6 +521,7 @@ function TopologyInner({ onEdit, onClone }) {
 
       {/* Cihaz bazlı ping (IP kilitli) */}
       {pingIp && <PingModal ip={pingIp} lockIp onClose={() => setPingIp(null)} />}
+      {traceIp && <TraceModal ip={traceIp} lockIp onClose={() => setTraceIp(null)} />}
 
       {/* Tema uyumlu onay penceresi (window.confirm yerine) */}
       {confirmState && (

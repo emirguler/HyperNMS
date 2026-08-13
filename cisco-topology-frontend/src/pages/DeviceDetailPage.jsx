@@ -126,6 +126,11 @@ export default function DeviceDetailPage() {
             <TraceIcon size={16} /> {t('traceTool')}
           </button>
         )}
+        <button className="btn btn-primary btn-sm"
+          onClick={() => navigate(`/topology/${details.topologyPage || 'main'}?zoom=${id}`)}
+          title={t('focusTool')}>
+          🔍 {t('focusTool')}
+        </button>
       </div>
 
       {/* SATIR 1: Bilgi kartı (daraltıldı, 2 sütun) + CPU + RAM (küçültülmüş) */}
