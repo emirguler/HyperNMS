@@ -325,32 +325,47 @@ class MemoryStore {
         }
     }
 
-    _flushHistory(sync = false) {
-        if (this.historyDirty.size === 0) return;
-        const historyDir = path.join(config.DATA_DIR, 'history');
-        const ids = [...this.historyDirty];
-        this.historyDirty.clear();
-        for (const switchId of ids) {
-            const records = this.history[switchId];
-            if (!records) continue;
-            const file = path.join(historyDir, `${switchId}.json`);
+    // Dirty cihaz dosyalarını yaz. Çalışırken (sync=false) cihazları küçük gruplar (CHUNK)
+    // halinde AYRI tick'lerde işler → tüm cihazların JSON.stringify CPU'su tek turda birikip
+    // event loop'u (dolayısıyla SSH terminal relay'ini) yüzlerce ms dondurmasın; gruplar
+    // arasında setImmediate ile relay nefes alır. Kapanışta (sync=true) hepsi hemen yazılır.
+    _flushFiles(ids, dir, cache, sync, label) {
+        const writeOne = (id) => {
+            const arr = cache[id];
+            if (!arr) return;
+            const file = path.join(dir, `${id}.json`);
             const tmpFile = file + '.tmp';
-            const json = JSON.stringify(records); // senkron snapshot
             try {
+                const json = JSON.stringify(arr); // senkron snapshot
                 if (sync) {
                     fs.writeFileSync(tmpFile, json);
                     fs.renameSync(tmpFile, file);
                 } else {
-                    // Non-blocking: ping döngüsü sırasında event loop'u bloklamaz
                     fs.writeFile(tmpFile, json, (err) => {
-                        if (err) return console.error(`[STORE] history ${switchId} yazılamadı:`, err.message);
-                        fs.rename(tmpFile, file, (e2) => { if (e2) console.error(`[STORE] history rename ${switchId}:`, e2.message); });
+                        if (err) return console.error(`[STORE] ${label} ${id} yazılamadı:`, err.message);
+                        fs.rename(tmpFile, file, (e2) => { if (e2) console.error(`[STORE] ${label} rename ${id}:`, e2.message); });
                     });
                 }
             } catch (e) {
-                console.error(`[STORE] history ${switchId} yazılamadı:`, e.message);
+                console.error(`[STORE] ${label} ${id} yazılamadı:`, e.message);
             }
-        }
+        };
+        if (sync) { for (const id of ids) writeOne(id); return; }
+        let i = 0;
+        const CHUNK = 3; // ~150 cihazda tick başına donma ~11ms (bir kare altı); ölçümle seçildi
+        const step = () => {
+            const end = Math.min(i + CHUNK, ids.length);
+            for (; i < end; i++) writeOne(ids[i]);
+            if (i < ids.length) setImmediate(step);
+        };
+        step();
+    }
+
+    _flushHistory(sync = false) {
+        if (this.historyDirty.size === 0) return;
+        const ids = [...this.historyDirty];
+        this.historyDirty.clear();
+        this._flushFiles(ids, path.join(config.DATA_DIR, 'history'), this.history, sync, 'history');
     }
 
     // --- Ping Rollup (5dk ozet, cihaz basina dosya) ---
@@ -406,29 +421,9 @@ class MemoryStore {
 
     _flushRollup(sync = false) {
         if (this.rollupDirty.size === 0) return;
-        const rollupDir = path.join(config.DATA_DIR, 'rollup');
         const ids = [...this.rollupDirty];
         this.rollupDirty.clear();
-        for (const switchId of ids) {
-            const buckets = this.rollup[switchId];
-            if (!buckets) continue;
-            const file = path.join(rollupDir, `${switchId}.json`);
-            const tmpFile = file + '.tmp';
-            const json = JSON.stringify(buckets);
-            try {
-                if (sync) {
-                    fs.writeFileSync(tmpFile, json);
-                    fs.renameSync(tmpFile, file);
-                } else {
-                    fs.writeFile(tmpFile, json, (err) => {
-                        if (err) return console.error(`[STORE] rollup ${switchId} yazilamadi:`, err.message);
-                        fs.rename(tmpFile, file, (e2) => { if (e2) console.error(`[STORE] rollup rename ${switchId}:`, e2.message); });
-                    });
-                }
-            } catch (e) {
-                console.error(`[STORE] rollup ${switchId} yazilamadi:`, e.message);
-            }
-        }
+        this._flushFiles(ids, path.join(config.DATA_DIR, 'rollup'), this.rollup, sync, 'rollup');
     }
 
     // --- Dirty tracking & debounced write ---
