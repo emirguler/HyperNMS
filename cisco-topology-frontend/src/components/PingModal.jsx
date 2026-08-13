@@ -21,27 +21,38 @@ export default function PingModal({ ip: initialIp = '', lockIp = false, onClose 
   const [running, setRunning] = useState(false);
   const [results, setResults] = useState([]); // [{ seq, status, latency }]
   const genRef = useRef(0); // çalışma nesli — her yeni runPing öncekini iptal eder (StrictMode çift-çağrı + modal kapanışı)
+  const abortRef = useRef(null); // devam eden /ping isteğini iptal etmek için
 
   const valid = IPV4_RE.test(ip.trim());
 
   // Cihaz bazlı (kilitli IP): açılır açılmaz otomatik başlat
   useEffect(() => {
     if (lockIp && initialIp && IPV4_RE.test(initialIp.trim())) runPing();
-    return () => { genRef.current++; }; // unmount'ta mevcut çalışmayı iptal et
+    return () => { genRef.current++; if (abortRef.current) { try { abortRef.current.abort(); } catch { /* ignore */ } } }; // unmount'ta iptal
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Play/Stop tek buton: çalışırken durdur → nesli artır (döngü durur) + isteği iptal et + takılı ⏳ satırını temizle
+  const stop = () => {
+    genRef.current++;
+    if (abortRef.current) { try { abortRef.current.abort(); } catch { /* ignore */ } }
+    setResults(prev => prev.filter(r => r.status !== 'pending'));
+    setRunning(false);
+  };
 
   const runPing = async () => {
     const target = ip.trim();
     if (!IPV4_RE.test(target)) return;
     const myGen = ++genRef.current; // bu çalışmanın nesli; önceki çalışmalar iptal olur
+    const controller = new AbortController();
+    abortRef.current = controller;
     setRunning(true);
     setResults([]);
     for (let seq = 1; seq <= PING_COUNT; seq++) {
       if (genRef.current !== myGen) return; // iptal edildi / yeni çalışma başladı
       setResults(prev => [...prev, { seq, status: 'pending' }]);
       try {
-        const res = await authFetch('/ping', { method: 'POST', body: JSON.stringify({ ip: target, count: 1 }) });
+        const res = await authFetch('/ping', { method: 'POST', body: JSON.stringify({ ip: target, count: 1 }), signal: controller.signal });
         const data = res && res.ok ? await res.json() : null;
         const r = data && data.results && data.results[0] ? data.results[0] : { status: 'error', latency: null };
         if (genRef.current !== myGen) return;
@@ -72,8 +83,10 @@ export default function PingModal({ ip: initialIp = '', lockIp = false, onClose 
               onChange={e => setIp(e.target.value)} placeholder="10.0.0.1" autoComplete="off"
               onKeyDown={e => { if (e.key === 'Enter') runPing(); }} autoFocus />
           )}
-          <button className="btn btn-primary" onClick={runPing} disabled={!valid || running}>
-            {running ? t('pingRunning') : t('pingStart')}
+          <button className="btn btn-primary" onClick={running ? stop : runPing}
+            disabled={!running && !valid} title={running ? t('stopBtn') : t('startBtn')}
+            style={{ minWidth: 52, fontSize: '1rem', lineHeight: 1, ...(running ? { background: 'var(--danger)', borderColor: 'var(--danger)', color: '#fff' } : {}) }}>
+            {running ? '■' : '▶'}
           </button>
         </div>
 

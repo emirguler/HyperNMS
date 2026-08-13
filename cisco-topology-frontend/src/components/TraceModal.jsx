@@ -13,24 +13,34 @@ export default function TraceModal({ ip: initialIp = '', lockIp = false, onClose
   const [hops, setHops] = useState(null); // null = henüz çalışmadı, [] = sonuç geldi
   const [error, setError] = useState('');
   const genRef = useRef(0); // çalışma nesli — modal kapanınca / yeni çalışmada öncekini iptal et
+  const abortRef = useRef(null); // devam eden /traceroute isteğini iptal etmek için
 
   const valid = IPV4_RE.test(ip.trim());
 
   // Cihaz bazlı (kilitli IP): açılır açılmaz otomatik başlat
   useEffect(() => {
     if (lockIp && initialIp && IPV4_RE.test(initialIp.trim())) runTrace();
-    return () => { genRef.current++; };
+    return () => { genRef.current++; if (abortRef.current) { try { abortRef.current.abort(); } catch { /* ignore */ } } };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Play/Stop tek buton: çalışırken durdur → nesli artır (akış durur) + isteği iptal et
+  const stop = () => {
+    genRef.current++;
+    if (abortRef.current) { try { abortRef.current.abort(); } catch { /* ignore */ } }
+    setRunning(false);
+  };
 
   const runTrace = async () => {
     const target = ip.trim();
     if (!IPV4_RE.test(target)) return;
     const myGen = ++genRef.current;
+    const controller = new AbortController();
+    abortRef.current = controller;
     setRunning(true); setHops(null); setError('');
     let all;
     try {
-      const res = await authFetch('/traceroute', { method: 'POST', body: JSON.stringify({ ip: target }) });
+      const res = await authFetch('/traceroute', { method: 'POST', body: JSON.stringify({ ip: target }), signal: controller.signal });
       const data = res ? await res.json().catch(() => null) : null;
       if (genRef.current !== myGen) return; // iptal edildi
       if (res && res.ok && data && Array.isArray(data.hops)) {
@@ -72,8 +82,10 @@ export default function TraceModal({ ip: initialIp = '', lockIp = false, onClose
               onChange={e => setIp(e.target.value)} placeholder="10.0.0.1" autoComplete="off"
               onKeyDown={e => { if (e.key === 'Enter') runTrace(); }} autoFocus />
           )}
-          <button className="btn btn-primary" onClick={runTrace} disabled={!valid || running}>
-            {running ? t('traceRunning') : t('traceStart')}
+          <button className="btn btn-primary" onClick={running ? stop : runTrace}
+            disabled={!running && !valid} title={running ? t('stopBtn') : t('startBtn')}
+            style={{ minWidth: 52, fontSize: '1rem', lineHeight: 1, ...(running ? { background: 'var(--danger)', borderColor: 'var(--danger)', color: '#fff' } : {}) }}>
+            {running ? '■' : '▶'}
           </button>
         </div>
         <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginBottom: 16 }}>{t('traceHint')}</div>
