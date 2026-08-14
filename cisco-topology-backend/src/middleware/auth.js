@@ -47,10 +47,33 @@ const authenticate = (req, res, next) => {
     });
 };
 
+// Roller (yetki sirasi):
+//   Administrator — tam yetki
+//   Operator      — Restricted-Config: SSH (izinli komutlar), arayuz konfigi, cihaz reload
+//   Viewer        — User (View Only): sadece izleme; SSH/konfig/reload yok
+const ROLES = { ADMIN: 'Administrator', OPERATOR: 'Operator', VIEWER: 'Viewer' };
+
+// Eski kayitlardaki 'User' rolu = bugunun Operator'u (isim degisikligi geriye donuk uyum)
+const normalizeRole = (role) => (role === 'User' ? ROLES.OPERATOR : role);
+
+// Operator yetkisi: cihaza dokunan islemler (SSH, interface config, reload)
+const canOperate = (role) => {
+    const r = normalizeRole(role);
+    return r === ROLES.ADMIN || r === ROLES.OPERATOR;
+};
+
 // Admin role check
 const requireAdmin = (req, res, next) => {
-    if (req.user.role !== 'Administrator') {
+    if (normalizeRole(req.user.role) !== ROLES.ADMIN) {
         return res.status(403).json({ error: 'Administrator privileges required' });
+    }
+    next();
+};
+
+// Operator (veya Administrator) role check — Viewer (View Only) engellenir
+const requireOperator = (req, res, next) => {
+    if (!canOperate(req.user.role)) {
+        return res.status(403).json({ error: 'Operator privileges required for device operations' });
     }
     next();
 };
@@ -79,4 +102,8 @@ function authenticateWs(req) {
     }
 }
 
-module.exports = { authenticate, requireAdmin, authenticateWs, setTokenCookie, clearTokenCookie, COOKIE_OPTIONS };
+module.exports = {
+    authenticate, requireAdmin, requireOperator, authenticateWs,
+    setTokenCookie, clearTokenCookie, COOKIE_OPTIONS,
+    ROLES, normalizeRole, canOperate
+};

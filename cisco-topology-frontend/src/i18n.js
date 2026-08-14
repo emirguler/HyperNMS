@@ -202,8 +202,11 @@ const translations = {
     newPasswordHint: 'New Password (Leave empty to keep current)',
     passwordLabel: 'Password',
     roleLabel: 'Role / Permission',
-    roleUser: 'User (View Only)',
+    roleViewer: 'User (View Only)',
+    roleOperator: 'Operator (Restricted-Config)',
     roleAdmin: 'Administrator (Full Access)',
+    roleViewerHint: 'Monitoring only — no SSH terminal, no interface config, no device reload.',
+    roleOperatorHint: 'Can open the SSH terminal (assigned commands), change interface config and reload devices.',
     authTypeLabel: 'Authentication',
     authTypeLocal: 'Local (password)',
     authTypeAd: 'Active Directory',
@@ -261,7 +264,7 @@ const translations = {
     noCommandsAssigned: 'No commands assigned to you',
     refresh: 'Refresh',
     allowedCommandsLabel: 'Allowed SSH Commands',
-    allowedCommandsHint: 'One command per line. Only for the User role — these appear as buttons in the SSH terminal and are the only commands this user can run.',
+    allowedCommandsHint: 'One command per line. Only for the Operator role — these appear as buttons in the SSH terminal and are the only commands this user can run.',
 
     // Edge context menu
     deleteConnection: 'Delete Connection',
@@ -470,8 +473,11 @@ const translations = {
     newPasswordHint: 'Yeni Parola (De\u011fi\u015fmeyecekse bo\u015f b\u0131rak)',
     passwordLabel: 'Parola',
     roleLabel: 'Rol / Yetki',
-    roleUser: 'User (Sadece \u0130zleme)',
+    roleViewer: 'User (Sadece \u0130zleme)',
+    roleOperator: 'Operator (K\u0131s\u0131tl\u0131 Konfig)',
     roleAdmin: 'Administrator (Tam Yetki)',
+    roleViewerHint: 'Sadece izleme \u2014 SSH terminali, aray\u00fcz konfigi ve cihaz reload yok.',
+    roleOperatorHint: 'SSH terminalini (atanm\u0131\u015f komutlarla) a\u00e7abilir, aray\u00fcz konfigini de\u011fi\u015ftirebilir ve cihaz\u0131 reload edebilir.',
     authTypeLabel: 'Kimlik do\u011frulama',
     authTypeLocal: 'Yerel (parola)',
     authTypeAd: 'Active Directory',
@@ -543,6 +549,14 @@ let listeners = [];
 
 export function t(key) {
   return (translations[currentLang] && translations[currentLang][key]) || translations.en[key] || key;
+}
+
+// Rol anahtari -> gorunen ad. 'User' eski kayitlarda Operator anlamina gelir (backend de boyle gocurur).
+export function roleLabel(role) {
+  if (role === 'Administrator') return t('roleAdmin');
+  if (role === 'Operator' || role === 'User') return t('roleOperator');
+  if (role === 'Viewer') return t('roleViewer');
+  return role || '';
 }
 
 export function getLang() {

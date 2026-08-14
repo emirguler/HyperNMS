@@ -4,7 +4,15 @@ import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import UserFormModal from '../UserFormModal';
 import { showToast } from '../Toast';
-import { t } from '../i18n';
+import { t, roleLabel } from '../i18n';
+
+// Rol rozeti renkleri — Administrator mor, Operator mavi, Viewer nötr
+const ROLE_STYLE = {
+  Administrator: { bg: 'rgba(168,85,247,0.15)', fg: '#a855f7', bd: 'rgba(168,85,247,0.3)' },
+  Operator:      { bg: 'rgba(59,130,246,0.15)', fg: '#60a5fa', bd: 'rgba(59,130,246,0.3)' },
+  Viewer:        { bg: 'rgba(255,255,255,0.05)', fg: 'var(--text-muted)', bd: 'var(--border-color)' },
+};
+const roleStyle = (role) => ROLE_STYLE[role === 'User' ? 'Operator' : role] || ROLE_STYLE.Viewer;
 
 export default function UsersPage() {
   const { users, fetchUsers } = useApp();
@@ -56,7 +64,7 @@ export default function UsersPage() {
                   )}
                 </td>
                 <td>
-                  <span style={{ background: u.role === 'Administrator' ? 'rgba(168,85,247,0.15)' : 'rgba(255,255,255,0.05)', color: u.role === 'Administrator' ? '#a855f7' : 'var(--text-muted)', padding: '4px 10px', borderRadius: 20, fontSize: '0.75rem', fontWeight: 600, border: `1px solid ${u.role === 'Administrator' ? 'rgba(168,85,247,0.3)' : 'var(--border-color)'}` }}>{u.role}</span>
+                  <span style={{ background: roleStyle(u.role).bg, color: roleStyle(u.role).fg, padding: '4px 10px', borderRadius: 20, fontSize: '0.75rem', fontWeight: 600, border: `1px solid ${roleStyle(u.role).bd}`, whiteSpace: 'nowrap' }}>{roleLabel(u.role)}</span>
                 </td>
                 <td style={{ textAlign: 'right', paddingRight: 24 }}>
                   <button className="btn btn-ghost btn-sm" style={{ marginRight: 6 }} onClick={() => { setEditingUser(u); setIsModalOpen(true); }}>{t('edit')}</button>
@@ -72,7 +80,7 @@ export default function UsersPage() {
         <div className="modal-overlay" onKeyDown={e => { if (e.key === 'Enter') confirmDelete(); if (e.key === 'Escape') setDeleteTarget(null); }}>
           <div className="confirm-modal-content">
             <h3 className="confirm-title">{t('deleteUser')}</h3>
-            <p className="confirm-desc">{t('deleteUserConfirm')} <strong>{deleteTarget.username}</strong> ({deleteTarget.role})?</p>
+            <p className="confirm-desc">{t('deleteUserConfirm')} <strong>{deleteTarget.username}</strong> ({roleLabel(deleteTarget.role)})?</p>
             <div className="confirm-actions">
               <button className="btn btn-ghost" onClick={() => setDeleteTarget(null)}>{t('cancel')}</button>
               <button className="btn btn-danger" onClick={confirmDelete} autoFocus>{t('yesDelete')}</button>

@@ -1,6 +1,6 @@
 const express = require('express');
 const store = require('../utils/memoryStore');
-const { authenticate, requireAdmin } = require('../middleware/auth');
+const { authenticate, requireAdmin, requireOperator } = require('../middleware/auth');
 const { validateSwitch, sanitizeSwitch, isBlockedIP, isValidIPv4 } = require('../utils/validation');
 const { encryptPassword, decryptPassword } = require('../utils/crypto');
 const { getDeviceDetails, discoverNeighbors, searchMAC, inventoryAll, ipSlaStatus } = require('../services/snmpService');
@@ -1144,7 +1144,8 @@ router.get('/switches/export/detailed', authenticate, requireAdmin, detailedExpo
 
 // --- Arayüz (interface) yapılandırma — cihaz detayındaki "Config" butonu ---
 // Komutlar SUNUCUDA doğrulanmış girdilerden (mode + VLAN id'leri) üretilir; serbest komut yok.
-// Bu yüzden admin dışı roller de kullanabilir (yalnızca authenticate). Yıkıcı/serbest giriş imkânsız.
+// Bu yüzden Operator rolü de kullanabilir (requireOperator). Yıkıcı/serbest giriş imkânsız.
+// Viewer (User / View Only) rolü cihaza dokunamaz → 403.
 const IFNAME_RE = /^[A-Za-z][A-Za-z0-9./_-]{1,40}$/;      // GigabitEthernet1/0/1, Fa1/5, Po1 ...
 const VLAN_OK = (v) => Number.isInteger(v) && v >= 1 && v <= 4094;
 
@@ -1165,7 +1166,7 @@ function parseVlanBrief(text) {
 }
 
 // VLAN listesi (dropdown'lar için) — "show vlan brief"
-router.get('/switches/:id/vlans', authenticate, async (req, res) => {
+router.get('/switches/:id/vlans', authenticate, requireOperator, async (req, res) => {
     const device = store.getSwitch(req.params.id);
     if (!device) return res.status(404).json({ error: 'Device not found' });
     if (!device.sshUsername || !device.sshPassword) return res.status(400).json({ error: 'SSH credentials missing' });
@@ -1179,7 +1180,7 @@ router.get('/switches/:id/vlans', authenticate, async (req, res) => {
 });
 
 // Arayüzün mevcut ayarları — "show running-config interface <name>" (sol taraf)
-router.get('/switches/:id/interface-config', authenticate, async (req, res) => {
+router.get('/switches/:id/interface-config', authenticate, requireOperator, async (req, res) => {
     const device = store.getSwitch(req.params.id);
     if (!device) return res.status(404).json({ error: 'Device not found' });
     const name = String(req.query.name || '').trim();
@@ -1197,7 +1198,7 @@ router.get('/switches/:id/interface-config', authenticate, async (req, res) => {
 });
 
 // Arayüz ayarını uygula — mode (access/trunk) + VLAN'lar. Komutlar burada üretilir (sağ taraf).
-router.post('/switches/:id/interface-config', authenticate, async (req, res) => {
+router.post('/switches/:id/interface-config', authenticate, requireOperator, async (req, res) => {
     const device = store.getSwitch(req.params.id);
     if (!device) return res.status(404).json({ error: 'Device not found' });
     if (!device.sshUsername || !device.sshPassword) return res.status(400).json({ error: 'SSH credentials missing' });
@@ -1260,9 +1261,9 @@ router.post('/switches/:id/interface-config', authenticate, async (req, res) => 
 });
 
 // Cihazı yeniden başlat (reload) — "reload" + onay ("Proceed with reload? [confirm]") Enter'ı SSH ile
-// gönderir. YIKICI (cihaz reboot olur). Komut sabit, enjeksiyon yok → kullanıcı isteğiyle her iki rol
-// (authenticate) çağırabilir. İşlem denetime yazılır.
-router.post('/switches/:id/reload', authenticate, async (req, res) => {
+// gönderir. YIKICI (cihaz reboot olur). Komut sabit, enjeksiyon yok → Administrator ve Operator
+// çağırabilir; Viewer (User / View Only) çağıramaz. İşlem denetime yazılır.
+router.post('/switches/:id/reload', authenticate, requireOperator, async (req, res) => {
     const device = store.getSwitch(req.params.id);
     if (!device) return res.status(404).json({ error: 'Device not found' });
     if (!device.sshUsername || !device.sshPassword) return res.status(400).json({ error: 'SSH credentials missing' });

@@ -62,6 +62,16 @@ class MemoryStore {
         this.data.users = this._readFile(config.DB_USERS);
         this.data.edges = this._readFile(config.DB_EDGES);
 
+        // Rol goc: eski 'User' rolu -> 'Operator' (Restricted-Config). Yeni 'Viewer' rolu
+        // (User / View Only) hicbir sekilde etkilenmez; 'User' artik gecerli bir rol degil,
+        // bu yuzden donusum tekrarlanabilir (her acilista guvenle calisir).
+        const migrated = this.data.users.filter(u => u && u.role === 'User');
+        if (migrated.length > 0) {
+            migrated.forEach(u => { u.role = 'Operator'; });
+            this._markDirty('users');
+            console.log(`[STORE] ${migrated.length} kullanicinin rolu 'User' -> 'Operator' olarak guncellendi`);
+        }
+
         // Topology tabs
         const savedTabs = this._readFile(config.DB_TOPO_TABS);
         if (savedTabs.length > 0) this.data.topoTabs = savedTabs;

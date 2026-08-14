@@ -30,7 +30,7 @@ const minimapNodeColor = (node) =>
 
 function TopologyInner({ onEdit, onClone }) {
   const { rawDevices, edges, setEdges, fetchData, openSshSession } = useApp();
-  const { isAdmin, authFetch, csrfToken, allowedCommands } = useAuth();
+  const { isAdmin, isOperator, authFetch, csrfToken, allowedCommands } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { tabId } = useParams();
@@ -430,7 +430,7 @@ function TopologyInner({ onEdit, onClone }) {
             {menu.data?.ip && <div className="context-menu-item" onClick={() => { setTraceIp(menu.data.ip); setMenu(null); }} style={{ display: 'flex', alignItems: 'center', gap: 8 }}><TraceIcon size={15} /> Trace</div>}
             {isAdmin && <div className="context-menu-item" onClick={() => { onEdit(rawDevices.find(d => d.id === menu.id)); setMenu(null); }}>✏️ Edit</div>}
             {isAdmin && <div className="context-menu-item" onClick={() => { onClone(rawDevices.find(d => d.id === menu.id)); setMenu(null); }}>⧉ Clone</div>}
-            {(isAdmin || allowedCommands.length > 0) && <div className="context-menu-item" onClick={() => { openSshSession(menu.id, menu.label); setMenu(null); }}>💻 SSH Terminal</div>}
+            {isOperator && (isAdmin || allowedCommands.length > 0) && <div className="context-menu-item" onClick={() => { openSshSession(menu.id, menu.label); setMenu(null); }}>💻 SSH Terminal</div>}
             {menu.data?.type === 'antenna' && <div className="context-menu-item" onClick={() => { setWebModal({ id: menu.id, label: menu.label, ip: menu.data.ip, scheme: 'http' }); setMenu(null); }}>🌐 Web</div>}
             <div className="context-menu-item" onClick={() => {
               const pos = localNodes.find(n => n.id === menu.id)?.position;

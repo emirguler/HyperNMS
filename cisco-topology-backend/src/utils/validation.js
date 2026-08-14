@@ -101,7 +101,8 @@ function validateUser(data, isEdit = false) {
         if (!/[^A-Za-z0-9]/.test(checkPw)) errors.push('Password must contain a special character');
     }
 
-    const validRoles = ['Administrator', 'User'];
+    // Viewer = "User (View Only)" — sadece izleme. Operator = eski 'User' (Restricted-Config).
+    const validRoles = ['Administrator', 'Operator', 'Viewer'];
     if (data.role && !validRoles.includes(data.role)) {
         errors.push('Invalid role');
     }

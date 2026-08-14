@@ -18,7 +18,7 @@ export default function DeviceDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const { authFetch, isAdmin, allowedCommands } = useAuth();
+  const { authFetch, isAdmin, isOperator, allowedCommands } = useAuth();
   const { openSshSession, topoTabs, rawDevices } = useApp();
   const [showPing, setShowPing] = useState(false);
   const [showTrace, setShowTrace] = useState(false);
@@ -133,7 +133,7 @@ export default function DeviceDetailPage() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
         <button onClick={() => navigate(backTo)} className="btn btn-ghost">{t('goBack')}</button>
         <h2 style={{ margin: 0, fontSize: '1.8rem' }}>{displayHostname}</h2>
-        {(isAdmin || allowedCommands.length > 0) && (
+        {isOperator && (isAdmin || allowedCommands.length > 0) && (
           <button className="btn btn-primary btn-sm" onClick={() => openSshSession(id, displayHostname || details.name || id)}>
             💻 SSH Terminal
           </button>
@@ -153,11 +153,13 @@ export default function DeviceDetailPage() {
           title={t('focusTool')}>
           🔍 {t('focusTool')}
         </button>
-        <button className="btn btn-sm" onClick={() => setConfirmReload(true)} disabled={reloading}
-          title={t('reloadDevice')}
-          style={{ marginLeft: 'auto', background: 'var(--danger)', color: '#fff', border: 'none', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-          <ReloadIcon size={15} /> {reloading ? t('reloadSending') : t('reloadDevice')}
-        </button>
+        {isOperator && (
+          <button className="btn btn-sm" onClick={() => setConfirmReload(true)} disabled={reloading}
+            title={t('reloadDevice')}
+            style={{ marginLeft: 'auto', background: 'var(--danger)', color: '#fff', border: 'none', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <ReloadIcon size={15} /> {reloading ? t('reloadSending') : t('reloadDevice')}
+          </button>
+        )}
       </div>
 
       {/* SATIR 1: Bilgi kartı (daraltıldı, 2 sütun) + CPU + RAM (küçültülmüş) */}
@@ -247,7 +249,7 @@ export default function DeviceDetailPage() {
               <th style={{ width: '22%' }}>VLAN Name</th>
               <th style={{ width: '15%' }}>Status</th>
               <th style={{ width: '10%' }}>Capacity</th>
-              <th style={{ width: '15%', textAlign: 'center' }}>Config</th>
+              {isOperator && <th style={{ width: '15%', textAlign: 'center' }}>Config</th>}
             </tr>
           </thead>
           <tbody>
@@ -273,19 +275,22 @@ export default function DeviceDetailPage() {
                   </span>
                 </td>
                 <td style={{ fontFamily: 'monospace', fontSize: '0.9rem', color: 'var(--text-muted)' }}>{formatSpeed(i.speed)}</td>
-                <td style={{ textAlign: 'center' }}>
-                  {/* VLAN (SVI) arayüzlerinde switchport ayarı yok → Config butonu gösterme.
-                      SNMP adı "Vlan10" ya da kısaltmalı "Vl10" olabilir; fiziksel portlar Gi/Fa/Te ile başlar. */}
-                  {!/^vl(?:an)?\s*\d+$/i.test((i.name || '').trim()) && (
-                    <button className="btn btn-primary btn-sm" onClick={() => setConfigIface(i)}
-                      style={{ fontSize: '0.78rem', fontWeight: 700, padding: '5px 16px', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                      <GearIcon size={14} /> Config
-                    </button>
-                  )}
-                </td>
+                {/* Arayüz konfigi Operator+ yetkisi ister — Viewer (View Only) rolünde kolon hiç yok */}
+                {isOperator && (
+                  <td style={{ textAlign: 'center' }}>
+                    {/* VLAN (SVI) arayüzlerinde switchport ayarı yok → Config butonu gösterme.
+                        SNMP adı "Vlan10" ya da kısaltmalı "Vl10" olabilir; fiziksel portlar Gi/Fa/Te ile başlar. */}
+                    {!/^vl(?:an)?\s*\d+$/i.test((i.name || '').trim()) && (
+                      <button className="btn btn-primary btn-sm" onClick={() => setConfigIface(i)}
+                        style={{ fontSize: '0.78rem', fontWeight: 700, padding: '5px 16px', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <GearIcon size={14} /> Config
+                      </button>
+                    )}
+                  </td>
+                )}
               </tr>
             )) : (
-              <tr><td colSpan="6" style={{ textAlign: 'center', padding: 30, color: 'var(--text-muted)' }}>
+              <tr><td colSpan={isOperator ? 6 : 5} style={{ textAlign: 'center', padding: 30, color: 'var(--text-muted)' }}>
                 {!snmpLoaded ? t('loadingSnmpData') : (details.status === 'UP' ? t('noPortsFound') : t('deviceDown'))}
               </td></tr>
             )}

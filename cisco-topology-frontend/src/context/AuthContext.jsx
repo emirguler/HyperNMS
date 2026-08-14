@@ -139,6 +139,9 @@ export function AuthProvider({ children }) {
     <AuthContext.Provider value={{
       isAuthenticated, userRole, username, login, logout, authFetch,
       isAdmin: userRole === 'Administrator',
+      // Cihaza dokunan islemler (SSH / arayuz konfigi / reload): Administrator + Operator.
+      // 'User' eski kayitlarin Operator karsiligi; 'Viewer' = User (View Only) → yetkisiz.
+      isOperator: userRole === 'Administrator' || userRole === 'Operator' || userRole === 'User',
       mustChangePassword, clearMustChangePassword, csrfToken,
       allowedCommands
     }}>

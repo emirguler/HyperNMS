@@ -3,7 +3,7 @@ const ssh2 = require('ssh2').Client;
 const net = require('net');
 const store = require('../utils/memoryStore');
 const { decryptPassword } = require('../utils/crypto');
-const { authenticateWs } = require('../middleware/auth');
+const { authenticateWs, normalizeRole, canOperate } = require('../middleware/auth');
 const { isBlockedIP } = require('../utils/validation');
 
 // --- Cihaz keşfi için SSH probe (Find Device) ---
@@ -110,13 +110,19 @@ function setupWebSocket(server) {
             return;
         }
 
-        // Administrator = tam kontrol (raw giriş). User = salt-izle: sadece kendisine
+        // Administrator = tam kontrol (raw giriş). Operator = kısıtlı: sadece kendisine
         // atanmış whitelist komutlarını butonla çalıştırabilir; klavye girişi sunucuda yok sayılır.
-        const isAdmin = user.role === 'Administrator';
+        // Viewer (User / View Only) = SSH tamamen kapalı.
+        const isAdmin = normalizeRole(user.role) === 'Administrator';
+        if (!canOperate(user.role)) {
+            ws.send(JSON.stringify({ type: 'error', message: 'Your role (View Only) is not permitted to open SSH sessions.' }));
+            ws.close();
+            return;
+        }
         const account = store.getUser(user.id) || {};
         const allowedCommands = isAdmin ? null : (Array.isArray(account.allowedCommands) ? account.allowedCommands : []);
 
-        // Komut atanmamış User rolüne SSH tamamen kapalı
+        // Komut atanmamış Operator rolüne SSH tamamen kapalı
         if (!isAdmin && allowedCommands.length === 0) {
             ws.send(JSON.stringify({ type: 'error', message: 'No SSH commands assigned to your account. Access denied.' }));
             ws.close();

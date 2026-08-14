@@ -8,7 +8,7 @@ function UserFormModal({ mode, initialValues, onCancel, onSave }) {
   const [values, setValues] = useState({
     username: '',
     password: '',
-    role: 'User',
+    role: 'Viewer',   // varsayilan en dusuk yetki
     authType: 'local', // 'local' | 'ad'
     allowedCommands: '', // textarea: her satıra bir komut
   });
@@ -18,7 +18,8 @@ function UserFormModal({ mode, initialValues, onCancel, onSave }) {
       setValues({
         username: initialValues.username || '',
         password: '',
-        role: initialValues.role || 'User',
+        // Eski kayitlarda 'User' = bugunun Operator'u
+        role: initialValues.role === 'User' ? 'Operator' : (initialValues.role || 'Viewer'),
         authType: initialValues.authType || 'local',
         allowedCommands: (initialValues.allowedCommands || []).join('\n'),
       });
@@ -32,8 +33,9 @@ function UserFormModal({ mode, initialValues, onCancel, onSave }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    // Komut metnini diziye çevir; Administrator için gönderme (tam kontrol)
-    const allowedCommands = values.role === 'User'
+    // Komut metnini diziye çevir; yalnızca Operator için anlamlı
+    // (Administrator = tam kontrol, Viewer = SSH kapalı)
+    const allowedCommands = values.role === 'Operator'
       ? values.allowedCommands.split('\n').map(s => s.trim()).filter(Boolean)
       : [];
     const payload = { username: values.username, role: values.role, authType: values.authType, allowedCommands };
@@ -113,12 +115,18 @@ function UserFormModal({ mode, initialValues, onCancel, onSave }) {
                 onChange={handleChange}
                 style={{ cursor: 'pointer' }}
               >
-                <option value="User">{t('roleUser')}</option>
+                <option value="Viewer">{t('roleViewer')}</option>
+                <option value="Operator">{t('roleOperator')}</option>
                 <option value="Administrator">{t('roleAdmin')}</option>
               </select>
+              {(values.role === 'Viewer' || values.role === 'Operator') && (
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 6 }}>
+                  {values.role === 'Viewer' ? t('roleViewerHint') : t('roleOperatorHint')}
+                </div>
+              )}
             </div>
 
-            {values.role === 'User' && (
+            {values.role === 'Operator' && (
               <div>
                 <label className="input-label" style={{display:'block', marginBottom:8, color:'#94a3b8'}}>{t('allowedCommandsLabel')}</label>
                 <textarea

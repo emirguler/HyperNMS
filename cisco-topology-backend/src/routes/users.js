@@ -33,7 +33,7 @@ router.post('/users', authenticate, requireAdmin, async (req, res) => {
         username: data.username,
         authType: isAd ? 'ad' : 'local',
         password: isAd ? '' : await bcrypt.hash(data.password, BCRYPT_ROUNDS), // AD: yerel sifre yok, AD'de dogrulanir
-        role: data.role || 'User',
+        role: data.role || 'Viewer',   // varsayilan en dusuk yetki (User / View Only)
         allowedCommands: data.allowedCommands || []
     };
     store.addUser(newUser);
