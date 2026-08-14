@@ -96,8 +96,17 @@ export default function InterfaceConfigModal({ deviceId, iface, onClose }) {
           <div style={{ flex: '1 1 320px', minWidth: 280 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
               <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)' }}>{t('ifaceCurrentCfg')}</span>
-              <button className="btn btn-ghost btn-sm" onClick={() => loadOutput(true)} disabled={outLoading}
-                title={t('ifaceRefreshRevert')} style={{ fontSize: '0.72rem', padding: '3px 10px' }}>↻</button>
+              <button className="btn btn-sm" onClick={() => loadOutput(true)} disabled={outLoading}
+                title={t('ifaceRefreshRevert')}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: '0.72rem', fontWeight: 600,
+                  padding: '4px 11px', color: 'var(--primary)', background: 'rgba(59,130,246,0.12)',
+                  border: '1px solid var(--primary)', borderRadius: 6 }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="23 4 23 10 17 10" />
+                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                </svg>
+                {t('ifaceReload')}
+              </button>
             </div>
             <pre style={{
               margin: 0, background: '#000', color: '#e5e7eb', border: '1px solid var(--border-color)', borderRadius: 8,
