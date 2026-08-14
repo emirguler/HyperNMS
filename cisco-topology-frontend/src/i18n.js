@@ -66,7 +66,7 @@ const translations = {
     ifaceApplyFail: 'Apply failed',
     ifaceLoadFail: 'Could not load',
     ifaceRefreshRevert: 'Reload current settings (discard changes)',
-    ifaceReload: 'Reload',
+    ifaceReload: 'Refresh',
     traceNoHops: 'No hops returned',
     traceTimeout: 'timeout',
     traceHint: 'Shows the network path to the device. May take up to ~30s for unreachable hosts.',
