@@ -4,7 +4,7 @@ const { authenticate, requireAdmin } = require('../middleware/auth');
 const { validateSwitch, sanitizeSwitch, isBlockedIP, isValidIPv4 } = require('../utils/validation');
 const { encryptPassword, decryptPassword } = require('../utils/crypto');
 const { getDeviceDetails, discoverNeighbors, searchMAC, inventoryAll, ipSlaStatus } = require('../services/snmpService');
-const { probeDevice, ipSlaViaSsh, runCommands, kbAuth } = require('../services/sshService');
+const { probeDevice, ipSlaViaSsh, runCommands, runShowCommand, kbAuth } = require('../services/sshService');
 const { listBackups, getBackup, backupDevice } = require('../services/configBackupService');
 const { getImportableConfig } = require('../services/importableConfigService');
 const { identifyFromSsh } = require('../utils/sshIdentify');
@@ -1139,6 +1139,106 @@ router.get('/switches/export/detailed', authenticate, requireAdmin, detailedExpo
     } catch (e) {
         console.error('[EXPORT-DETAILED] Hata:', e.message);
         res.status(500).json({ error: 'Detailed export failed' });
+    }
+});
+
+// --- Arayüz (interface) yapılandırma — cihaz detayındaki "Config" butonu ---
+// Komutlar SUNUCUDA doğrulanmış girdilerden (mode + VLAN id'leri) üretilir; serbest komut yok.
+// Bu yüzden admin dışı roller de kullanabilir (yalnızca authenticate). Yıkıcı/serbest giriş imkânsız.
+const IFNAME_RE = /^[A-Za-z][A-Za-z0-9./_-]{1,40}$/;      // GigabitEthernet1/0/1, Fa1/5, Po1 ...
+const VLAN_OK = (v) => Number.isInteger(v) && v >= 1 && v <= 4094;
+
+function parseVlanBrief(text) {
+    const out = [];
+    const seen = new Set();
+    for (const line of String(text || '').replace(/\r/g, '').split('\n')) {
+        // "10   MGMT     active   Gi1/0/1, ..." → id + ad (status act/sus ile başlar)
+        const m = line.match(/^\s*(\d{1,4})\s+(\S+)\s+(act|sus)/i);
+        if (!m) continue;
+        const id = parseInt(m[1], 10);
+        if (!VLAN_OK(id) || (id >= 1002 && id <= 1005) || seen.has(id)) continue; // 1002-1005 varsayılan fddi/token
+        seen.add(id);
+        out.push({ id, name: m[2] });
+    }
+    out.sort((a, b) => a.id - b.id);
+    return out;
+}
+
+// VLAN listesi (dropdown'lar için) — "show vlan brief"
+router.get('/switches/:id/vlans', authenticate, async (req, res) => {
+    const device = store.getSwitch(req.params.id);
+    if (!device) return res.status(404).json({ error: 'Device not found' });
+    if (!device.sshUsername || !device.sshPassword) return res.status(400).json({ error: 'SSH credentials missing' });
+    if (isBlockedIP(device.ip)) return res.status(403).json({ error: 'Connection to this IP is not allowed' });
+    try {
+        const raw = await runShowCommand(device, 'show vlan brief');
+        res.json({ vlans: parseVlanBrief(raw) });
+    } catch (e) {
+        res.status(500).json({ error: 'SSH error: ' + (e.message || 'failed') });
+    }
+});
+
+// Arayüzün mevcut ayarları — "show running-config interface <name>" (sol taraf)
+router.get('/switches/:id/interface-config', authenticate, async (req, res) => {
+    const device = store.getSwitch(req.params.id);
+    if (!device) return res.status(404).json({ error: 'Device not found' });
+    const name = String(req.query.name || '').trim();
+    if (!IFNAME_RE.test(name)) return res.status(400).json({ error: 'Invalid interface name' });
+    if (!device.sshUsername || !device.sshPassword) return res.status(400).json({ error: 'SSH credentials missing' });
+    if (isBlockedIP(device.ip)) return res.status(403).json({ error: 'Connection to this IP is not allowed' });
+    try {
+        const raw = await runShowCommand(device, `show running-config interface ${name}`);
+        const clean = String(raw || '').replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '').replace(/\r/g, '')
+            .split('\n').filter(l => !/terminal length 0/.test(l)).join('\n').trim();
+        res.json({ output: clean });
+    } catch (e) {
+        res.status(500).json({ error: 'SSH error: ' + (e.message || 'failed') });
+    }
+});
+
+// Arayüz ayarını uygula — mode (access/trunk) + VLAN'lar. Komutlar burada üretilir (sağ taraf).
+router.post('/switches/:id/interface-config', authenticate, async (req, res) => {
+    const device = store.getSwitch(req.params.id);
+    if (!device) return res.status(404).json({ error: 'Device not found' });
+    if (!device.sshUsername || !device.sshPassword) return res.status(400).json({ error: 'SSH credentials missing' });
+    if (isBlockedIP(device.ip)) return res.status(403).json({ error: 'Connection to this IP is not allowed' });
+
+    const { name, mode } = req.body || {};
+    const ifName = String(name || '').trim();
+    if (!IFNAME_RE.test(ifName)) return res.status(400).json({ error: 'Invalid interface name' });
+    if (mode !== 'access' && mode !== 'trunk') return res.status(400).json({ error: 'Invalid mode' });
+
+    const cmds = [`interface ${ifName}`];
+    if (mode === 'access') {
+        cmds.push('switchport mode access');
+        if (req.body.accessVlan != null && req.body.accessVlan !== '') {
+            const v = parseInt(req.body.accessVlan, 10);
+            if (!VLAN_OK(v)) return res.status(400).json({ error: 'Invalid access VLAN' });
+            cmds.push(`switchport access vlan ${v}`);
+        }
+    } else {
+        cmds.push('switchport trunk encapsulation dot1q'); // bazı platformlarda gerekli; desteklemeyende zararsız hata
+        cmds.push('switchport mode trunk');
+        if (req.body.nativeVlan != null && req.body.nativeVlan !== '') {
+            const nv = parseInt(req.body.nativeVlan, 10);
+            if (!VLAN_OK(nv)) return res.status(400).json({ error: 'Invalid native VLAN' });
+            cmds.push(`switchport trunk native vlan ${nv}`);
+        }
+        const allowed = Array.isArray(req.body.allowedVlans) ? req.body.allowedVlans.map(x => parseInt(x, 10)) : [];
+        if (allowed.length) {
+            if (!allowed.every(VLAN_OK)) return res.status(400).json({ error: 'Invalid allowed VLAN' });
+            const uniq = [...new Set(allowed)].sort((a, b) => a - b);
+            cmds.push(`switchport trunk allowed vlan ${uniq.join(',')}`);
+        }
+    }
+
+    try {
+        const output = await runCommands(device, cmds, { config: true, save: !!req.body.save });
+        const clean = String(output || '').replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '').replace(/\r/g, '').trim();
+        await logAction(req.user, 'IFACE_CONFIG', `${device.name} ${ifName}`, { mode, save: !!req.body.save, cmds });
+        res.json({ ok: true, commands: cmds, output: clean });
+    } catch (e) {
+        res.status(500).json({ error: 'SSH error: ' + (e.message || 'failed') });
     }
 });
 

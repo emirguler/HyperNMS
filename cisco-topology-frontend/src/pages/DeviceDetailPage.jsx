@@ -6,6 +6,7 @@ import PingModal from '../components/PingModal';
 import PingIcon from '../components/PingIcon';
 import TraceModal from '../components/TraceModal';
 import TraceIcon from '../components/TraceIcon';
+import InterfaceConfigModal from '../components/InterfaceConfigModal';
 import Gauge from '../components/Gauge';
 import PingHistoryChart from '../components/PingHistoryChart';
 import ConfigBackupCard from '../components/ConfigBackupCard';
@@ -19,6 +20,7 @@ export default function DeviceDetailPage() {
   const { openSshSession, topoTabs, rawDevices } = useApp();
   const [showPing, setShowPing] = useState(false);
   const [showTrace, setShowTrace] = useState(false);
+  const [configIface, setConfigIface] = useState(null); // "Config" butonuyla açılan arayüz
   // Geri dön: gelinen sayfaya (topoloji sekmesi / Devices / Dashboard ...).
   // Doğrudan link ile açıldıysa (state yok) Devices'a düş.
   const backTo = location.state?.from || '/devices';
@@ -217,9 +219,10 @@ export default function DeviceDetailPage() {
             <tr>
               <th style={{ paddingLeft: 24, width: '20%' }}>Port</th>
               <th style={{ width: '12%' }}>VLAN</th>
-              <th style={{ width: '28%' }}>VLAN Name</th>
+              <th style={{ width: '22%' }}>VLAN Name</th>
               <th style={{ width: '15%' }}>Status</th>
               <th style={{ width: '10%' }}>Capacity</th>
+              <th style={{ width: '15%', textAlign: 'center' }}>Config</th>
             </tr>
           </thead>
           <tbody>
@@ -245,9 +248,13 @@ export default function DeviceDetailPage() {
                   </span>
                 </td>
                 <td style={{ fontFamily: 'monospace', fontSize: '0.9rem', color: 'var(--text-muted)' }}>{formatSpeed(i.speed)}</td>
+                <td style={{ textAlign: 'center' }}>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setConfigIface(i)}
+                    style={{ fontSize: '0.72rem', padding: '4px 12px', whiteSpace: 'nowrap' }}>⚙ Config</button>
+                </td>
               </tr>
             )) : (
-              <tr><td colSpan="5" style={{ textAlign: 'center', padding: 30, color: 'var(--text-muted)' }}>
+              <tr><td colSpan="6" style={{ textAlign: 'center', padding: 30, color: 'var(--text-muted)' }}>
                 {!snmpLoaded ? t('loadingSnmpData') : (details.status === 'UP' ? t('noPortsFound') : t('deviceDown'))}
               </td></tr>
             )}
@@ -260,6 +267,9 @@ export default function DeviceDetailPage() {
       )}
       {showTrace && details.ip && (
         <TraceModal ip={details.ip} lockIp onClose={() => setShowTrace(false)} />
+      )}
+      {configIface && (
+        <InterfaceConfigModal deviceId={id} iface={configIface} onClose={() => setConfigIface(null)} />
       )}
     </div>
   );
