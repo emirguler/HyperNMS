@@ -23,17 +23,27 @@ export default function InterfaceConfigModal({ deviceId, iface, onClose }) {
   const [applying, setApplying] = useState(false);
   const [applyMsg, setApplyMsg] = useState(null); // { ok, text }
 
-  const loadOutput = () => {
+  const loadOutput = (fillForm = false) => {
     setOutLoading(true); setOutErr('');
     authFetch(`/switches/${deviceId}/interface-config?name=${encodeURIComponent(name)}`)
       .then(r => (r && r.ok ? r.json() : (r ? r.json().then(d => Promise.reject(d)) : Promise.reject({}))))
-      .then(d => setOutput(d.output || ''))
+      .then(d => {
+        const text = d.output || '';
+        setOutput(text);
+        if (fillForm) { // formu cihazın mevcut ayarlarıyla doldur (yalnızca ilk açılışta)
+          const p = parseInterfaceConfig(text);
+          setMode(p.mode || ((p.nativeVlan || p.allowedVlans.length) ? 'trunk' : 'access'));
+          setAccessVlan(p.accessVlan || '');
+          setNativeVlan(p.nativeVlan || '');
+          setAllowedVlans(p.allowedVlans || []);
+        }
+      })
       .catch(d => setOutErr((d && d.error) || t('ifaceLoadFail')))
       .finally(() => setOutLoading(false));
   };
 
   useEffect(() => {
-    loadOutput();
+    loadOutput(true); // ilk açılış: mevcut ayarları forma otomatik getir
     authFetch(`/switches/${deviceId}/vlans`)
       .then(r => (r && r.ok ? r.json() : null))
       .then(d => setVlans((d && d.vlans) || []))
@@ -73,7 +83,7 @@ export default function InterfaceConfigModal({ deviceId, iface, onClose }) {
           <div style={{ flex: '1 1 320px', minWidth: 280 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
               <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)' }}>{t('ifaceCurrentCfg')}</span>
-              <button className="btn btn-ghost btn-sm" onClick={loadOutput} disabled={outLoading} style={{ fontSize: '0.72rem', padding: '3px 10px' }}>↻</button>
+              <button className="btn btn-ghost btn-sm" onClick={() => loadOutput()} disabled={outLoading} style={{ fontSize: '0.72rem', padding: '3px 10px' }}>↻</button>
             </div>
             <pre style={{
               margin: 0, background: '#000', color: '#e5e7eb', border: '1px solid var(--border-color)', borderRadius: 8,
@@ -169,4 +179,37 @@ function VlanPick({ vlans, value, onChange }) {
     <input className="modern-input" style={{ width: '100%' }} type="number" min="1" max="4094"
       value={value} onChange={e => onChange(e.target.value)} placeholder="VLAN id" />
   );
+}
+
+// "10,20,30-33" gibi VLAN listesini id kümesine aç (checkbox'ları işaretlemek için)
+function expandVlanSpec(spec) {
+  const ids = new Set();
+  for (const part of String(spec || '').split(',')) {
+    const p = part.trim();
+    const range = p.match(/^(\d+)-(\d+)$/);
+    if (range) {
+      let a = +range[1], b = +range[2];
+      if (a > b) { const tmp = a; a = b; b = tmp; }
+      for (let i = a; i <= b && ids.size < 4096; i++) ids.add(i);
+    } else if (/^\d+$/.test(p)) ids.add(+p);
+  }
+  return [...ids].sort((x, y) => x - y);
+}
+
+// "show running-config interface" çıktısından mevcut ayarları çıkar → formu otomatik doldur.
+// allowed vlan birden çok satıra ("... allowed vlan add ...") yayılabilir → birleştirilir.
+function parseInterfaceConfig(text) {
+  const out = { mode: null, accessVlan: '', nativeVlan: '', allowedVlans: [] };
+  let allowedSpec = '';
+  for (const raw of String(text || '').replace(/\r/g, '').split('\n')) {
+    const l = raw.trim();
+    let m;
+    if (/^switchport mode access\b/i.test(l)) out.mode = 'access';
+    else if (/^switchport mode trunk\b/i.test(l)) out.mode = 'trunk';
+    else if ((m = l.match(/^switchport access vlan\s+(\d+)/i))) out.accessVlan = m[1];
+    else if ((m = l.match(/^switchport trunk native vlan\s+(\d+)/i))) out.nativeVlan = m[1];
+    else if ((m = l.match(/^switchport trunk allowed vlan\s+(?:add\s+)?([\d,\-]+)/i))) allowedSpec += (allowedSpec ? ',' : '') + m[1];
+  }
+  out.allowedVlans = expandVlanSpec(allowedSpec).map(String);
+  return out;
 }
