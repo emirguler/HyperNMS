@@ -162,10 +162,11 @@ export default function InterfaceConfigModal({ deviceId, iface, onClose }) {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 12 }}>
               <div>
                 <div style={{ fontSize: '0.82rem', color: 'var(--text-main)' }}>{t('ifaceShutdown')}</div>
-                <div style={{ fontSize: '0.7rem', fontFamily: 'monospace', color: shut ? 'var(--danger)' : 'var(--success)' }}>{shut ? 'shutdown' : 'no shutdown'}</div>
+                <div style={{ fontSize: '0.7rem', fontFamily: 'monospace', color: shut ? 'var(--danger)' : '#facc15' }}>{shut ? 'shutdown' : 'no shutdown'}</div>
               </div>
-              <label className="toggle-switch" style={{ flexShrink: 0 }}>
-                <input type="checkbox" checked={shut} onChange={e => setShut(e.target.checked)} />
+              {/* Sağ/açık = no shutdown (sarı), sol/kapalı = shutdown (kırmızı) → checked = !shut */}
+              <label className="toggle-switch toggle-shutdown" style={{ flexShrink: 0 }}>
+                <input type="checkbox" checked={!shut} onChange={e => setShut(!e.target.checked)} />
                 <span className="toggle-slider" />
               </label>
             </div>

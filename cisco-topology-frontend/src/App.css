@@ -185,6 +185,10 @@ body {
 .toggle-switch input:checked + .toggle-slider { background: var(--success); }
 .toggle-switch input:checked + .toggle-slider::before { transform: translateX(20px); }
 
+/* Shutdown toggle: sağ/açık = no shutdown (sarı), sol/kapalı = shutdown (kırmızı) */
+.toggle-switch.toggle-shutdown .toggle-slider { background: var(--danger); }
+.toggle-switch.toggle-shutdown input:checked + .toggle-slider { background: #facc15; }
+
 /* ============================================
    FORM ELEMENTS
    ============================================ */
