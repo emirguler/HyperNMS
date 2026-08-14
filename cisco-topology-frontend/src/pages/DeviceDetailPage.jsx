@@ -249,8 +249,9 @@ export default function DeviceDetailPage() {
                 </td>
                 <td style={{ fontFamily: 'monospace', fontSize: '0.9rem', color: 'var(--text-muted)' }}>{formatSpeed(i.speed)}</td>
                 <td style={{ textAlign: 'center' }}>
-                  {/* VLAN (SVI) arayüzlerinde switchport ayarı yok → Config butonu gösterme */}
-                  {!/^vlan\s*\d+$/i.test((i.name || '').trim()) && (
+                  {/* VLAN (SVI) arayüzlerinde switchport ayarı yok → Config butonu gösterme.
+                      SNMP adı "Vlan10" ya da kısaltmalı "Vl10" olabilir; fiziksel portlar Gi/Fa/Te ile başlar. */}
+                  {!/^vl(?:an)?\s*\d+$/i.test((i.name || '').trim()) && (
                     <button className="btn btn-primary btn-sm" onClick={() => setConfigIface(i)}
                       style={{ fontSize: '0.78rem', fontWeight: 700, padding: '5px 16px', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                       <GearIcon size={14} /> Config
