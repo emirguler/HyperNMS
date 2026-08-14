@@ -7,6 +7,8 @@ import PingIcon from '../components/PingIcon';
 import TraceModal from '../components/TraceModal';
 import TraceIcon from '../components/TraceIcon';
 import InterfaceConfigModal from '../components/InterfaceConfigModal';
+import ConfirmModal from '../components/ConfirmModal';
+import { showToast } from '../Toast';
 import Gauge from '../components/Gauge';
 import PingHistoryChart from '../components/PingHistoryChart';
 import ConfigBackupCard from '../components/ConfigBackupCard';
@@ -21,6 +23,8 @@ export default function DeviceDetailPage() {
   const [showPing, setShowPing] = useState(false);
   const [showTrace, setShowTrace] = useState(false);
   const [configIface, setConfigIface] = useState(null); // "Config" butonuyla açılan arayüz
+  const [confirmReload, setConfirmReload] = useState(false); // reload onay diyaloğu
+  const [reloading, setReloading] = useState(false);
   // Geri dön: gelinen sayfaya (topoloji sekmesi / Devices / Dashboard ...).
   // Doğrudan link ile açıldıysa (state yok) Devices'a düş.
   const backTo = location.state?.from || '/devices';
@@ -108,6 +112,22 @@ export default function DeviceDetailPage() {
     return (bps / 1000000).toFixed(0) + ' M';
   };
 
+  // Cihazı yeniden başlat: SSH ile "reload" + onay Enter'ı gönder (yıkıcı → önce onay diyaloğu)
+  const doReload = async () => {
+    setConfirmReload(false);
+    setReloading(true);
+    try {
+      const res = await authFetch(`/switches/${id}/reload`, { method: 'POST' });
+      const data = res ? await res.json().catch(() => null) : null;
+      if (res && res.ok) showToast(t('reloadSent'), 'success');
+      else showToast((data && data.error) || t('reloadFail'), 'error');
+    } catch {
+      showToast(t('reloadFail'), 'error');
+    } finally {
+      setReloading(false);
+    }
+  };
+
   return (
     <div className="list-container">
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
@@ -132,6 +152,11 @@ export default function DeviceDetailPage() {
           onClick={() => navigate(`/topology/${details.topologyPage || 'main'}?zoom=${id}`)}
           title={t('focusTool')}>
           🔍 {t('focusTool')}
+        </button>
+        <button className="btn btn-sm" onClick={() => setConfirmReload(true)} disabled={reloading}
+          title={t('reloadDevice')}
+          style={{ marginLeft: 'auto', background: 'var(--danger)', color: '#fff', border: 'none', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <ReloadIcon size={15} /> {reloading ? t('reloadSending') : t('reloadDevice')}
         </button>
       </div>
 
@@ -277,6 +302,15 @@ export default function DeviceDetailPage() {
       {configIface && (
         <InterfaceConfigModal deviceId={id} iface={configIface} onClose={() => setConfigIface(null)} />
       )}
+      {confirmReload && (
+        <ConfirmModal
+          title={t('reloadConfirmTitle')}
+          message={t('reloadConfirmMsg').replace('{name}', displayHostname || details.name || id)}
+          confirmLabel={t('reloadDevice')}
+          onConfirm={doReload}
+          onCancel={() => setConfirmReload(false)}
+        />
+      )}
     </div>
   );
 }
@@ -293,6 +327,13 @@ const GearIcon = ({ size = 14 }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="3" />
     <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+  </svg>
+);
+
+const ReloadIcon = ({ size = 15 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="23 4 23 10 17 10" />
+    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
   </svg>
 );
 

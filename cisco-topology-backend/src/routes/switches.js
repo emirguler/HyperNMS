@@ -1259,4 +1259,22 @@ router.post('/switches/:id/interface-config', authenticate, async (req, res) => 
     }
 });
 
+// Cihazı yeniden başlat (reload) — "reload" + onay ("Proceed with reload? [confirm]") Enter'ı SSH ile
+// gönderir. YIKICI (cihaz reboot olur). Komut sabit, enjeksiyon yok → kullanıcı isteğiyle her iki rol
+// (authenticate) çağırabilir. İşlem denetime yazılır.
+router.post('/switches/:id/reload', authenticate, async (req, res) => {
+    const device = store.getSwitch(req.params.id);
+    if (!device) return res.status(404).json({ error: 'Device not found' });
+    if (!device.sshUsername || !device.sshPassword) return res.status(400).json({ error: 'SSH credentials missing' });
+    if (isBlockedIP(device.ip)) return res.status(403).json({ error: 'Connection to this IP is not allowed' });
+    try {
+        const output = await runCommands(device, ['reload', ''], { config: false, timeoutMs: 15000 });
+        await logAction(req.user, 'DEVICE_RELOAD', device.name, { ip: device.ip });
+        const clean = String(output || '').replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '').replace(/\r/g, '').trim();
+        res.json({ ok: true, output: clean });
+    } catch (e) {
+        res.status(500).json({ error: 'SSH error: ' + (e.message || 'failed') });
+    }
+});
+
 module.exports = router;
