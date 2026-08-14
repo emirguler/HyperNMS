@@ -58,19 +58,6 @@ export default function InterfaceConfigModal({ deviceId, iface, onClose }) {
 
   const label = { fontSize: '0.78rem', color: 'var(--text-muted)', display: 'block', marginBottom: 6, marginTop: 14 };
 
-  // VLAN tek seçim: liste varsa dropdown, yoksa sayı girişi
-  const VlanPick = ({ value, onChange }) => (
-    vlans.length ? (
-      <select className="modern-input" style={{ width: '100%' }} value={value} onChange={e => onChange(e.target.value)}>
-        <option value="">—</option>
-        {vlans.map(v => <option key={v.id} value={String(v.id)}>{v.id} — {v.name}</option>)}
-      </select>
-    ) : (
-      <input className="modern-input" style={{ width: '100%' }} type="number" min="1" max="4094"
-        value={value} onChange={e => onChange(e.target.value)} placeholder="VLAN id" />
-    )
-  );
-
   return (
     <div className="modal-overlay" onClick={() => onClose()} onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
       <div className="modal-content" style={{ width: 780, maxWidth: '95vw' }} onClick={e => e.stopPropagation()}>
@@ -109,12 +96,12 @@ export default function InterfaceConfigModal({ deviceId, iface, onClose }) {
             {mode === 'access' ? (
               <>
                 <label style={label}>{t('ifaceAccessVlan')}</label>
-                <VlanPick value={accessVlan} onChange={setAccessVlan} />
+                <VlanPick vlans={vlans} value={accessVlan} onChange={setAccessVlan} />
               </>
             ) : (
               <>
                 <label style={label}>{t('ifaceNativeVlan')}</label>
-                <VlanPick value={nativeVlan} onChange={setNativeVlan} />
+                <VlanPick vlans={vlans} value={nativeVlan} onChange={setNativeVlan} />
 
                 <label style={label}>{t('ifaceAllowedVlans')}</label>
                 {vlans.length ? (
@@ -166,5 +153,20 @@ export default function InterfaceConfigModal({ deviceId, iface, onClose }) {
         </div>
       </div>
     </div>
+  );
+}
+
+// VLAN tek seçim: liste varsa dropdown, yoksa sayı girişi. MODÜL SEVİYESİNDE tanımlı —
+// bileşenin içinde tanımlanırsa her render'da yeni bileşen tipi olur, React <select>'i
+// remount eder ve açık native dropdown seçim yapılmadan kapanırdı.
+function VlanPick({ vlans, value, onChange }) {
+  return vlans.length ? (
+    <select className="modern-input" style={{ width: '100%' }} value={value} onChange={e => onChange(e.target.value)}>
+      <option value="">—</option>
+      {vlans.map(v => <option key={v.id} value={String(v.id)}>{v.id} — {v.name}</option>)}
+    </select>
+  ) : (
+    <input className="modern-input" style={{ width: '100%' }} type="number" min="1" max="4094"
+      value={value} onChange={e => onChange(e.target.value)} placeholder="VLAN id" />
   );
 }
