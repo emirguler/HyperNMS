@@ -1210,13 +1210,19 @@ router.post('/switches/:id/interface-config', authenticate, async (req, res) => 
 
     const cmds = [`interface ${ifName}`];
     if (mode === 'access') {
+        // Önce moda geç, SONRA trunk kalıntı komutlarını sil (aksi halde access portta trunk satırları kalır)
         cmds.push('switchport mode access');
+        cmds.push('no switchport trunk allowed vlan');
+        cmds.push('no switchport trunk native vlan');
+        cmds.push('no switchport trunk encapsulation'); // yapılandırılabilir platformlarda temizler; fixed'de zararsız hata
         if (req.body.accessVlan != null && req.body.accessVlan !== '') {
             const v = parseInt(req.body.accessVlan, 10);
             if (!VLAN_OK(v)) return res.status(400).json({ error: 'Invalid access VLAN' });
             cmds.push(`switchport access vlan ${v}`);
         }
     } else {
+        // Access kalıntısını sil, sonra trunk'a geç
+        cmds.push('no switchport access vlan');
         cmds.push('switchport trunk encapsulation dot1q'); // bazı platformlarda gerekli; desteklemeyende zararsız hata
         cmds.push('switchport mode trunk');
         if (req.body.nativeVlan != null && req.body.nativeVlan !== '') {

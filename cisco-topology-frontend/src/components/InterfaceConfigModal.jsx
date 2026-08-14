@@ -118,11 +118,20 @@ export default function InterfaceConfigModal({ deviceId, iface, onClose }) {
 
                 <label style={label}>{t('ifaceAllowedVlans')}</label>
                 {vlans.length ? (
-                  <select multiple className="modern-input" style={{ width: '100%', height: 132 }}
-                    value={allowedVlans}
-                    onChange={e => setAllowedVlans(Array.from(e.target.selectedOptions).map(o => o.value))}>
-                    {vlans.map(v => <option key={v.id} value={String(v.id)}>{v.id} — {v.name}</option>)}
-                  </select>
+                  <div style={{ border: '1px solid var(--border-color)', borderRadius: 8, padding: '8px 10px', maxHeight: 168, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(115px, 1fr))', gap: '5px 12px' }}>
+                    {vlans.map(v => {
+                      const vid = String(v.id);
+                      const checked = allowedVlans.includes(vid);
+                      return (
+                        <label key={v.id} title={`${v.id} — ${v.name}`}
+                          style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.78rem', cursor: 'pointer', color: 'var(--text-main)' }}>
+                          <input type="checkbox" checked={checked}
+                            onChange={e => setAllowedVlans(prev => e.target.checked ? [...prev, vid] : prev.filter(x => x !== vid))} />
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.id} — {v.name}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
                 ) : (
                   <input className="modern-input" style={{ width: '100%' }}
                     value={allowedVlans.join(',')}
