@@ -1268,7 +1268,41 @@ router.post('/switches/:id/reload', authenticate, async (req, res) => {
     if (!device.sshUsername || !device.sshPassword) return res.status(400).json({ error: 'SSH credentials missing' });
     if (isBlockedIP(device.ip)) return res.status(403).json({ error: 'Connection to this IP is not allowed' });
     try {
-        const output = await runCommands(device, ['reload', ''], { config: false, timeoutMs: 15000 });
+        const pw = decryptPassword(device.sshPassword);
+        const output = await new Promise((resolve, reject) => {
+            const conn = new ssh2();
+            let result = '';
+            let dataTimeout = null;
+            let answeredSave = false, confirmed = false;
+            const finish = () => { clearTimeout(hardTimeout); if (dataTimeout) clearTimeout(dataTimeout); try { conn.end(); } catch (e) {} resolve(result); };
+            const hardTimeout = setTimeout(finish, 20000);
+            conn.on('ready', () => {
+                conn.shell((err, stream) => {
+                    if (err) { clearTimeout(hardTimeout); try { conn.end(); } catch (e) {} return reject(err); }
+                    const send = (s) => { try { stream.write(s); } catch (e) {} };
+                    stream.on('data', (d) => {
+                        result += d.toString();
+                        // Kaydedilmemiş config: "System configuration has been modified. Save? [yes/no]:" → otomatik "no"
+                        if (!answeredSave && /\[yes\/no\]/i.test(result)) { answeredSave = true; send('no\n'); }
+                        // "Proceed with reload? [confirm]" → Enter ile onayla
+                        else if (!confirmed && /\[confirm\]/i.test(result)) { confirmed = true; send('\n'); }
+                        if (dataTimeout) clearTimeout(dataTimeout);
+                        dataTimeout = setTimeout(finish, 3000); // reboot bağlantıyı düşürünce 'close' zaten bitirir
+                    });
+                    stream.on('close', () => finish());
+                    send('terminal length 0\n');
+                    setTimeout(() => send('reload\n'), 500);
+                });
+            }).on('error', (err) => { clearTimeout(hardTimeout); reject(err); }).on('keyboard-interactive', kbAuth(pw)).connect({
+                host: device.ip, port: 22, username: device.sshUsername, password: pw,
+                readyTimeout: 8000, tryKeyboard: true,
+                algorithms: {
+                    kex: ["ecdh-sha2-nistp256", "ecdh-sha2-nistp384", "ecdh-sha2-nistp521", "diffie-hellman-group-exchange-sha256", "diffie-hellman-group14-sha1"],
+                    cipher: ["aes128-ctr", "aes192-ctr", "aes256-ctr", "aes128-cbc"],
+                    serverHostKey: ["ssh-rsa", "ecdsa-sha2-nistp256", "ecdsa-sha2-nistp384"]
+                }
+            });
+        });
         await logAction(req.user, 'DEVICE_RELOAD', device.name, { ip: device.ip });
         const clean = String(output || '').replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '').replace(/\r/g, '').trim();
         res.json({ ok: true, output: clean });
