@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { t } from '../i18n';
 
@@ -19,6 +19,9 @@ export default function InterfaceConfigModal({ deviceId, iface, onClose }) {
   const [accessVlan, setAccessVlan] = useState(iface?.vlan && /^\d+$/.test(String(iface.vlan)) ? String(iface.vlan) : '');
   const [nativeVlan, setNativeVlan] = useState('');
   const [allowedVlans, setAllowedVlans] = useState([]); // string id'ler
+  const [powerAuto, setPowerAuto] = useState(true); // Power inline: true=auto, false=never
+  const [shut, setShut] = useState(false);          // true=shutdown, false=no shutdown
+  const initPowerRef = useRef(true);                // ilk (mevcut) PoE değeri — yalnızca değişince gönderilir
   const [save, setSave] = useState(false);
   const [applying, setApplying] = useState(false);
   const [applyMsg, setApplyMsg] = useState(null); // { ok, text }
@@ -36,6 +39,9 @@ export default function InterfaceConfigModal({ deviceId, iface, onClose }) {
           setAccessVlan(p.accessVlan || '');
           setNativeVlan(p.nativeVlan || '');
           setAllowedVlans(p.allowedVlans || []);
+          const auto = p.power !== 'never';
+          setPowerAuto(auto); initPowerRef.current = auto;
+          setShut(!!p.shutdown);
         }
       })
       .catch(d => setOutErr((d && d.error) || t('ifaceLoadFail')))
@@ -56,6 +62,8 @@ export default function InterfaceConfigModal({ deviceId, iface, onClose }) {
     const body = { name, mode, save };
     if (mode === 'access') body.accessVlan = accessVlan || undefined;
     else { body.nativeVlan = nativeVlan || undefined; body.allowedVlans = allowedVlans.map(Number); }
+    body.shutdown = shut; // admin durumu her zaman gönderilir (zararsız)
+    if (powerAuto !== initPowerRef.current) body.powerInline = powerAuto ? 'auto' : 'never'; // yalnızca değiştiyse
     authFetch(`/switches/${deviceId}/interface-config`, { method: 'POST', body: JSON.stringify(body) })
       .then(r => r.json().then(d => ({ ok: r.ok, d })))
       .then(({ ok, d }) => {
@@ -139,6 +147,29 @@ export default function InterfaceConfigModal({ deviceId, iface, onClose }) {
               </>
             )}
 
+            {/* Power inline (auto/never) ve Shutdown — mod'dan bağımsız, toggle */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 18, paddingTop: 14, borderTop: '1px solid var(--border-color)' }}>
+              <div>
+                <div style={{ fontSize: '0.82rem', color: 'var(--text-main)' }}>{t('ifacePowerInline')}</div>
+                <div style={{ fontSize: '0.7rem', fontFamily: 'monospace', color: 'var(--text-muted)' }}>{powerAuto ? 'auto' : 'never'}</div>
+              </div>
+              <label className="toggle-switch" style={{ flexShrink: 0 }}>
+                <input type="checkbox" checked={powerAuto} onChange={e => setPowerAuto(e.target.checked)} />
+                <span className="toggle-slider" />
+              </label>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 12 }}>
+              <div>
+                <div style={{ fontSize: '0.82rem', color: 'var(--text-main)' }}>{t('ifaceShutdown')}</div>
+                <div style={{ fontSize: '0.7rem', fontFamily: 'monospace', color: shut ? 'var(--danger)' : 'var(--success)' }}>{shut ? 'shutdown' : 'no shutdown'}</div>
+              </div>
+              <label className="toggle-switch" style={{ flexShrink: 0 }}>
+                <input type="checkbox" checked={shut} onChange={e => setShut(e.target.checked)} />
+                <span className="toggle-slider" />
+              </label>
+            </div>
+
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16, cursor: 'pointer', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
               <input type="checkbox" checked={save} onChange={e => setSave(e.target.checked)} />
               {t('ifaceSaveStartup')}
@@ -199,7 +230,7 @@ function expandVlanSpec(spec) {
 // "show running-config interface" çıktısından mevcut ayarları çıkar → formu otomatik doldur.
 // allowed vlan birden çok satıra ("... allowed vlan add ...") yayılabilir → birleştirilir.
 function parseInterfaceConfig(text) {
-  const out = { mode: null, accessVlan: '', nativeVlan: '', allowedVlans: [] };
+  const out = { mode: null, accessVlan: '', nativeVlan: '', allowedVlans: [], power: 'auto', shutdown: false };
   let allowedSpec = '';
   for (const raw of String(text || '').replace(/\r/g, '').split('\n')) {
     const l = raw.trim();
@@ -209,6 +240,9 @@ function parseInterfaceConfig(text) {
     else if ((m = l.match(/^switchport access vlan\s+(\d+)/i))) out.accessVlan = m[1];
     else if ((m = l.match(/^switchport trunk native vlan\s+(\d+)/i))) out.nativeVlan = m[1];
     else if ((m = l.match(/^switchport trunk allowed vlan\s+(?:add\s+)?([\d,\-]+)/i))) allowedSpec += (allowedSpec ? ',' : '') + m[1];
+    else if (/^power inline never\b/i.test(l)) out.power = 'never';
+    else if (/^power inline auto\b/i.test(l)) out.power = 'auto';
+    else if (/^shutdown$/i.test(l)) out.shutdown = true; // "no shutdown" varsayılan → run'da görünmez
   }
   out.allowedVlans = expandVlanSpec(allowedSpec).map(String);
   return out;

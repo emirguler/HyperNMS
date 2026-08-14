@@ -1238,6 +1238,11 @@ router.post('/switches/:id/interface-config', authenticate, async (req, res) => 
         }
     }
 
+    // Mod'dan bağımsız: admin durumu (shutdown/no shutdown) ve PoE (power inline auto/never).
+    // Frontend bunları yalnızca değiştiyse gönderir → PoE olmayan portta gereksiz hata olmaz.
+    if (typeof req.body.shutdown === 'boolean') cmds.push(req.body.shutdown ? 'shutdown' : 'no shutdown');
+    if (req.body.powerInline === 'auto' || req.body.powerInline === 'never') cmds.push(`power inline ${req.body.powerInline}`);
+
     try {
         const output = await runCommands(device, cmds, { config: true, save: !!req.body.save });
         const clean = String(output || '').replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '').replace(/\r/g, '').trim();
