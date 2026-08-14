@@ -1230,11 +1230,17 @@ router.post('/switches/:id/interface-config', authenticate, async (req, res) => 
             if (!VLAN_OK(nv)) return res.status(400).json({ error: 'Invalid native VLAN' });
             cmds.push(`switchport trunk native vlan ${nv}`);
         }
-        const allowed = Array.isArray(req.body.allowedVlans) ? req.body.allowedVlans.map(x => parseInt(x, 10)) : [];
-        if (allowed.length) {
+        // Dizi geldiyse açık liste ayarla (boş dizi = none). Hiç gelmediyse (undefined) dokunma
+        // → cihazdaki mevcut "hepsi izinli" (allowed vlan satırı yok) korunur.
+        const allowed = Array.isArray(req.body.allowedVlans) ? req.body.allowedVlans.map(x => parseInt(x, 10)) : null;
+        if (allowed) {
             if (!allowed.every(VLAN_OK)) return res.status(400).json({ error: 'Invalid allowed VLAN' });
-            const uniq = [...new Set(allowed)].sort((a, b) => a - b);
-            cmds.push(`switchport trunk allowed vlan ${uniq.join(',')}`);
+            if (allowed.length) {
+                const uniq = [...new Set(allowed)].sort((a, b) => a - b);
+                cmds.push(`switchport trunk allowed vlan ${uniq.join(',')}`);
+            } else {
+                cmds.push('switchport trunk allowed vlan none');
+            }
         }
     }
 

@@ -18,7 +18,8 @@ export default function InterfaceConfigModal({ deviceId, iface, onClose }) {
   const [mode, setMode] = useState(initialMode);
   const [accessVlan, setAccessVlan] = useState(iface?.vlan && /^\d+$/.test(String(iface.vlan)) ? String(iface.vlan) : '');
   const [nativeVlan, setNativeVlan] = useState('');
-  const [allowedVlans, setAllowedVlans] = useState([]); // string id'ler
+  const [allowedVlans, setAllowedVlans] = useState([]); // string id'ler (açık liste)
+  const [allowedAll, setAllowedAll] = useState(false);  // true = allowed satırı yok → tüm VLAN'lar izinli
   const [powerAuto, setPowerAuto] = useState(true); // Power inline: true=auto, false=never
   const [shut, setShut] = useState(false);          // true=shutdown, false=no shutdown
   const initPowerRef = useRef(true);                // ilk (mevcut) PoE değeri — yalnızca değişince gönderilir
@@ -39,6 +40,7 @@ export default function InterfaceConfigModal({ deviceId, iface, onClose }) {
           setAccessVlan(p.accessVlan || '');
           setNativeVlan(p.nativeVlan || '');
           setAllowedVlans(p.allowedVlans || []);
+          setAllowedAll(!p.allowedExplicit); // allowed satırı yoksa → tüm VLAN'lar seçili gelsin
           const auto = p.power !== 'never';
           setPowerAuto(auto); initPowerRef.current = auto;
           setShut(!!p.shutdown);
@@ -61,7 +63,10 @@ export default function InterfaceConfigModal({ deviceId, iface, onClose }) {
     setApplying(true); setApplyMsg(null);
     const body = { name, mode, save };
     if (mode === 'access') body.accessVlan = accessVlan || undefined;
-    else { body.nativeVlan = nativeVlan || undefined; body.allowedVlans = allowedVlans.map(Number); }
+    else {
+      body.nativeVlan = nativeVlan || undefined;
+      if (!allowedAll) body.allowedVlans = allowedVlans.map(Number); // allowedAll = mevcut "hepsi izinli"ye dokunma
+    }
     body.shutdown = shut; // admin durumu her zaman gönderilir (zararsız)
     if (powerAuto !== initPowerRef.current) body.powerInline = powerAuto ? 'auto' : 'never'; // yalnızca değiştiyse
     authFetch(`/switches/${deviceId}/interface-config`, { method: 'POST', body: JSON.stringify(body) })
@@ -91,7 +96,8 @@ export default function InterfaceConfigModal({ deviceId, iface, onClose }) {
           <div style={{ flex: '1 1 320px', minWidth: 280 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
               <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)' }}>{t('ifaceCurrentCfg')}</span>
-              <button className="btn btn-ghost btn-sm" onClick={() => loadOutput()} disabled={outLoading} style={{ fontSize: '0.72rem', padding: '3px 10px' }}>↻</button>
+              <button className="btn btn-ghost btn-sm" onClick={() => loadOutput(true)} disabled={outLoading}
+                title={t('ifaceRefreshRevert')} style={{ fontSize: '0.72rem', padding: '3px 10px' }}>↻</button>
             </div>
             <pre style={{
               margin: 0, background: '#000', color: '#e5e7eb', border: '1px solid var(--border-color)', borderRadius: 8,
@@ -126,12 +132,20 @@ export default function InterfaceConfigModal({ deviceId, iface, onClose }) {
                   <div style={{ border: '1px solid var(--border-color)', borderRadius: 8, padding: '8px 10px', maxHeight: 168, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(115px, 1fr))', gap: '5px 12px' }}>
                     {vlans.map(v => {
                       const vid = String(v.id);
-                      const checked = allowedVlans.includes(vid);
+                      const checked = allowedAll || allowedVlans.includes(vid);
                       return (
                         <label key={v.id} title={`${v.id} — ${v.name}`}
                           style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.78rem', cursor: 'pointer', color: 'var(--text-main)' }}>
                           <input type="checkbox" checked={checked}
-                            onChange={e => setAllowedVlans(prev => e.target.checked ? [...prev, vid] : prev.filter(x => x !== vid))} />
+                            onChange={e => {
+                              if (allowedAll) { // "hepsi izinli"den açık listeye geç: tıklanan hariç hepsi işaretli kalır
+                                const all = vlans.map(x => String(x.id));
+                                setAllowedAll(false);
+                                setAllowedVlans(e.target.checked ? all : all.filter(x => x !== vid));
+                              } else {
+                                setAllowedVlans(prev => e.target.checked ? [...prev, vid] : prev.filter(x => x !== vid));
+                              }
+                            }} />
                           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.id} — {v.name}</span>
                         </label>
                       );
@@ -140,7 +154,7 @@ export default function InterfaceConfigModal({ deviceId, iface, onClose }) {
                 ) : (
                   <input className="modern-input" style={{ width: '100%' }}
                     value={allowedVlans.join(',')}
-                    onChange={e => setAllowedVlans(e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
+                    onChange={e => { setAllowedAll(false); setAllowedVlans(e.target.value.split(',').map(s => s.trim()).filter(Boolean)); }}
                     placeholder="10,20,30" />
                 )}
                 <div style={{ fontSize: '0.68rem', color: 'var(--text-dim)', marginTop: 4 }}>{t('ifaceAllowedHint')}</div>
@@ -231,7 +245,7 @@ function expandVlanSpec(spec) {
 // "show running-config interface" çıktısından mevcut ayarları çıkar → formu otomatik doldur.
 // allowed vlan birden çok satıra ("... allowed vlan add ...") yayılabilir → birleştirilir.
 function parseInterfaceConfig(text) {
-  const out = { mode: null, accessVlan: '', nativeVlan: '', allowedVlans: [], power: 'auto', shutdown: false };
+  const out = { mode: null, accessVlan: '', nativeVlan: '', allowedVlans: [], allowedExplicit: false, power: 'auto', shutdown: false };
   let allowedSpec = '';
   for (const raw of String(text || '').replace(/\r/g, '').split('\n')) {
     const l = raw.trim();
@@ -240,7 +254,8 @@ function parseInterfaceConfig(text) {
     else if (/^switchport mode trunk\b/i.test(l)) out.mode = 'trunk';
     else if ((m = l.match(/^switchport access vlan\s+(\d+)/i))) out.accessVlan = m[1];
     else if ((m = l.match(/^switchport trunk native vlan\s+(\d+)/i))) out.nativeVlan = m[1];
-    else if ((m = l.match(/^switchport trunk allowed vlan\s+(?:add\s+)?([\d,\-]+)/i))) allowedSpec += (allowedSpec ? ',' : '') + m[1];
+    else if (/^switchport trunk allowed vlan\s+none\b/i.test(l)) out.allowedExplicit = true; // hiçbiri
+    else if ((m = l.match(/^switchport trunk allowed vlan\s+(?:add\s+)?([\d,\-]+)/i))) { out.allowedExplicit = true; allowedSpec += (allowedSpec ? ',' : '') + m[1]; }
     else if (/^power inline never\b/i.test(l)) out.power = 'never';
     else if (/^power inline auto\b/i.test(l)) out.power = 'auto';
     else if (/^shutdown$/i.test(l)) out.shutdown = true; // "no shutdown" varsayılan → run'da görünmez
