@@ -684,42 +684,26 @@
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
   }
+  /* DIKKAT - burada govde (body) kaydirmasina GECILMEZ. Denendi ve kirdi:
+     .app-container height:auto yapilinca <main> icerige gore boyutlanir, boylece
+     App.css:462'deki ".list-container { height:100% }" BELIRSIZ bir yukseklige
+     gore cozulur ve auto gibi davranir -> kendi overflow-y:auto'su hic devreye
+     girmez. Ustelik App.jsx:111'deki <main style={{overflow:'hidden'}}> INLINE
+     oldugu icin stylesheet'ten ezilemez ve ekran altini kirpar. Sonuc: Dashboard,
+     Devices ve Topology'de hicbir sey kaydirilamiyordu.
+
+     Dogru model masaustununkiyle ayni: .app-container tam ekran yuksekligi alir,
+     <main> kirpar, asil kaydirici .list-container'dir. 100vh'nin mobildeki adres
+     cubugu sorunu zaten dvh ile cozuluyor - height:auto'ya gerek yok. */
   body {
     overflow-x: hidden;
-    overflow-y: auto;
-    overscroll-behavior-y: none;
     min-height: 100vh;
     min-height: 100dvh;
   }
 
-  #root {
-    height: auto;
-    min-height: 100vh;
-    min-height: 100dvh;
-  }
-
-  .app-container {
-    /* 100vw kaydirma cubugu genisligini saymaz -> yatay tasma. */
-    width: 100%;
-    /* Kati 100vh yerine: en az bir ekran, gerekirse buyusun. */
-    height: auto;
-    min-height: 100vh;
-    min-height: 100dvh;
-  }
-
-  /* main inline'da flex:1 + overflow:hidden. Kolon flex yaparak sayfa kokunun
-     (or. TopologyPage'in height:100% div'i) yuksekligi almasini GARANTILE -
-     .app-container height:auto'ya gectigi icin bu sart. TerminalPanel'in koku
-     position:absolute oldugu icin flex akisinin disinda kalir, etkilenmez. */
-  .app-container > main {
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-  }
-  .app-container > main > * {
-    flex: 1 1 auto;
-    min-height: 0;
-  }
+  /* Sadece 100vw duzeltmesi: kaydirma cubugu genisligini saymadigi icin yatay
+     tasma yaratiyordu. Yukseklik modeline DOKUNULMAZ. */
+  .app-container { width: 100%; }
 }
 
 @media (max-width: 1024px) {
