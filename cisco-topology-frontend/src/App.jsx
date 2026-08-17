@@ -19,6 +19,7 @@ const DeviceDetailPage = lazy(() => import('./pages/DeviceDetailPage'));
 const TopologyPage = lazy(() => import('./pages/TopologyPage'));
 const UsersPage = lazy(() => import('./pages/UsersPage'));
 const AuditPage = lazy(() => import('./pages/AuditPage'));
+const SessionLogPage = lazy(() => import('./pages/SessionLogPage'));
 const GeoMapPage = lazy(() => import('./pages/GeoMapPage'));
 const MacSearchPage = lazy(() => import('./pages/MacSearchPage'));
 const CommandLinePage = lazy(() => import('./pages/CommandLinePage'));
@@ -118,6 +119,7 @@ function AppLayout() {
             <Route path="/topology/:tabId" element={<TopologyPage onEdit={isAdmin ? handleEditDevice : undefined} onClone={isAdmin ? handleCloneDevice : undefined} />} />
             <Route path="/users" element={<UsersPage />} />
             <Route path="/audit" element={<AuditPage />} />
+            <Route path="/sessions" element={<SessionLogPage />} />
             <Route path="/geomap" element={<GeoMapPage />} />
             <Route path="/mac-search" element={<MacSearchPage />} />
             <Route path="/command-line" element={<CommandLinePage />} />

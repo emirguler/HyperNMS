@@ -24,6 +24,8 @@ const switchRoutes = require('./routes/switches');
 const edgeRoutes = require('./routes/edges');
 const userRoutes = require('./routes/users');
 const auditRoutes = require('./routes/audit');
+const sessionRoutes = require('./routes/sessions');
+const sessionLog = require('./services/sessionLog');
 const settingsRoutes = require('./routes/settings');
 const webproxyRoutes = require('./routes/webproxy');
 
@@ -110,6 +112,7 @@ app.use(apiPrefix, switchRoutes);
 app.use(apiPrefix, edgeRoutes);
 app.use(apiPrefix, userRoutes);
 app.use(apiPrefix, auditRoutes);
+app.use(apiPrefix, sessionRoutes);
 app.use(apiPrefix, settingsRoutes);
 app.use(apiPrefix, webproxyRoutes);
 
@@ -251,6 +254,16 @@ setupNotificationWs(server);
 initDB().then(() => {
     startPingService();
     startBackupScheduler(); // günlük config yedeği (03:00) + startup catch-up
+    // SSH oturum kayıtları: çökme sonrası "canlı" kalmış kayıtları kapat, sonra
+    // 90 günden eski transcript'leri temizle (açılışta bir kez + günde bir).
+    sessionLog.reconcileOnBoot()
+        .then(() => sessionLog.cleanup())
+        .catch(e => console.error('[SESSION] bakim hatasi:', e.message));
+    const sessionCleanupTimer = setInterval(
+        () => sessionLog.cleanup().catch(e => console.error('[SESSION] bakim hatasi:', e.message)),
+        24 * 60 * 60 * 1000
+    );
+    if (sessionCleanupTimer.unref) sessionCleanupTimer.unref();
     startVersionRefresh();  // SNMP yazılım sürümlerini periyodik yenile (liste sıralaması için)
     server.listen(config.PORT, () => {
         console.log(`[SERVER] ${protocol.toUpperCase()} Port ${config.PORT}`);

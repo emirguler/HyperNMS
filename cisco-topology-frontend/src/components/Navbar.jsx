@@ -48,6 +48,7 @@ export default function Navbar({ onAddDevice }) {
   const [showTrace, setShowTrace] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mapsOpen, setMapsOpen] = useState(false);
+  const [logsOpen, setLogsOpen] = useState(false);
 
   const { isTablet, isShort, width, height } = useViewport();
   // responsive.css bolum 05 ile ayni esik: hamburger <=1024px VEYA <=500px yukseklikte.
@@ -56,7 +57,7 @@ export default function Navbar({ onAddDevice }) {
   const iconOnly = width <= 480;
   const landscape = width > height;
 
-  const go = (p) => { navigate(p); setMobileOpen(false); setMapsOpen(false); };
+  const go = (p) => { navigate(p); setMobileOpen(false); setMapsOpen(false); setLogsOpen(false); };
   const cls = (p) => `nav-btn ${path === p ? 'active' : ''}`;
 
   // Acik menu su durumlarda erisilemez hale gelir ve kapanmali:
@@ -89,14 +90,21 @@ export default function Navbar({ onAddDevice }) {
   // Maps menusu dokunmatikte hover ile acilamiyor -> tik ile aciliyor.
   // Disari dokununca kapansin (pointerdown hem fare hem parmagi kapsar).
   useEffect(() => {
-    if (!mapsOpen) return;
+    if (!mapsOpen && !logsOpen) return;
     const onDown = (e) => {
       const el = e.target;
-      if (!el || typeof el.closest !== 'function' || !el.closest('.dropdown')) setMapsOpen(false);
+      if (!el || typeof el.closest !== 'function' || !el.closest('.dropdown')) {
+        setMapsOpen(false);
+        setLogsOpen(false);
+      }
     };
     document.addEventListener('pointerdown', onDown);
     return () => document.removeEventListener('pointerdown', onDown);
-  }, [mapsOpen]);
+  }, [mapsOpen, logsOpen]);
+
+  // Ayni anda tek menu acik kalsin (ikisi ust uste binmesin)
+  useEffect(() => { if (mapsOpen) setLogsOpen(false); }, [mapsOpen]);
+  useEffect(() => { if (logsOpen) setMapsOpen(false); }, [logsOpen]);
 
   return (
     <>
@@ -132,7 +140,19 @@ export default function Navbar({ onAddDevice }) {
 
             <button className={cls('/mac-search')} onClick={() => go('/mac-search')}>MAC Search</button>
             {isAdmin && <button className={cls('/command-line')} onClick={() => go('/command-line')}>Command-line</button>}
-            {isAdmin && <button className={cls('/audit')} onClick={() => go('/audit')}>Audit Log</button>}
+            {isAdmin && (
+              <div className={`dropdown ${logsOpen ? 'open' : ''}`}>
+                <button
+                  className={`nav-btn ${path === '/audit' || path === '/sessions' ? 'active' : ''}`}
+                  onClick={() => setLogsOpen(o => !o)}
+                  aria-expanded={logsOpen}
+                >Logs ▾</button>
+                <div className="dropdown-content">
+                  <a className="dropdown-item" onClick={() => go('/sessions')}>Session Log</a>
+                  <a className="dropdown-item" onClick={() => go('/audit')}>Audit Log</a>
+                </div>
+              </div>
+            )}
 
             {isAdmin && (path === '/devices' || path.startsWith('/topology')) && onAddDevice && (
               <button className="btn btn-primary btn-sm" style={{ marginLeft: 8 }} onClick={onAddDevice}>+ Add Device</button>
@@ -189,6 +209,9 @@ export default function Navbar({ onAddDevice }) {
           <button className={cls('/geomap')} onClick={() => go('/geomap')}>Geographic Map</button>
           <button className={cls('/mac-search')} onClick={() => go('/mac-search')}>MAC Search</button>
           {isAdmin && <button className={cls('/command-line')} onClick={() => go('/command-line')}>Command-line</button>}
+          {/* Cekmecede ic ice menu YOK: dropdown'i parmakla acmak fazladan bir dokunus
+              demek ve panel zaten dikey bir liste - iki giris duz olarak yaziliyor. */}
+          {isAdmin && <button className={cls('/sessions')} onClick={() => go('/sessions')}>Session Log</button>}
           {isAdmin && <button className={cls('/audit')} onClick={() => go('/audit')}>Audit Log</button>}
           {isAdmin && <button className={cls('/users')} onClick={() => go('/users')}>Users</button>}
           {isAdmin && (path === '/devices' || path.startsWith('/topology')) && onAddDevice && (

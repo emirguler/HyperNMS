@@ -5,6 +5,8 @@ const store = require('../utils/memoryStore');
 const { decryptPassword } = require('../utils/crypto');
 const { authenticateWs, normalizeRole, canOperate } = require('../middleware/auth');
 const { isBlockedIP } = require('../utils/validation');
+const sessionLog = require('./sessionLog');
+const { logAction } = require('./auditLog');
 
 // --- Cihaz keşfi için SSH probe (Find Device) ---
 // Not: ssh2 gerçekleri (ampirik doğrulandı):
@@ -162,6 +164,9 @@ function setupWebSocket(server) {
         };
 
         const sshPass = decryptPassword(device.sshPassword);
+        // Oturum kaydedicisi conn.on('ready') icinde olusur; kapanis yollari
+        // (stream close / ws close / ssh error) buradan erisir.
+        let recorder = null;
         const conn = new ssh2();
         // Cihaza giden TCP soketinde Nagle'ı kapat (PuTTY de TCP_NODELAY yapar). ssh2 bunu kendi
         // soketinde yapmadığından soketi biz açıp 'sock' olarak veriyoruz → interaktif yazım gecikmesi biter.
@@ -173,9 +178,37 @@ function setupWebSocket(server) {
             safeSend(JSON.stringify({ type: 'info', message: 'SSH Connection Established.\r\n' }));
             // İstemciye modunu bildir: admin = tam kontrol, user = sadece komut butonları
             safeSend(JSON.stringify({ type: 'mode', readOnly: !isAdmin, commands: allowedCommands || [] }));
+
+            // --- Oturum kaydi baslar ---
+            // Cihaz adi/IP/topoloji adi ANLIK KOPYA: cihaz sonradan yeniden adlandirilir,
+            // tasinir veya silinirse eski kayitlar anlamsizlasmasin.
+            const tab = store.getTopoTabs ? (store.getTopoTabs() || []).find(t => t.id === device.topologyPage) : null;
+            recorder = sessionLog.startSession({
+                deviceId: device.id, deviceName: device.name, deviceIp: device.ip, deviceType: device.type,
+                topologyPage: device.topologyPage || 'main',
+                topologyName: (tab && tab.name) || device.topologyPage || 'Main Topology',
+                userId: user.id, username: user.username, role: normalizeRole(effectiveRole),
+                mode: isAdmin ? 'full' : 'restricted',
+                clientIp: req.socket?.remoteAddress || null,
+            }, () => {
+                // Admin bu oturumu sonlandirdi
+                safeSend(JSON.stringify({ type: 'error', message: '*** Session terminated by an administrator ***' }));
+                try { conn.end(); } catch (e) { /* ignore */ }
+                try { ws.close(); } catch (e) { /* ignore */ }
+            });
+            logAction(user, 'SESSION_START', device.name, { ip: req.socket?.remoteAddress, sessionId: recorder.id, deviceIp: device.ip })
+                .catch(() => { /* denetim kaydi oturumu engellemesin */ });
+
             conn.shell((err, stream) => {
                 if (err) { safeSend(JSON.stringify({ type: 'error', message: err.message })); return; }
-                stream.on('data', (data) => safeSend(JSON.stringify({ type: 'data', data: data.toString() })));
+                stream.on('data', (data) => {
+                    const text = data.toString();
+                    // YALNIZCA bu yon kaydedilir (cihaz -> istemci). Kullanicinin tuslari
+                    // asla kaydedilmez: "enable" sifresi echo EDILMEDIGI icin cihaz
+                    // ciktisinda gorunmez, ama tus vuruslarinda duz metin olarak gecerdi.
+                    if (recorder) recorder.write(text);
+                    safeSend(JSON.stringify({ type: 'data', data: text }));
+                });
                 stream.on('close', () => { conn.end(); try { ws.close(); } catch (e) {} });
 
                 // Kısıtlı (User) oturum: sayfalamayı kapat — buton çıktıları --More-- ile durmasın
@@ -191,6 +224,8 @@ function setupWebSocket(server) {
                             // Sadece whitelist'te BİREBİR eşleşen komut çalıştırılır.
                             if (parsed.type === 'command' && typeof parsed.cmd === 'string') {
                                 if (allowedCommands.includes(parsed.cmd)) {
+                                    // Whitelist komutu: sabit liste, sir icermez -> kaydedilir
+                                    if (recorder) recorder.command(parsed.cmd);
                                     stream.write(parsed.cmd + '\n');
                                 } else {
                                     safeSend(JSON.stringify({ type: 'error', message: `Command not allowed: ${parsed.cmd}` }));
@@ -202,6 +237,7 @@ function setupWebSocket(server) {
             });
         }).on('error', (err) => {
             console.log(`[SSH] Error ${device.name}: ${err.message}`);
+            if (recorder) recorder.end('ssh-error: ' + err.message);
             safeSend(JSON.stringify({ type: 'error', message: 'SSH Failed: ' + err.message }));
         }).on('keyboard-interactive', kbAuth(sshPass)).connect({
             sock: deviceSock,    // NoDelay'li kendi soketimiz (host/port bunun içinde)
@@ -222,6 +258,13 @@ function setupWebSocket(server) {
 
         ws.on('close', () => {
             try { conn.end(); } catch (e) { /* ignore */ }
+            if (recorder && !recorder.ended) {
+                recorder.end('closed');
+                logAction(user, 'SESSION_END', device.name, {
+                    ip: req.socket?.remoteAddress, sessionId: recorder.id,
+                    durationMs: recorder.record.durationMs, bytes: recorder.record.bytes,
+                }).catch(() => { /* ignore */ });
+            }
         });
     });
 
