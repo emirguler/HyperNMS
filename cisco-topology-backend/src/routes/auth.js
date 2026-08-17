@@ -84,7 +84,11 @@ router.post('/login', async (req, res) => {
         username: user.username,
         mustChangePassword: user.mustChangePassword || false,
         allowedCommands: user.allowedCommands || [],
-        fullSsh: user.fullSsh === true
+        fullSsh: user.fullSsh === true,
+        // Bu dala yalnizca totpEnabled=false iken gelinir (2FA kodu adimi yukarida
+        // erken doner). Dolayisiyla require2fa aciksa kullanici kurulum ekranina
+        // zorlanmali — sifre adimindan SONRA, mustChangePassword ile ayni desen.
+        mustSetup2fa: user.require2fa === true,
     });
 });
 
@@ -161,11 +165,11 @@ router.get('/me', authenticate, (req, res) => {
         allowedCommands: user.allowedCommands || [],
         fullSsh: user.fullSsh === true,
         twoFactorEnabled: user.totpEnabled === true,
-        // Politika geregi kayit olmasi gerekiyorsa arayuz zorlayici ekrani acar
-        // (mevcut mustChangePassword deseninin aynisi).
-        mustSetup2fa: twofactor.isEnforced()
-            && (user.role === 'Administrator')
-            && user.totpEnabled !== true,
+        // require2fa acik ve henuz kurulmamissa arayuz zorlayici ekrani acar
+        // (mevcut mustChangePassword deseninin aynisi). Sayfa her acildiginda
+        // /me cagrildigi icin, admin zorunlulugu actiktan sonra kullanici
+        // yeniden girmese bile bir sonraki yenilemede kapiya takilir.
+        mustSetup2fa: user.require2fa === true && user.totpEnabled !== true,
     });
 });
 

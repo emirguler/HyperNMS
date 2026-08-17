@@ -29,17 +29,22 @@ const ISSUER = 'NetPulse';
 // Kod deneme siniri: 6 hane = 1M ihtimal, sinirsiz deneme kaba kuvvetle kirilir
 const codeLimiter = rateLimiter({ windowMs: 5 * 60 * 1000, max: 10, message: 'Too many attempts, try again in 5 minutes' });
 
-const isEnforced = () => (store.getSettings && store.getSettings().enforceAdmin2fa) === true;
+// Yalnizca yerlesik "admin" superkullanicisi baska adminlerin 2FA zorunlulugunu
+// yonetir ve yalnizca O, zorunlu kilinmis bir hesapta 2FA'yi kapatabilir.
+// Kimlik username==='admin' ile belirlenir — bu kullanici adi form'da kilitli,
+// degistirilemez, dolayisiyla kararli bir tanimlayici.
+const isSuperAdmin = (u) => !!u && u.username === 'admin';
 
 /** Kullanicinin 2FA durumu (kendi hesabi). */
 router.get('/2fa/status', authenticate, (req, res) => {
     const u = store.getUser(req.user.id) || {};
+    const required = u.require2fa === true;
     res.json({
         enabled: u.totpEnabled === true,
         recoveryRemaining: Array.isArray(u.recoveryCodes) ? u.recoveryCodes.length : 0,
-        enforced: isEnforced(),
-        // Zorunlulук yalnizca Administrator icin gecerli
-        mustSetup: isEnforced() && normalizeRole(u.role) === 'Administrator' && u.totpEnabled !== true,
+        required,                                   // admin bu hesap icin 2FA'yi zorunlu kildi mi
+        canDisable: !required || isSuperAdmin(u),   // superadmin kendi 2FA'sini her zaman kapatabilir
+        mustSetup: required && u.totpEnabled !== true,
     });
 });
 
@@ -88,8 +93,9 @@ router.post('/2fa/enable', authenticate, codeLimiter, async (req, res) => {
 router.post('/2fa/disable', authenticate, codeLimiter, async (req, res) => {
     const u = store.getUser(req.user.id);
     if (!u || !u.totpEnabled) return res.status(400).json({ error: 'Two-factor is not enabled' });
-    if (isEnforced() && normalizeRole(u.role) === 'Administrator') {
-        return res.status(403).json({ error: 'Policy requires two-factor for administrators' });
+    // require2fa acik olan hesap kendi 2FA'sini kapatamaz; yalnizca "admin" istisna.
+    if (u.require2fa === true && !isSuperAdmin(u)) {
+        return res.status(403).json({ error: 'An administrator requires two-factor on your account' });
     }
     if (!verifyAny(u, req.body && req.body.code).ok) {
         await logAction(req.user, 'TWOFA_DISABLE_FAILED', u.username, { ip: req.ip });
@@ -130,16 +136,28 @@ router.post('/2fa/reset/:id', authenticate, requireAdmin, async (req, res) => {
     res.json({ success: true });
 });
 
-/* --- Politika: adminler icin zorunlu kilma ------------------------------- */
-router.get('/settings/security', authenticate, requireAdmin, (req, res) => {
-    res.json({ enforceAdmin2fa: isEnforced() });
-});
-
-router.put('/settings/security', authenticate, requireAdmin, async (req, res) => {
-    const on = req.body && req.body.enforceAdmin2fa === true;
-    store.updateSettings({ enforceAdmin2fa: on });
-    await logAction(req.user, 'SECURITY_POLICY_UPDATE', 'enforceAdmin2fa', { ip: req.ip, value: on });
-    res.json({ enforceAdmin2fa: on });
+/* --- Kullanici-basina zorunluluk: yalnizca "admin" superkullanicisi yonetir ---
+   admin, herhangi bir Administrator hesabi icin 2FA'yi zorunlu kilar/kaldirir.
+   Acilinca kullanici bir sonraki giriste kurulum ekranina zorlanir (mustSetup2fa)
+   ve 2FA'sini kapatamaz. */
+router.put('/2fa/require/:id', authenticate, requireAdmin, async (req, res) => {
+    const me = store.getUser(req.user.id);
+    if (!isSuperAdmin(me)) {
+        return res.status(403).json({ error: 'Only the built-in "admin" account can manage this' });
+    }
+    const target = store.getUser(req.params.id);
+    if (!target) return res.status(404).json({ error: 'User not found' });
+    if (normalizeRole(target.role) !== 'Administrator') {
+        return res.status(400).json({ error: 'Two-factor requirement applies to administrator accounts' });
+    }
+    if (isSuperAdmin(target)) {
+        // "admin" kendini zorunlu kilmaz — zaten istisna, anlamsiz olurdu
+        return res.status(400).json({ error: 'The admin account manages this for others' });
+    }
+    const on = req.body && req.body.require2fa === true;
+    store.updateUser(target.id, { require2fa: on });
+    await logAction(req.user, on ? 'TWOFA_REQUIRED_ON' : 'TWOFA_REQUIRED_OFF', target.username, { ip: req.ip, targetUser: target.username });
+    res.json({ success: true, require2fa: on });
 });
 
 /* --- ortak yardimcilar (login rotasi da kullanir) ------------------------ */
@@ -176,4 +194,4 @@ function verifyAny(user, code) {
 module.exports = router;
 module.exports.verifyAny = verifyAny;
 module.exports.clear2fa = clear2fa;
-module.exports.isEnforced = isEnforced;
+module.exports.isSuperAdmin = isSuperAdmin;

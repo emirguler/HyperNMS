@@ -16,6 +16,7 @@ router.get('/users', authenticate, requireAdmin, (req, res) => {
     const safeUsers = store.getUsers().map(({ password, totpSecret, totpPending, totpLastStep, recoveryCodes, ...u }) => ({
         ...u,
         totpEnabled: u.totpEnabled === true,
+        require2fa: u.require2fa === true,   // Users sayfasindaki rozet + admin toggle'i icin
         active: presence.isActive(u.id),   // son 5 dk içinde istek yapmış (uygulaması açık)
         lastSeen: presence.lastSeenAt(u.id),
     }));

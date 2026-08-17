@@ -8,6 +8,7 @@ import ToastContainer from './Toast';
 import SwitchFormModal from './SwitchFormModal';
 import LoginPage from './pages/LoginPage';
 import ForcePasswordChange from './components/ForcePasswordChange';
+import ForceTwoFactorSetup from './components/ForceTwoFactorSetup';
 import { showToast } from './Toast';
 
 // Kimlik-korumalı sayfalar ve terminal talebe göre yüklenir (başlangıç paketini küçültür:
@@ -54,7 +55,7 @@ function ProtectedRoute({ children }) {
 }
 
 function AppLayout() {
-  const { isAuthenticated, isAdmin, mustChangePassword, clearMustChangePassword, authFetch, csrfToken } = useAuth();
+  const { isAuthenticated, isAdmin, mustChangePassword, clearMustChangePassword, mustSetup2fa, clearMustSetup2fa, authFetch, csrfToken } = useAuth();
   const { fetchData, topoTabs, rawDevices } = useApp();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState('add');
@@ -130,6 +131,8 @@ function AppLayout() {
       </main>
 
       {mustChangePassword && <ForcePasswordChange onComplete={clearMustChangePassword} />}
+      {/* Once sifre degisimi, sonra 2FA kurulumu: ikisi de zorunluysa sirayla. */}
+      {!mustChangePassword && mustSetup2fa && <ForceTwoFactorSetup onComplete={clearMustSetup2fa} />}
 
       {isAdmin && isModalOpen && (
         <SwitchFormModal

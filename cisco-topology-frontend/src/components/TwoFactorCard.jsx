@@ -40,11 +40,10 @@ function QrSvg({ text, size = 190 }) {
 const codeInputStyle = { letterSpacing: '0.25em', fontFamily: 'monospace', textAlign: 'center' };
 
 export default function TwoFactorCard() {
-  const { authFetch, isAdmin } = useAuth();
+  const { authFetch } = useAuth();
   const { isTouch, isPhone } = useViewport();
 
   const [status, setStatus] = useState(null);
-  const [enforce, setEnforce] = useState(false);
   const [setup, setSetup] = useState(null);      // { secret, uri }
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
@@ -54,11 +53,7 @@ export default function TwoFactorCard() {
   const load = useCallback(async () => {
     const r = await authFetch('/2fa/status');
     if (r && r.ok) setStatus(await r.json());
-    if (isAdmin) {
-      const s = await authFetch('/settings/security');
-      if (s && s.ok) setEnforce((await s.json()).enforceAdmin2fa === true);
-    }
-  }, [authFetch, isAdmin]);
+  }, [authFetch]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -97,12 +92,6 @@ export default function TwoFactorCard() {
   const regenerate = async () => {
     const d = await call('/2fa/recovery', { code });
     if (d) { setCodes(d.recoveryCodes); setCode(''); showToast('New recovery codes generated', 'success'); load(); }
-  };
-
-  const toggleEnforce = async (on) => {
-    const r = await authFetch('/settings/security', { method: 'PUT', body: JSON.stringify({ enforceAdmin2fa: on }) });
-    if (r && r.ok) { setEnforce(on); load(); }
-    else showToast('Could not update policy', 'error');
   };
 
   const copyCodes = () => {
@@ -204,39 +193,17 @@ export default function TwoFactorCard() {
             style={{ ...codeInputStyle, maxWidth: 220 }} />
           <div className="rw-actions" style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
             <button className="btn btn-ghost" onClick={regenerate} disabled={busy || !code.trim()}>New recovery codes</button>
-            {/* Politika adminler icin zorunlu kildiysa kapatma dugmesi anlamsiz */}
-            {!(status.enforced && isAdmin) && (
+            {/* Bir admin bu hesap icin 2FA'yi zorunlu kildiysa kapatilamaz */}
+            {status.canDisable && (
               <button className="btn btn-danger" onClick={disable} disabled={busy || !code.trim()}>Turn off</button>
             )}
           </div>
-          {status.enforced && isAdmin && (
+          {!status.canDisable && (
             <div style={{ fontSize: '0.75rem', color: 'var(--warning)', marginTop: 8 }}>
-              Policy requires two-factor for administrators, so it cannot be turned off.
+              An administrator requires two-factor on your account, so it cannot be turned off.
             </div>
           )}
         </div>
-      )}
-
-      {/* --- Politika (yalnizca admin) --- */}
-      {isAdmin && (
-        <label style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
-          borderTop: '1px solid var(--border-color)', paddingTop: 14,
-          minHeight: isTouch ? 44 : undefined, cursor: 'pointer',
-        }}>
-          <span style={{ minWidth: 0 }}>
-            <span style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-main)' }}>
-              Require two-factor for all administrators
-            </span>
-            <span style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>
-              Administrators without it are prompted to set it up at sign-in.
-            </span>
-          </span>
-          <span className="toggle-switch" style={{ flexShrink: 0 }}>
-            <input type="checkbox" checked={enforce} onChange={e => toggleEnforce(e.target.checked)} />
-            <span className="toggle-slider" />
-          </span>
-        </label>
       )}
     </div>
   );

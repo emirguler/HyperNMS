@@ -201,8 +201,9 @@ class MemoryStore {
         // yani kullanici adi degistirme ve yerel<->AD gecisi kaydedilmiyordu.
         const allowed = ['username', 'password', 'role', 'authType', 'mustChangePassword', 'allowedCommands', 'fullSsh',
             // 2FA alanlari: BILEREK sanitizeUser'da YOK - kullanici formundan
-            // degil, yalnizca /2fa rotalarindan degistirilebilirler.
-            'totpEnabled', 'totpSecret', 'totpPending', 'totpLastStep', 'recoveryCodes'];
+            // degil, yalnizca /2fa rotalarindan degistirilebilirler. require2fa
+            // ozellikle yalnizca "admin" superkullanicisinin ucuyla degisir.
+            'totpEnabled', 'totpSecret', 'totpPending', 'totpLastStep', 'recoveryCodes', 'require2fa'];
         for (const key of allowed) {
             if (updates[key] !== undefined) this.data.users[idx][key] = updates[key];
         }

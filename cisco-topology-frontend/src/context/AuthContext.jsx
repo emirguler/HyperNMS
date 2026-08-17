@@ -13,6 +13,9 @@ export function AuthProvider({ children }) {
   const [allowedCommands, setAllowedCommands] = useState([]);
   // Operator'e verilen ham (tam) SSH klavye erisimi
   const [fullSsh, setFullSsh] = useState(false);
+  // Admin bu hesap icin 2FA'yi zorunlu kildiysa: girisin ardindan kurulum
+  // ekrani gosterilir (mustChangePassword deseninin aynisi).
+  const [mustSetup2fa, setMustSetup2fa] = useState(false);
 
   // Fetch CSRF token on mount
   const fetchCsrfToken = useCallback(async () => {
@@ -41,6 +44,7 @@ export function AuthProvider({ children }) {
           setMustChangePassword(data.mustChangePassword || false);
           setAllowedCommands(data.allowedCommands || []);
           setFullSsh(data.fullSsh === true);
+          setMustSetup2fa(data.mustSetup2fa === true);
           fetchCsrfToken();
         })
         .catch(() => {
@@ -74,6 +78,7 @@ export function AuthProvider({ children }) {
       setMustChangePassword(data.mustChangePassword || false);
       setAllowedCommands(data.allowedCommands || []);
       setFullSsh(data.fullSsh === true);
+      setMustSetup2fa(data.mustSetup2fa === true);
       localStorage.setItem('userRole', data.role);
       localStorage.setItem('username', data.username);
       showToast('Login successful', 'success');
@@ -101,6 +106,7 @@ export function AuthProvider({ children }) {
     setMustChangePassword(data.mustChangePassword || false);
     setAllowedCommands(data.allowedCommands || []);
     setFullSsh(data.fullSsh === true);
+    setMustSetup2fa(false); // bu yola yalnizca 2FA'si olanlar girer
     localStorage.setItem('userRole', data.role);
     localStorage.setItem('username', data.username);
     showToast('Login successful', 'success');
@@ -127,12 +133,17 @@ export function AuthProvider({ children }) {
     setCsrfToken('');
     setAllowedCommands([]);
     setFullSsh(false);
+    setMustSetup2fa(false);
     localStorage.removeItem('userRole');
     localStorage.removeItem('username');
   }, [csrfToken]);
 
   const clearMustChangePassword = useCallback(() => {
     setMustChangePassword(false);
+  }, []);
+
+  const clearMustSetup2fa = useCallback(() => {
+    setMustSetup2fa(false);
   }, []);
 
   const authFetch = useCallback(async (url, options = {}) => {
@@ -181,6 +192,7 @@ export function AuthProvider({ children }) {
       // 'User' eski kayitlarin Operator karsiligi; 'Viewer' = User (View Only) → yetkisiz.
       isOperator: userRole === 'Administrator' || userRole === 'Operator' || userRole === 'User',
       mustChangePassword, clearMustChangePassword, csrfToken,
+      mustSetup2fa, clearMustSetup2fa,
       allowedCommands, fullSsh,
     }}>
       {children}

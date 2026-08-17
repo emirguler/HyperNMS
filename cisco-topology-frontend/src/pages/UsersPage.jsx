@@ -17,7 +17,9 @@ const roleStyle = (role) => ROLE_STYLE[role === 'User' ? 'Operator' : role] || R
 
 export default function UsersPage() {
   const { users, fetchUsers } = useApp();
-  const { isAdmin, authFetch } = useAuth();
+  const { isAdmin, authFetch, username } = useAuth();
+  // require2fa toggle'ini yalnizca yerlesik "admin" superkullanicisi yonetir
+  const isSuperAdmin = username === 'admin';
   // Erken return'un USTUNDE cagrilmali, yoksa hook sirasi bozulur
   const { isPhone, isTouch } = useViewport();
 
@@ -33,6 +35,15 @@ export default function UsersPage() {
     const id = setInterval(fetchUsers, 15000);
     return () => clearInterval(id);
   }, [fetchUsers]);
+
+  // "admin" bir yonetici hesabi icin 2FA'yi zorunlu kilar/kaldirir
+  const toggleRequire2fa = async (u, on) => {
+    const res = await authFetch(`/2fa/require/${u.id}`, { method: 'PUT', body: JSON.stringify({ require2fa: on }) });
+    if (res && res.ok) {
+      showToast(on ? `2FA now required for "${u.username}"` : `2FA no longer required for "${u.username}"`, 'success');
+      fetchUsers();
+    } else { const d = res ? await res.json().catch(() => ({})) : {}; showToast(d.error || t('operationFailed'), 'error'); }
+  };
 
   const confirmDelete = async () => {
     if (!deleteTarget) return;
@@ -83,12 +94,28 @@ export default function UsersPage() {
                   {u.totpEnabled && (
                     <span title="Two-factor enabled" style={{ marginLeft: 6, background: 'rgba(34,197,94,0.15)', color: 'var(--success)', border: '1px solid rgba(34,197,94,0.35)', padding: '3px 9px', borderRadius: 20, fontSize: '0.7rem', fontWeight: 700, whiteSpace: 'nowrap' }}>2FA</span>
                   )}
+                  {/* Zorunlu ama henuz kurmamis: kirmizi "2FA REQUIRED" — herkese gorunur ipucu */}
+                  {u.require2fa && !u.totpEnabled && (
+                    <span title="Two-factor required but not yet set up" style={{ marginLeft: 6, background: 'rgba(239,68,68,0.15)', color: 'var(--danger)', border: '1px solid rgba(239,68,68,0.35)', padding: '3px 9px', borderRadius: 20, fontSize: '0.7rem', fontWeight: 700, whiteSpace: 'nowrap' }}>2FA REQUIRED</span>
+                  )}
                   {u.fullSsh && (
                     <span title="Full SSH access" style={{ marginLeft: 6, background: 'rgba(245,158,11,0.15)', color: 'var(--warning)', border: '1px solid rgba(245,158,11,0.35)', padding: '3px 9px', borderRadius: 20, fontSize: '0.7rem', fontWeight: 700, whiteSpace: 'nowrap' }}>FULL SSH</span>
                   )}
                 </td>
                 {/* Actions gizlenmiyor: satir tiklanabilir degil, tek etkilesim yolu bu */}
                 <td data-label="" style={{ textAlign: 'right', paddingRight: isPhone ? undefined : 24 }}>
+                  {/* "Require 2FA" toggle'i: yalnizca "admin" yonetir, yalnizca kendisi
+                      DISINDAKI Administrator hesaplar icin. */}
+                  {isSuperAdmin && u.role === 'Administrator' && u.username !== 'admin' && (
+                    <label title="Require two-factor for this administrator"
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginRight: isTouch ? 12 : 10, verticalAlign: 'middle', cursor: 'pointer', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                      <span style={{ whiteSpace: 'nowrap' }}>Require 2FA</span>
+                      <span className="toggle-switch" style={{ verticalAlign: 'middle' }}>
+                        <input type="checkbox" checked={u.require2fa === true} onChange={e => toggleRequire2fa(u, e.target.checked)} />
+                        <span className="toggle-slider" />
+                      </span>
+                    </label>
+                  )}
                   <button className="btn btn-ghost btn-sm" style={{ marginRight: isTouch ? 10 : 6 }} onClick={() => { setEditingUser(u); setIsModalOpen(true); }}>{t('edit')}</button>
                   {/* Kilitlenme kurtarmasi: telefonunu kaybeden kullanicinin 2FA'sini
                       ikinci bir admin sifirlayabilir. Islem denetim kaydina yazilir. */}
