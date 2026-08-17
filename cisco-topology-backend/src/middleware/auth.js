@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const { SECRET_KEY, NODE_ENV } = require('../config');
 const presence = require('../services/presence');
+const store = require('../utils/memoryStore');
 
 // Cookie options
 const COOKIE_OPTIONS = {
@@ -62,9 +63,18 @@ const canOperate = (role) => {
     return r === ROLES.ADMIN || r === ROLES.OPERATOR;
 };
 
+// Istegin GECERLI rolu: kayitli hesaptan okunur, token'dan degil.
+// Token rolu giris aninda dondurulur ve JWT_EXPIRY boyunca degismez; bu yuzden hem
+// yetki yukseltme (kullanici cikip girene kadar reddedilir) hem de yetki DUSURME
+// (8 saat boyunca etkisiz kalir) gecikiyordu. Hesap silinmisse token roluna duseriz.
+const effectiveRole = (req) => {
+    const account = store.getUser(req.user.id);
+    return (account && account.role) || req.user.role;
+};
+
 // Admin role check
 const requireAdmin = (req, res, next) => {
-    if (normalizeRole(req.user.role) !== ROLES.ADMIN) {
+    if (normalizeRole(effectiveRole(req)) !== ROLES.ADMIN) {
         return res.status(403).json({ error: 'Administrator privileges required' });
     }
     next();
@@ -72,8 +82,9 @@ const requireAdmin = (req, res, next) => {
 
 // Operator (veya Administrator) role check — Viewer (View Only) engellenir
 const requireOperator = (req, res, next) => {
-    if (!canOperate(req.user.role)) {
-        return res.status(403).json({ error: 'Operator privileges required for device operations' });
+    const role = effectiveRole(req);
+    if (!canOperate(role)) {
+        return res.status(403).json({ error: `Your role ("${role || 'unknown'}") is not permitted to perform device operations` });
     }
     next();
 };

@@ -113,13 +113,26 @@ function setupWebSocket(server) {
         // Administrator = tam kontrol (raw giriş). Operator = kısıtlı: sadece kendisine
         // atanmış whitelist komutlarını butonla çalıştırabilir; klavye girişi sunucuda yok sayılır.
         // Viewer (User / View Only) = SSH tamamen kapalı.
-        const isAdmin = normalizeRole(user.role) === 'Administrator';
-        if (!canOperate(user.role)) {
-            ws.send(JSON.stringify({ type: 'error', message: 'Your role (View Only) is not permitted to open SSH sessions.' }));
+        const account = store.getUser(user.id) || {};
+        // Yetki KAYITLI rolden okunur, token'dan DEGIL. Token rolu giris aninda
+        // dondurulur ve JWT_EXPIRY (8sa) boyunca oyle kalir; admin bir kullaniciyi
+        // Viewer'dan Operator'e cekince kullanici cikip yeniden girene kadar SSH
+        // reddediliyordu. Ters yon daha da onemli: bir yetki DUSURME de ayni sure
+        // boyunca etkisiz kaliyordu. Hesap silinmisse token roluna duseriz; zaten
+        // allowedCommands da bos gelecegi icin bir sonraki kontrol reddeder.
+        const effectiveRole = account.role || user.role;
+        const isAdmin = normalizeRole(effectiveRole) === 'Administrator';
+        if (!canOperate(effectiveRole)) {
+            // Gercek rol adi yazilir. Sabit "View Only" metni, rol beklenmedik bir
+            // deger oldugunda yalan soyleyip teshisi yanlis yone cekiyordu.
+            console.warn(`[SSH] Reddedildi: ${user.username} — kayitli rol="${account.role || '(hesap yok)'}", token rolu="${user.role || '(yok)'}"`);
+            ws.send(JSON.stringify({
+                type: 'error',
+                message: `Your role ("${effectiveRole || 'unknown'}") is not permitted to open SSH sessions.`
+            }));
             ws.close();
             return;
         }
-        const account = store.getUser(user.id) || {};
         const allowedCommands = isAdmin ? null : (Array.isArray(account.allowedCommands) ? account.allowedCommands : []);
 
         // Komut atanmamış Operator rolüne SSH tamamen kapalı
