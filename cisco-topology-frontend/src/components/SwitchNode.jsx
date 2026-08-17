@@ -137,8 +137,11 @@ function SwitchNode({ data }) {
             ? '0 0 10px rgba(239,68,68,0.35), 0 4px 12px rgba(0,0,0,0.3)'
             : `0 0 10px rgba(${rgb}, 0.22), 0 4px 12px rgba(0,0,0,0.3)`,
           opacity: isDown ? 0.75 : 1,
-          // Anten 26x26: parmakla hedeflenemeyecek kadar küçük → dokunmatikte 40px
-          ...(isTouch && isAntenna ? { width: 40, height: 40 } : null)
+          // NOT: dokunma hedefi burada BUYUTULMEZ. Sekli 40px yapmak .topology-node'un
+          // (flex column) kutusunu buyutuyor, konumlar sabit oldugu icin dugumler
+          // birbirine giriyordu; ayrica inline stil .zoom-minimal'in 24px'e kucultmesini
+          // eziyordu. Hedef artik responsive.css'te .node-shape::after ile buyutuluyor:
+          // position:absolute oldugu icin akis disidir, duzeni hic etkilemez.
         }}
       >
         <Handle type="source" position={Position.Top} id="top" style={handleStyle(rgb, isTouch)} />
@@ -147,14 +150,18 @@ function SwitchNode({ data }) {
         <Handle type="source" position={Position.Bottom} id="bottom" style={handleStyle(rgb, isTouch)} />
 
         <span className="node-icon">
-          <IconComponent status={data.status} size={isAntenna ? (isTouch ? 18 : 12) : ICON_SIZE} />
+          {/* Sekil masaustuyle ayni 26px oldugu icin ikon da ayni: 18px 23px'lik ic
+              bosluga sigmiyordu. */}
+          <IconComponent status={data.status} size={isAntenna ? 12 : ICON_SIZE} />
         </span>
       </div>
 
       {/* Hostname — şeklin dışında, altında.
           Masaüstünde antende gizli; dokunmatikte anten etiketsiz turuncu bir noktaya
           dönüşüyordu ve onu tanımlayacak menü de sağ-tık ardındaydı → etiket açılır. */}
-      {(!isAntenna || isTouch) && <div className="node-label">{data.label}</div>}
+      {(!isAntenna || isTouch) && (
+        <div className={isAntenna ? 'node-label node-label-antenna' : 'node-label'}>{data.label}</div>
+      )}
 
       {/* IP — farede hover'da, dokunmatikte kalıcı (düşük zoom'da .zoom-compact gizler) */}
       {(hovered || isTouch) && data.ip && (
