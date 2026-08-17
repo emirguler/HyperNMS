@@ -14,6 +14,7 @@ const rateLimiter = require('../middleware/rateLimiter');
 const ping = require('ping');
 const ssh2 = require('ssh2').Client;
 const { spawn } = require('child_process');
+const fs = require('fs');
 
 const router = express.Router();
 
@@ -77,6 +78,49 @@ function parseTrace(output) {
     return hops;
 }
 
+/* --- Docker köprüsünün yarattığı sahte ilk hop ---
+   Uygulama konteyner içinde çalıştığında traceroute konteynerin ağ alanından
+   başlar, dolayısıyla 1. hop Docker köprüsünün geçididir (ör. 172.20.0.1).
+   O geçit fiziksel olarak HOST'un kendisidir: kullanıcının görmek istediği
+   "sunucudan cihaza giden yol" gerçekte 2. hop'tan başlar. Konteyner içindeysek
+   baştaki bu yapay hop(lar)ı atıp yeniden numaralandırıyoruz.
+   Konteyner DIŞINDA hiçbir şey değişmez — orada varsayılan geçit gerçek bir
+   router'dır ve gizlenmesi bilgi kaybı olurdu. */
+const IN_CONTAINER = (() => {
+    try { return fs.existsSync('/.dockerenv'); } catch (e) { return false; }
+})();
+
+// /proc/net/route: alanlar hex, adresler little-endian. Destination 00000000
+// olan satır varsayılan rotadır; Gateway alanı aradığımız değer.
+function readDefaultGateway() {
+    try {
+        for (const line of fs.readFileSync('/proc/net/route', 'utf8').split('\n').slice(1)) {
+            const f = line.trim().split(/\s+/);
+            if (f.length < 3 || f[1] !== '00000000') continue;
+            if (!/^[0-9A-Fa-f]{8}$/.test(f[2])) continue;
+            return f[2].match(/../g).reverse().map(h => parseInt(h, 16)).join('.');
+        }
+    } catch (e) { /* Linux disi ya da okunamadi */ }
+    return null;
+}
+
+let gwCache = null, gwRead = false;
+function containerGateway() {
+    if (!IN_CONTAINER) return null;
+    if (!gwRead) { gwCache = readDefaultGateway(); gwRead = true; }
+    return gwCache;
+}
+
+/** Baştaki geçit hop'larını atar ve kalanları 1'den yeniden numaralandırır. */
+function stripContainerHops(hops) {
+    const gw = containerGateway();
+    if (!gw || !hops.length) return { hops, stripped: null };
+    let i = 0;
+    while (i < hops.length && hops[i].ip === gw) i++;
+    if (i === 0) return { hops, stripped: null };
+    return { hops: hops.slice(i).map((h, k) => ({ ...h, hop: k + 1 })), stripped: gw };
+}
+
 // Tek traceroute çalıştırması → { hops, err }. ASLA reject etmez. 45sn'de süreç öldürülür.
 function spawnTrace(cmd, args) {
     return new Promise((resolve) => {
@@ -113,7 +157,8 @@ router.post('/traceroute', authenticate, traceLimiter, async (req, res) => {
         // Windows tracert zaten ICMP echo → temiz sonuç
         const r = await spawnTrace('tracert', ['-d', '-h', String(MAX_HOPS), '-w', '2000', ip]);
         if (r.err === 'notinstalled') return res.status(500).json({ error: 'traceroute not installed on server' });
-        return res.json({ ip, hops: r.hops });
+        const w = stripContainerHops(r.hops);
+        return res.json({ ip, hops: w.hops, viaGateway: w.stripped });
     }
 
     // Linux: ÖNCE ICMP (-I) — Windows tracert ile aynı, temiz. Linux traceroute varsayılanı
@@ -125,7 +170,9 @@ router.post('/traceroute', authenticate, traceLimiter, async (req, res) => {
         const udp = await spawnTrace('traceroute', ['-n', '-m', String(MAX_HOPS), '-w', '2', ip]);
         if (udp.hops.length) r = udp;
     }
-    return res.json({ ip, hops: r.hops });
+    const w = stripContainerHops(r.hops);
+    // viaGateway: atilan Docker gecidi (tesnis icin; arayuzde gosterilmiyor)
+    return res.json({ ip, hops: w.hops, viaGateway: w.stripped });
 });
 
 router.get('/topology', authenticate, (req, res) => {
