@@ -35,6 +35,38 @@ function innerScroll(px, dvh, isPhone, isShort) {
   return { maxHeight: px, overflowY: 'auto' };
 }
 
+/* Kart kabugu: dolgu ICERIDE, baslik blogunda verilir. Dort kartin da ayni
+   kalibi kullanmasi hizalanmalarinin tek sarti. */
+const CARD_SHELL = { padding: 0, overflow: 'hidden' };
+
+/**
+ * Kart basligi — DORT kartta da AYNI geometri.
+ *
+ * Onceden uc ayri kalip vardi: (a) .chart-container'in 24px dolgusu + dogrudan
+ * <h3>, (b) padding:0 + kendi dolgusu olan baslik blogu, (c) icinde <select>
+ * olan bir flex satiri. (c)'de satir select'in yuksekligine gore buyuyup
+ * align-items:center basligi asagi itiyordu; sonucta uc kartin basligi uc farkli
+ * yukseklikte duruyor ve kartlar birbirine gore kaymis gorunuyordu.
+ * minHeight sabit oldugu icin select'li ve select'siz baslik ayni yer kaplar,
+ * boylece govdeler de ayni Y'de baslar.
+ *
+ * React 19: modul kapsaminda tanimli - bilesen govdesinde tanimlanirsa her
+ * render'da remount eder.
+ */
+function CardHead({ title, right, pad, minH }) {
+  return (
+    <div style={{
+      padding: pad, minHeight: minH, boxSizing: 'border-box',
+      borderBottom: '1px solid var(--border-color)',
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      gap: 12, flexWrap: 'wrap',
+    }}>
+      <h3 className="dash-section-title" style={{ margin: 0, textAlign: 'left' }}>{title}</h3>
+      {right || null}
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const { rawDevices, topoTabs, notifications } = useApp();
   const navigate = useNavigate();
@@ -88,15 +120,21 @@ export default function DashboardPage() {
   // Filtre <select>'leri: dokunmatikte inline fontSize/padding KALKAR, boylece
   // responsive.css'in 16px + 44px tabani devreye girer (yoksa iOS odakta zoomlar)
   // ve select.modern-input'un 40px'lik ok payi geri gelir. Telefonda tam genislik.
-  const healthSelectStyle = isTouch
-    ? (isPhone ? { width: '100%', minWidth: 0 } : { width: 'auto', minWidth: 110 })
-    : { width: 'auto', minWidth: 84, fontSize: '0.72rem', padding: '5px 8px' };
-  const downSelectStyle = isTouch
-    ? (isPhone ? { width: '100%', minWidth: 0 } : { width: 'auto', minWidth: 160 })
-    : { width: 'auto', minWidth: 140, fontSize: '0.8rem', padding: '8px 12px' };
+  // Iki filtre de AYNI stil: farkli minWidth/fontSize/padding degerleri yuzunden
+  // ayni "All Types" kutusu iki kartta iki ayri boyda gorunuyordu.
+  const filterSelectStyle = isTouch
+    ? (isPhone ? { width: '100%', minWidth: 0 } : { width: 'auto', minWidth: 150 })
+    : { width: 'auto', minWidth: 130, fontSize: '0.75rem', padding: '6px 10px' };
 
   // Kart basliklari: 375px ekranda 48px'lik yatay dolgu israf.
   const cardHeadPad = isPhone ? '12px 14px' : '16px 24px';
+  // Baslik yuksekligi TEK yerden. Ikinci terim, icindeki en yuksek kontrolden
+  // (select) BILEREK buyuk: esit verilirse select'in yuksekligi kirilim noktasina
+  // gore 28/29px oynadigi icin select'li kart 1px daha uzun kaliyor ve kartlar
+  // yine kayiyordu. minHeight her zaman kazansin.
+  const headMinH = (isPhone ? 24 : 32) + (isTouch ? 48 : 32);
+  // Govde dolgusu: kabuk artik padding:0, dolgu iceride.
+  const cardBodyPad = isPhone ? '12px 14px' : '16px 24px';
   // Tablo hucrelerindeki inline 24px, App.css'in <=768px 10px/8px kuralini eziyordu.
   const tdPadL = isPhone ? undefined : 24;
   const tdPadR = isPhone ? undefined : 24;
@@ -128,15 +166,20 @@ export default function DashboardPage() {
       <div className="grid-dash-main" style={compact ? { order: 3, flexShrink: 0 } : undefined}>
         {/* Network Health Pie — cihaz tipine göre filtrelenebilir */}
         {/* Tek kolona dusen gridde donut EN SONA gider (sadece dekoratif). */}
-        <div className="chart-container" style={stackedGrid ? { textAlign: 'center', order: 3 } : { textAlign: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
-            <h3 className="dash-section-title" style={{ margin: 0 }}>{t('networkHealth')}</h3>
-            <select className="modern-input" value={healthType} onChange={e => setHealthType(e.target.value)}
-              aria-label={t('networkHealth')} style={healthSelectStyle}>
-              <option value="all">{t('allTypes')}</option>
-              {healthTypes.map(ty => <option key={ty} value={ty} style={{ textTransform: 'capitalize' }}>{ty}</option>)}
-            </select>
-          </div>
+        <div className="chart-container" style={stackedGrid ? { ...CARD_SHELL, order: 3 } : CARD_SHELL}>
+          <CardHead
+            pad={cardHeadPad} minH={headMinH}
+            title={t('networkHealth')}
+            right={(
+              <select className="modern-input" value={healthType} onChange={e => setHealthType(e.target.value)}
+                aria-label={t('networkHealth')} style={filterSelectStyle}>
+                <option value="all">{t('allTypes')}</option>
+                {healthTypes.map(ty => <option key={ty} value={ty} style={{ textTransform: 'capitalize' }}>{ty}</option>)}
+              </select>
+            )}
+          />
+          {/* textAlign artik GOVDEDE: kabukta olunca baslik metnini de etkiliyordu */}
+          <div style={{ padding: cardBodyPad, textAlign: 'center' }}>
           {/* Tablet ve altinda akiskan: 130px sabit donut, tek kolona dusen kartta
               kaybolacak kadar kucuk kaliyordu. Yaricaplar yuzde -> orani korur. */}
           <div style={isTablet
@@ -159,12 +202,13 @@ export default function DashboardPage() {
             <span style={{ fontSize: '0.8rem', color: 'var(--success)' }}>● UP: {healthStats.up}</span>
             <span style={{ fontSize: '0.8rem', color: 'var(--danger)' }}>● DOWN: {healthStats.down}</span>
           </div>
+          </div>
         </div>
 
         {/* Device Types */}
-        <div className="chart-container" style={stackedGrid ? { order: 2 } : undefined}>
-          <h3 className="dash-section-title">{t('deviceTypes')}</h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 12, ...innerScroll(190, 40, isPhone, isShort) }}>
+        <div className="chart-container" style={stackedGrid ? { ...CARD_SHELL, order: 2 } : CARD_SHELL}>
+          <CardHead pad={cardHeadPad} minH={headMinH} title={t('deviceTypes')} />
+          <div style={{ padding: cardBodyPad, display: 'flex', flexDirection: 'column', gap: 10, ...innerScroll(190, 40, isPhone, isShort) }}>
             {Object.entries(stats.typeGroups).map(([type, count]) => (
               <div key={type} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span style={{ fontSize: '0.85rem', textTransform: 'capitalize' }}>{type}</span>
@@ -180,10 +224,8 @@ export default function DashboardPage() {
         </div>
 
         {/* Notifications (zil ile aynı veri) */}
-        <div className="chart-container" style={stackedGrid ? { padding: 0, overflow: 'hidden', order: 1 } : { padding: 0, overflow: 'hidden' }}>
-          <div style={{ padding: cardHeadPad, borderBottom: '1px solid var(--border-color)' }}>
-            <h3 className="dash-section-title" style={{ margin: 0 }}>🔔 {t('notifications')}</h3>
-          </div>
+        <div className="chart-container" style={stackedGrid ? { ...CARD_SHELL, order: 1 } : CARD_SHELL}>
+          <CardHead pad={cardHeadPad} minH={headMinH} title={<>🔔 {t('notifications')}</>} />
           <div style={innerScroll(190, 45, isPhone, isShort)}>
             {visibleNotifs.length > 0 ? visibleNotifs.map(n => (
               <div key={n.id}
@@ -225,16 +267,17 @@ export default function DashboardPage() {
       {/* order 1: sayfanin TEK eyleme donuk karti, dar govdede en uste gelir. */}
       <div className="chart-container no-float"
         style={compact ? { padding: 0, overflow: 'hidden', order: 1, flexShrink: 0 } : { padding: 0, overflow: 'hidden', marginTop: 14 }}>
-        <div style={{ padding: cardHeadPad, borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
-          <h3 className="dash-section-title" style={{ margin: 0 }}>
-            🔴 {t('downDevices')} <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>({filteredDown.length})</span>
-          </h3>
-          <select className="modern-input" value={downType} onChange={e => setDownType(e.target.value)}
-            aria-label={t('downDevices')} style={downSelectStyle}>
-            <option value="all">{t('allTypes')}</option>
-            {downTypes.map(ty => <option key={ty} value={ty} style={{ textTransform: 'capitalize' }}>{ty}</option>)}
-          </select>
-        </div>
+        <CardHead
+          pad={cardHeadPad} minH={headMinH}
+          title={<>🔴 {t('downDevices')} <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>({filteredDown.length})</span></>}
+          right={(
+            <select className="modern-input" value={downType} onChange={e => setDownType(e.target.value)}
+              aria-label={t('downDevices')} style={filterSelectStyle}>
+              <option value="all">{t('allTypes')}</option>
+              {downTypes.map(ty => <option key={ty} value={ty} style={{ textTransform: 'capitalize' }}>{ty}</option>)}
+            </select>
+          )}
+        />
 
         {/* Sayfa sekmeleri — dokunmatikte sarmak yerine tek satir yatay kaydirma:
             36px'lik kutuda sarilan satirlar erisilemez oluyordu. */}
