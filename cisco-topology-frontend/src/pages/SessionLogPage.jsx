@@ -53,12 +53,15 @@ const chip = (s) => ({
 });
 
 /** Transcript goruntuleyici — telefonda alt sayfa, masaustunde modal. */
-function TranscriptModal({ session, entries, loading, onClose, onDownload, compact }) {
+function TranscriptModal({ session, rendered, entries, loading, onClose, onDownload, compact }) {
   const [wrap, setWrap] = useState(true);
-  const text = useMemo(() => (entries || [])
-    .map(e => (e.c !== undefined ? `\n[command] ${e.c}\n` : e.d))
-    .join('')
-    .replace(ANSI, ''), [entries]);
+  // Sunucu 'rendered' doner: kontrol karakterleri (backspace, \r, imlec dizileri)
+  // UYGULANMIS hali - yazarken duzeltilen komutlar artik silinmis harfleriyle
+  // birlikte gorunmuyor. Eski bir sunucuya karsi calisilirsa ham birlestirmeye duser.
+  const text = useMemo(() => {
+    if (typeof rendered === 'string') return rendered;
+    return (entries || []).map(e => (e.c !== undefined ? `\n[command] ${e.c}\n` : e.d)).join('').replace(ANSI, '');
+  }, [rendered, entries]);
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -131,6 +134,7 @@ export default function SessionLogPage() {
   const [loading, setLoading] = useState(true);
   const [viewing, setViewing] = useState(null);
   const [entries, setEntries] = useState([]);
+  const [rendered, setRendered] = useState(null);
   const [entriesLoading, setEntriesLoading] = useState(false);
 
   // Transcript aramasi her tusta tum dosyalari taramasin
@@ -168,10 +172,12 @@ export default function SessionLogPage() {
     setViewing(s);
     setEntriesLoading(true);
     setEntries([]);
+    setRendered(null);
     const res = await authFetch(`/sessions/${s.id}/transcript`);
     if (res && res.ok) {
       const d = await res.json();
       setEntries(d.entries || []);
+      setRendered(typeof d.rendered === 'string' ? d.rendered : null);
     }
     setEntriesLoading(false);
   };
@@ -406,6 +412,7 @@ export default function SessionLogPage() {
         <TranscriptModal
           session={viewing}
           entries={entries}
+          rendered={rendered}
           loading={entriesLoading}
           compact={compact}
           onClose={() => setViewing(null)}

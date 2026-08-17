@@ -2,6 +2,7 @@ const express = require('express');
 const { authenticate, requireAdmin } = require('../middleware/auth');
 const { logAction } = require('../services/auditLog');
 const sessionLog = require('../services/sessionLog');
+const { renderEntries } = require('../utils/terminalRender');
 
 const router = express.Router();
 
@@ -39,7 +40,10 @@ router.get('/sessions/:id/transcript', authenticate, requireAdmin, (req, res) =>
     const meta = sessionLog.getSession(req.params.id);
     if (!meta) return res.status(404).json({ error: 'Session not found' });
     const { entries, missing } = sessionLog.readTranscript(req.params.id);
-    res.json({ session: meta, entries, missing });
+    // 'rendered': kontrol karakterleri UYGULANMIS hali - yani ekranda ne
+    // gorunduyse o. Yazarken duzeltilen komutlar artik silinmis harfleriyle
+    // birlikte gorunmuyor. 'entries' ham kalir (t offsetleriyle oynatma icin).
+    res.json({ session: meta, entries, rendered: renderEntries(entries), missing });
 });
 
 // Duz metin indirme (ANSI kacislari korunur, arsivlemek icin)
@@ -50,7 +54,9 @@ router.get('/sessions/:id/download', authenticate, requireAdmin, (req, res) => {
     const head = `# NetPulse SSH session ${meta.id}\n# device : ${meta.deviceName} (${meta.deviceIp})\n` +
         `# user   : ${meta.username} [${meta.mode}]\n# started: ${meta.startedAt}\n` +
         `# ended  : ${meta.endedAt || '(live)'}\n\n`;
-    const body = entries.map(e => (e.c !== undefined ? `\n[command] ${e.c}\n` : e.d)).join('');
+    // Indirilen dosya da islenmis hali tasir: ham akis bir metin editorunde
+    // backspace'ler yuzunden okunmaz oluyordu.
+    const body = renderEntries(entries);
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="session-${meta.id}.log"`);
     res.send(head + body);
