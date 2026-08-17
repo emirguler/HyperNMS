@@ -11,6 +11,23 @@ function ensureAuditFile() {
     }
 }
 
+/**
+ * req.ip cift yigin (dual-stack) soketlerde IPv4 istemcileri bile IPv6 kilifinda
+ * dondurur: "::ffff:10.0.0.5", loopback icin "::1". Audit tablosunda bu okunaksiz.
+ * IPv4'e indirger; gercek bir IPv6 adresi ise null doner (gosterilmez).
+ */
+function normalizeIp(ip) {
+    if (!ip) return null;
+    const s = String(ip).trim();
+    if (s === '::1' || s === '::ffff:127.0.0.1') return '127.0.0.1';
+    if (s.startsWith('::ffff:')) {
+        const v4 = s.slice(7);
+        return /^\d{1,3}(\.\d{1,3}){3}$/.test(v4) ? v4 : null;
+    }
+    if (s.includes(':')) return null;   // gercek IPv6
+    return s;
+}
+
 async function logAction(user, action, target, details = {}) {
     ensureAuditFile();
     const logs = readJSON(DB_AUDIT);
@@ -22,7 +39,7 @@ async function logAction(user, action, target, details = {}) {
         action,
         target,
         details,
-        ip: details.ip || null
+        ip: normalizeIp(details.ip)
     });
 
     // Eski kayıtları temizle
@@ -49,4 +66,4 @@ function getAuditLogs(filters = {}) {
     return logs.reverse().slice(0, filters.limit || 200);
 }
 
-module.exports = { logAction, getAuditLogs };
+module.exports = { logAction, getAuditLogs, normalizeIp };

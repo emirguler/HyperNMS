@@ -44,6 +44,7 @@ export default function DeviceListPage({ onEdit }) {
   const [sortConfig, setSortConfig] = useState({ key: 'name', dir: 'asc' });
   const [statusFilter, setStatusFilter] = useState('all');
   const [topoFilter, setTopoFilter] = useState('all');
+  const [typeFilter, setTypeFilter] = useState('all');
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [showBulkImport, setShowBulkImport] = useState(false);
   const [showFindDevice, setShowFindDevice] = useState(false);
@@ -63,6 +64,7 @@ export default function DeviceListPage({ onEdit }) {
     if (topoFilter !== 'all') {
       list = list.filter(d => (d.topologyPage || 'main') === topoFilter);
     }
+    if (typeFilter !== 'all') list = list.filter(d => (d.type || '') === typeFilter);
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       list = list.filter(d => d.name?.toLowerCase().includes(q) || d.ip?.toLowerCase().includes(q) || d.type?.toLowerCase().includes(q));
@@ -86,7 +88,14 @@ export default function DeviceListPage({ onEdit }) {
       return 0;
     });
     return list;
-  }, [rawDevices, searchQuery, sortConfig, statusFilter, topoFilter, topoTabs]);
+  }, [rawDevices, searchQuery, sortConfig, statusFilter, topoFilter, typeFilter, topoTabs]);
+
+  // Cihaz tipleri elde yazilmaz, kayitlardan turetilir: yeni bir tip eklenirse
+  // (or. router, firewall) filtre kendiliginden onu da listeler.
+  const deviceTypes = useMemo(
+    () => [...new Set(rawDevices.map(d => d.type).filter(Boolean))].sort(),
+    [rawDevices]
+  );
 
   const handleSort = (key) => setSortConfig(prev => ({ key, dir: prev.key === key && prev.dir === 'asc' ? 'desc' : 'asc' }));
   const sortIcon = (key) => sortConfig.key === key ? (sortConfig.dir === 'asc' ? ' ▲' : ' ▼') : '';
@@ -142,6 +151,16 @@ export default function DeviceListPage({ onEdit }) {
     finally { setDetailedLoading(false); }
   };
 
+  // Toplu islemler YALNIZCA hem secili hem GORUNUR cihazlara uygulanir.
+  // Secim filtre degisince temizlenmiyordu; "hepsini sec -> tipe gore filtrele ->
+  // Sil" ekranda hic gormedigin cihazlari da siliyordu. Kesisim almak, gosterilen
+  // sayinin gercekten islenecek sayi olmasini garantiler.
+  const selectedVisible = useMemo(
+    () => filteredDevices.filter(d => selectedIds.has(d.id)),
+    [filteredDevices, selectedIds]
+  );
+  const hiddenSelectedCount = selectedIds.size - selectedVisible.length;
+
   const toggleSelect = (id) => {
     setSelectedIds(prev => {
       const next = new Set(prev);
@@ -179,10 +198,10 @@ export default function DeviceListPage({ onEdit }) {
       const res = await authFetch('/switches/batch', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: [...selectedIds], updates })
+        body: JSON.stringify({ ids: selectedVisible.map(d => d.id), updates })
       });
       if (res && res.ok) {
-        showToast(`${selectedIds.size} device(s) updated`, 'success');
+        showToast(`${selectedVisible.length} device(s) updated`, 'success');
         setSelectedIds(new Set());
         setShowBatchEdit(false);
         setBatchForm({ sshUsername: '', sshPassword: '', snmpCommunity: '', tags: '', topologyPage: '', ipSlaEnabled: '', ipSlaOkLabel: '', ipSlaFailLabel: '' });
@@ -210,7 +229,7 @@ export default function DeviceListPage({ onEdit }) {
         </div>
         {compact && (
           <button className="btn btn-ghost btn-sm" aria-expanded={showFilters} onClick={() => setShowFilters(v => !v)}>
-            {showFilters ? '✕ Filters' : '⚙ Filters'}{(statusFilter !== 'all' || topoFilter !== 'all') ? ' •' : ''}
+            {showFilters ? '✕ Filters' : '⚙ Filters'}{(statusFilter !== 'all' || topoFilter !== 'all' || typeFilter !== 'all') ? ' •' : ''}
           </button>
         )}
         {(!compact || showFilters) && (
@@ -231,6 +250,15 @@ export default function DeviceListPage({ onEdit }) {
             ))}
           </select>
         )}
+        {(!compact || showFilters) && (
+          <select className="modern-input" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
+            style={{ width: compact ? '100%' : 'auto', minWidth: compact ? 0 : 130, fontSize: compact ? '1rem' : '0.8rem', padding: compact ? '10px 12px' : '8px 12px', textTransform: 'capitalize' }}>
+            <option value="all">All Types</option>
+            {deviceTypes.map(tp => (
+              <option key={tp} value={tp}>{tp}</option>
+            ))}
+          </select>
+        )}
         {isAdmin && (!compact || showFilters) && <button className="btn btn-ghost btn-sm" onClick={() => setShowFindDevice(true)} title={t('findDeviceTitle')}>🔍 {t('findDevice')}</button>}
         {isAdmin && (!compact || showFilters) && <button className="btn btn-ghost btn-sm" onClick={() => setShowBulkImport(true)} title="Bulk Import">📤 Import List</button>}
         {isAdmin && (!compact || showFilters) && <button className="btn btn-ghost btn-sm" onClick={() => setShowDownloadMenu(true)} title="Export CSV">📥 Download List</button>}
@@ -239,9 +267,15 @@ export default function DeviceListPage({ onEdit }) {
 
       {/* Toplu islem cubugu. Satir kaydirma .rw-actions'tan gelir (<=1024px);
           inline flexWrap masaustune de sizacagi icin bilerek yazilmadi. */}
-      {isAdmin && selectedIds.size > 0 && (
+      {isAdmin && selectedVisible.length > 0 && (
         <div className="rw-actions" style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, padding: '10px 16px', background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.3)', borderRadius: 8 }}>
-          <span style={{ fontWeight: 600, color: 'var(--primary)', fontSize: '0.85rem' }}>{selectedIds.size} selected</span>
+          <span style={{ fontWeight: 600, color: 'var(--primary)', fontSize: '0.85rem' }}>{selectedVisible.length} selected</span>
+          {/* Filtre disinda kalan secimler islenmeyecek - sessizce yutmak yerine soyle */}
+          {hiddenSelectedCount > 0 && (
+            <span style={{ fontSize: '0.78rem', color: 'var(--warning)' }}>
+              {hiddenSelectedCount} more hidden by filters (not affected)
+            </span>
+          )}
           <button className="btn btn-primary btn-sm" onClick={() => setShowBatchEdit(true)}>Batch Edit</button>
           <button className="btn btn-danger btn-sm" onClick={() => setConfirmBatchDelete(true)}>Delete Selected</button>
           <button className="btn btn-ghost btn-sm" onClick={() => setSelectedIds(new Set())}>Deselect All</button>
@@ -331,7 +365,7 @@ export default function DeviceListPage({ onEdit }) {
             )) : (
               // justifyContent sadece kart modunda (display:flex) etkili, masaustunde no-op
               <tr><td colSpan={isAdmin ? 10 : 8} style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)', justifyContent: 'center' }}>
-                {searchQuery || statusFilter !== 'all' ? t('noFilterResult') : t('noDevicesYet')}
+                {searchQuery || statusFilter !== 'all' || topoFilter !== 'all' || typeFilter !== 'all' ? t('noFilterResult') : t('noDevicesYet')}
               </td></tr>
             )}
           </tbody>
@@ -356,7 +390,7 @@ export default function DeviceListPage({ onEdit }) {
         <div className="modal-overlay" onClick={() => setShowBatchEdit(false)} onKeyDown={e => { if (e.key === 'Escape') setShowBatchEdit(false); }}>
           <div className="modal-content rw-sheet" style={{ width: 460 }} onClick={e => e.stopPropagation()}>
             <div className="rw-sheet-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: compact ? 0 : 20 }}>
-              <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 600, color: 'var(--text-main)' }}>Batch Edit ({selectedIds.size} devices)</h2>
+              <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 600, color: 'var(--text-main)' }}>Batch Edit ({selectedVisible.length} devices)</h2>
               <button className="rw-tap rw-sheet-close" onClick={() => setShowBatchEdit(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '1.5rem', cursor: 'pointer' }}>&times;</button>
             </div>
             <div className="rw-sheet-body">
@@ -447,12 +481,13 @@ export default function DeviceListPage({ onEdit }) {
       {confirmBatchDelete && (
         <ConfirmModal
           title={t('deleteDevice')}
-          message={`${selectedIds.size} ${t('deleteSelectedConfirm')}`}
+          message={`${selectedVisible.length} ${t('deleteSelectedConfirm')}`}
           onCancel={() => setConfirmBatchDelete(false)}
           onConfirm={async () => {
             setConfirmBatchDelete(false);
             let deleted = 0;
-            for (const id of selectedIds) {
+            // Yalnizca gorunur olanlar: filtre disinda kalan secimler silinmez
+            for (const id of selectedVisible.map(d => d.id)) {
               const res = await authFetch(`/switches/${id}`, { method: 'DELETE' });
               if (res && res.ok) deleted++;
             }

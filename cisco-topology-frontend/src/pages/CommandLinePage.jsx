@@ -14,6 +14,7 @@ export default function CommandLinePage() {
   const [selectedTab, setSelectedTab] = useState(() => (topoTabs && topoTabs[0] ? topoTabs[0].id : 'main'));
   const [search, setSearch] = useState('');
   const [onlyUp, setOnlyUp] = useState(false);
+  const [typeFilter, setTypeFilter] = useState('all');
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [commands, setCommands] = useState('');
   const [mode, setMode] = useState('show'); // 'show' | 'config'
@@ -88,13 +89,22 @@ export default function CommandLinePage() {
   }
 
   const devices = (rawDevices || []).filter(onPage);
+  // Tip listesi SAYFADAKI cihazlardan turetilir: baska sayfada olup burada
+  // bulunmayan bir tip secenek olarak cikip bos liste uretmesin.
+  const deviceTypes = [...new Set(devices.map(d => d.type).filter(Boolean))].sort();
   const q = search.trim().toLowerCase();
   const filtered = devices.filter(d =>
     (!onlyUp || d.status === 'UP') &&
+    (typeFilter === 'all' || (d.type || '') === typeFilter) &&
     (!q || (d.name || '').toLowerCase().includes(q) || (d.ip || '').toLowerCase().includes(q))
   );
   const selectableFiltered = filtered.filter(hasSsh);
-  const selCount = selectedIds.size;
+  // Komut YALNIZCA hem secili hem GORUNUR cihazlara gider. Tip/UP filtresi ya da
+  // arama, secili bir cihazi ekran disinda birakabiliyor; burasi bir komut
+  // calistirma sayfasi, gormedigin bir cihaza komut gitmesi kabul edilemez.
+  const targets = filtered.filter(d => selectedIds.has(d.id));
+  const selCount = targets.length;
+  const hiddenSelected = selectedIds.size - selCount;
 
   const toggle = (id) => setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const selectAll = () => setSelectedIds(prev => { const n = new Set(prev); selectableFiltered.forEach(d => n.add(d.id)); return n; });
@@ -117,7 +127,7 @@ export default function CommandLinePage() {
       const res = await authFetch('/switches/bulk-exec', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: [...selectedIds], commands, mode, saveAfter: mode === 'config' && saveAfter })
+        body: JSON.stringify({ ids: targets.map(d => d.id), commands, mode, saveAfter: mode === 'config' && saveAfter })
       });
       const d = await res.json().catch(() => ({}));
       if (!res || !res.ok) { showToast(d.error || t('operationFailed'), 'error'); setRunning(false); return; }
@@ -186,13 +196,30 @@ export default function CommandLinePage() {
           <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border-color)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
               <h3 style={{ margin: 0, fontSize: '1rem', color: 'var(--primary)' }}>{t('clTargets')}</h3>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{selCount} {t('clSelected')}</span>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'right' }}>
+                {selCount} {t('clSelected')}
+                {/* Filtre disinda kalan secimlere komut GITMEZ - sessizce yutma, soyle */}
+                {hiddenSelected > 0 && (
+                  <span style={{ display: 'block', color: 'var(--warning)' }}>+{hiddenSelected} filtered out</span>
+                )}
+              </span>
             </div>
             <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.4 }}>{t('clPage')}</label>
             <select className="modern-input" value={selectedTab} onChange={e => setSelectedTab(e.target.value)} style={{ width: '100%', marginBottom: 10 }}>
               {(topoTabs || []).map(tab => <option key={tab.id} value={tab.id}>{tab.name}</option>)}
             </select>
             {/* type="search" YALNIZCA dokunmatikte: masaustu Chrome'da temizleme (x) dugmesi cizer. */}
+            {/* Tip filtresi: tek tip varsa secenek sunmanin anlami yok, gizle */}
+            {deviceTypes.length > 1 && (
+              <>
+                <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.4 }}>{t('clType')}</label>
+                <select className="modern-input" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
+                  style={{ width: '100%', marginBottom: 10, textTransform: 'capitalize' }}>
+                  <option value="all">{t('clAllTypes')}</option>
+                  {deviceTypes.map(tp => <option key={tp} value={tp}>{tp}</option>)}
+                </select>
+              </>
+            )}
             <input
               className="modern-input"
               type={isTouch ? 'search' : 'text'}
