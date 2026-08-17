@@ -10,8 +10,12 @@ const presence = require('../services/presence');
 const router = express.Router();
 
 router.get('/users', authenticate, requireAdmin, (req, res) => {
-    const safeUsers = store.getUsers().map(({ password, ...u }) => ({
+    // totpSecret/totpPending/recoveryCodes ACIKCA cikarilir. Spread hepsini aynen
+    // gecirdigi icin, biri 2FA acar acmaz sifreli secret ve kurtarma kodu hash'leri
+    // istemciye gidecekti. Yalnizca totpEnabled disari verilir (listedeki rozet icin).
+    const safeUsers = store.getUsers().map(({ password, totpSecret, totpPending, totpLastStep, recoveryCodes, ...u }) => ({
         ...u,
+        totpEnabled: u.totpEnabled === true,
         active: presence.isActive(u.id),   // son 5 dk içinde istek yapmış (uygulaması açık)
         lastSeen: presence.lastSeenAt(u.id),
     }));
@@ -41,7 +45,7 @@ router.post('/users', authenticate, requireAdmin, async (req, res) => {
     store.addUser(newUser);
 
     await logAction(req.user, 'USER_CREATE', newUser.username);
-    const { password, ...safeUser } = newUser;
+    const { password, totpSecret, totpPending, totpLastStep, recoveryCodes, ...safeUser } = newUser;
     res.json(safeUser);
 });
 
@@ -74,7 +78,7 @@ router.put('/users/:id', authenticate, requireAdmin, async (req, res) => {
 
     store.updateUser(req.params.id, updates);
     await logAction(req.user, 'USER_UPDATE', user.username);
-    const { password, ...safeUser } = store.getUser(req.params.id);
+    const { password, totpSecret, totpPending, totpLastStep, recoveryCodes, ...safeUser } = store.getUser(req.params.id);
     res.json(safeUser);
 });
 

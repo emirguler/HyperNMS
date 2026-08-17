@@ -25,6 +25,7 @@ const edgeRoutes = require('./routes/edges');
 const userRoutes = require('./routes/users');
 const auditRoutes = require('./routes/audit');
 const sessionRoutes = require('./routes/sessions');
+const twoFactorRoutes = require('./routes/twofactor');
 const sessionLog = require('./services/sessionLog');
 const settingsRoutes = require('./routes/settings');
 const webproxyRoutes = require('./routes/webproxy');
@@ -113,6 +114,7 @@ app.use(apiPrefix, edgeRoutes);
 app.use(apiPrefix, userRoutes);
 app.use(apiPrefix, auditRoutes);
 app.use(apiPrefix, sessionRoutes);
+app.use(apiPrefix, twoFactorRoutes);
 app.use(apiPrefix, settingsRoutes);
 app.use(apiPrefix, webproxyRoutes);
 

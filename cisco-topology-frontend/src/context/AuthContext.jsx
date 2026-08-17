@@ -62,6 +62,11 @@ export function AuthProvider({ children }) {
       body: JSON.stringify({ username: usr, password })
     });
     const data = await res.json();
+    // 2FA acikken sunucu OTURUM ACMAZ: kisa omurlu bir gecis token'i doner ve
+    // ikinci adim beklenir. Burada hicbir oturum durumu kurulmaz.
+    if (res.ok && data.twoFactorRequired) {
+      return { success: false, twoFactorRequired: true, pendingToken: data.pendingToken };
+    }
     if (res.ok) {
       setIsAuthenticated(true);
       setUserRole(data.role);
@@ -77,6 +82,34 @@ export function AuthProvider({ children }) {
       return { success: true, mustChangePassword: data.mustChangePassword };
     }
     return { success: false, error: data.error || 'Login failed' };
+  }, [fetchCsrfToken]);
+
+  /** Girisin ikinci adimi: gecis token'i + TOTP ya da kurtarma kodu. */
+  const loginTwoFactor = useCallback(async (pendingToken, code) => {
+    const res = await fetch(`${API_BASE}/login/2fa`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pendingToken, code })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { success: false, error: data.error || 'Verification failed' };
+
+    setIsAuthenticated(true);
+    setUserRole(data.role);
+    setUsername(data.username);
+    setMustChangePassword(data.mustChangePassword || false);
+    setAllowedCommands(data.allowedCommands || []);
+    setFullSsh(data.fullSsh === true);
+    localStorage.setItem('userRole', data.role);
+    localStorage.setItem('username', data.username);
+    showToast('Login successful', 'success');
+    // Kurtarma kodu tuketildiyse kullaniciyi uyar - sessizce azalmasin
+    if (data.recoveryUsed) {
+      showToast(`Recovery code used — ${data.recoveryRemaining} left`, 'info', 6000);
+    }
+    await fetchCsrfToken();
+    return { success: true, mustChangePassword: data.mustChangePassword };
   }, [fetchCsrfToken]);
 
   const logout = useCallback(async () => {
@@ -142,7 +175,7 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider value={{
-      isAuthenticated, userRole, username, login, logout, authFetch,
+      isAuthenticated, userRole, username, login, loginTwoFactor, logout, authFetch,
       isAdmin: userRole === 'Administrator',
       // Cihaza dokunan islemler (SSH / arayuz konfigi / reload): Administrator + Operator.
       // 'User' eski kayitlarin Operator karsiligi; 'Viewer' = User (View Only) → yetkisiz.

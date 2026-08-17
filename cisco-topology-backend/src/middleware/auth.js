@@ -42,6 +42,12 @@ const authenticate = (req, res, next) => {
             }
             return res.status(403).json({ error: 'Invalid token' });
         }
+        // GUVENLIK: "2FA bekliyor" token'i bir OTURUM token'i DEGILDIR. Bu kontrol
+        // olmadan istemci pending token'i cookie'ye koyup ikinci adimi tamamen
+        // atlayabilirdi - yani 2FA hic devrede olmazdi.
+        if (user && user.stage === '2fa') {
+            return res.status(401).json({ error: 'Two-factor authentication not completed' });
+        }
         req.user = user;
         presence.touch(user.id); // aktif kullanıcı takibi (User Management "Active" rozeti)
         next();
@@ -107,7 +113,10 @@ function authenticateWs(req) {
 
     if (!token) return null;
     try {
-        return jwt.verify(token, SECRET_KEY);
+        const payload = jwt.verify(token, SECRET_KEY);
+        // HTTP tarafiyla ayni kural: yarim kalmis 2FA ile WS acilamaz
+        if (payload && payload.stage === '2fa') return null;
+        return payload;
     } catch {
         return null;
     }

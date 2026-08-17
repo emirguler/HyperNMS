@@ -35,8 +35,31 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const { login, loginTwoFactor } = useAuth();
+  // pendingToken doluysa ikinci adim (2FA kodu) ekrani gosterilir
+  const [pendingToken, setPendingToken] = useState('');
+  const [code, setCode] = useState('');
   const navigate = useNavigate();
+
+  const handleVerify = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      const r = await loginTwoFactor(pendingToken, code);
+      if (r.success) navigate('/dashboard');
+      else {
+        setError(r.error);
+        setCode('');
+        // Gecis token'i 5 dakikalik: suresi dolduysa bastan basla
+        if (/expired|Invalid session/i.test(r.error || '')) setPendingToken('');
+      }
+    } catch {
+      setError('Server unavailable. Please try again later.');
+    } finally {
+      setLoading(false);
+    }
+  };
   const { isShort, isTouch } = useViewport();
 
   const handleSubmit = async (e) => {
@@ -47,6 +70,10 @@ export default function LoginPage() {
       const result = await login(username, password);
       if (result.success) {
         navigate('/dashboard');
+      } else if (result.twoFactorRequired) {
+        // Sifre dogru ama oturum HENUZ acilmadi: ikinci adima gec
+        setPendingToken(result.pendingToken);
+        setCode('');
       } else {
         setError(result.error);
       }
@@ -79,6 +106,49 @@ export default function LoginPage() {
           </p>
         </div>
 
+        {/* --- Ikinci adim: dogrulama kodu --- */}
+        {pendingToken ? (
+          <form onSubmit={handleVerify} style={{ textAlign: 'left' }}>
+            {error && (
+              <div className="login-error">
+                <span style={{ marginRight: 8, flexShrink: 0 }}>✕</span>{error}
+              </div>
+            )}
+            <div style={{ marginBottom: 16 }}>
+              <label htmlFor="login-2fa" style={labelStyle}>VERIFICATION CODE</label>
+              <input
+                id="login-2fa"
+                className="modern-input"
+                value={code}
+                onChange={e => setCode(e.target.value)}
+                placeholder="6-digit code"
+                /* inputMode=numeric: telefonda dogrudan rakam tusları acilir.
+                   one-time-code: iOS/Android kodu klavyeden onerir. */
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                enterKeyHint="go"
+                autoFocus={!isTouch}
+                style={{ letterSpacing: '0.25em', fontFamily: 'monospace' }}
+              />
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 8, lineHeight: 1.5 }}>
+                Open your authenticator app (Duo Mobile, Google Authenticator…) and enter the code.
+                You can also use one of your recovery codes.
+              </div>
+            </div>
+            <button type="submit" className="btn btn-primary" disabled={loading || !code.trim()}
+              style={{ width: '100%', minHeight: 48 }}>
+              {loading ? 'Verifying…' : 'Verify'}
+            </button>
+            <button type="button" className="btn btn-ghost"
+              onClick={() => { setPendingToken(''); setCode(''); setError(''); }}
+              style={{ width: '100%', marginTop: 10, minHeight: 44 }}>
+              Back
+            </button>
+          </form>
+        ) : (
         <form onSubmit={handleSubmit} style={{ textAlign: 'left' }}>
           {error && (
             <div className="login-error">
@@ -150,6 +220,7 @@ export default function LoginPage() {
             {loading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
+        )}
 
         <p style={{ marginTop: isShort ? 12 : 24, fontSize: '0.7rem', color: 'var(--text-dim)', textAlign: 'center' }}>
           NetPulse NMS v2.0

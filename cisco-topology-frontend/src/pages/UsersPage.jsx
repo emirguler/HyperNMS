@@ -25,6 +25,7 @@ export default function UsersPage() {
   const [editingUser, setEditingUser] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [resetTarget, setResetTarget] = useState(null);
 
   // "Active" durumunu canlı tutmak için periyodik tazeleme
   useEffect(() => {
@@ -78,6 +79,10 @@ export default function UsersPage() {
                   <span style={{ background: roleStyle(u.role).bg, color: roleStyle(u.role).fg, padding: '4px 10px', borderRadius: 20, fontSize: '0.75rem', fontWeight: 600, border: `1px solid ${roleStyle(u.role).bd}`, whiteSpace: 'nowrap' }}>{roleLabel(u.role)}</span>
                   {/* Ham SSH ciddi bir yetki artisi: listede gorunur olsun ki
                       kimde acik oldugu formu acmadan anlasilsin. */}
+                  {/* 2FA rozeti: kimde acik oldugu listede gorunsun */}
+                  {u.totpEnabled && (
+                    <span title="Two-factor enabled" style={{ marginLeft: 6, background: 'rgba(34,197,94,0.15)', color: 'var(--success)', border: '1px solid rgba(34,197,94,0.35)', padding: '3px 9px', borderRadius: 20, fontSize: '0.7rem', fontWeight: 700, whiteSpace: 'nowrap' }}>2FA</span>
+                  )}
                   {u.fullSsh && (
                     <span title="Full SSH access" style={{ marginLeft: 6, background: 'rgba(245,158,11,0.15)', color: 'var(--warning)', border: '1px solid rgba(245,158,11,0.35)', padding: '3px 9px', borderRadius: 20, fontSize: '0.7rem', fontWeight: 700, whiteSpace: 'nowrap' }}>FULL SSH</span>
                   )}
@@ -85,6 +90,13 @@ export default function UsersPage() {
                 {/* Actions gizlenmiyor: satir tiklanabilir degil, tek etkilesim yolu bu */}
                 <td data-label="" style={{ textAlign: 'right', paddingRight: isPhone ? undefined : 24 }}>
                   <button className="btn btn-ghost btn-sm" style={{ marginRight: isTouch ? 10 : 6 }} onClick={() => { setEditingUser(u); setIsModalOpen(true); }}>{t('edit')}</button>
+                  {/* Kilitlenme kurtarmasi: telefonunu kaybeden kullanicinin 2FA'sini
+                      ikinci bir admin sifirlayabilir. Islem denetim kaydina yazilir. */}
+                  {u.totpEnabled && (
+                    <button className="btn btn-ghost btn-sm" style={{ marginRight: isTouch ? 10 : 6 }}
+                      title="Clear this user's two-factor setup"
+                      onClick={() => setResetTarget(u)}>Reset 2FA</button>
+                  )}
                   <button className="btn btn-danger btn-sm" onClick={() => setDeleteTarget(u)}>{t('delete')}</button>
                 </td>
               </tr>
@@ -93,6 +105,28 @@ export default function UsersPage() {
         </table>
         </div>
       </div>
+
+      {resetTarget && (
+        <div className="modal-overlay" onKeyDown={e => { if (e.key === 'Escape') setResetTarget(null); }}>
+          <div className="confirm-modal-content">
+            <h3 className="confirm-title">Reset two-factor</h3>
+            <p className="confirm-desc">
+              Clear the two-factor setup for <strong>{resetTarget.username}</strong>?
+              They will sign in with only their password until they enrol again.
+            </p>
+            <div className="confirm-actions">
+              <button className="btn btn-ghost" onClick={() => setResetTarget(null)}>{t('cancel')}</button>
+              <button className="btn btn-danger" onClick={async () => {
+                const res = await authFetch(`/2fa/reset/${resetTarget.id}`, { method: 'POST' });
+                if (res && res.ok) showToast(`Two-factor cleared for "${resetTarget.username}"`, 'success');
+                else { const dd = res ? await res.json().catch(() => ({})) : {}; showToast(dd.error || t('operationFailed'), 'error'); }
+                setResetTarget(null);
+                fetchUsers();
+              }}>Reset</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {deleteTarget && (
         <div className="modal-overlay" onKeyDown={e => { if (e.key === 'Enter') confirmDelete(); if (e.key === 'Escape') setDeleteTarget(null); }}>

@@ -199,7 +199,10 @@ class MemoryStore {
         // DIKKAT: bu listede olmayan bir alan SESSIZCE dusurulur. 'username' ve
         // 'authType' eksikti - PUT /users/:id ikisini de hesaplayip gonderiyordu,
         // yani kullanici adi degistirme ve yerel<->AD gecisi kaydedilmiyordu.
-        const allowed = ['username', 'password', 'role', 'authType', 'mustChangePassword', 'allowedCommands', 'fullSsh'];
+        const allowed = ['username', 'password', 'role', 'authType', 'mustChangePassword', 'allowedCommands', 'fullSsh',
+            // 2FA alanlari: BILEREK sanitizeUser'da YOK - kullanici formundan
+            // degil, yalnizca /2fa rotalarindan degistirilebilirler.
+            'totpEnabled', 'totpSecret', 'totpPending', 'totpLastStep', 'recoveryCodes'];
         for (const key of allowed) {
             if (updates[key] !== undefined) this.data.users[idx][key] = updates[key];
         }

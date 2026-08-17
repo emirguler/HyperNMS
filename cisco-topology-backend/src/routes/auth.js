@@ -7,6 +7,7 @@ const rateLimiter = require('../middleware/rateLimiter');
 const { authenticate, setTokenCookie, clearTokenCookie } = require('../middleware/auth');
 const { logAction } = require('../services/auditLog');
 const { authenticateAD } = require('../services/adService');
+const twofactor = require('./twofactor');
 
 const router = express.Router();
 
@@ -55,6 +56,19 @@ router.post('/login', async (req, res) => {
         }
     }
 
+    // --- Ikinci asama: 2FA acikken burada OTURUM ACILMAZ ---
+    // Kisa omurlu, stage:'2fa' isaretli bir gecis token'i veririz. Bu token
+    // middleware/auth tarafindan oturum token'i olarak REDDEDILIR; yalnizca
+    // /login/2fa onu kabul eder.
+    if (user.totpEnabled === true) {
+        const pendingToken = jwt.sign(
+            { id: user.id, username: user.username, stage: '2fa' },
+            SECRET_KEY,
+            { expiresIn: '5m' }
+        );
+        return res.json({ twoFactorRequired: true, pendingToken });
+    }
+
     const token = jwt.sign(
         { id: user.id, username: user.username, role: user.role },
         SECRET_KEY,
@@ -74,6 +88,61 @@ router.post('/login', async (req, res) => {
     });
 });
 
+/**
+ * Girisin ikinci asamasi: gecis token'i + TOTP kodu (ya da kurtarma kodu).
+ * Asil oturum JWT'si YALNIZCA burada uretilir.
+ */
+const twoFaLimiter = rateLimiter({ windowMs: 5 * 60 * 1000, max: 10, message: 'Too many attempts, please try again in 5 minutes' });
+router.post('/login/2fa', twoFaLimiter, async (req, res) => {
+    const { pendingToken, code } = req.body || {};
+    let payload;
+    try {
+        payload = jwt.verify(pendingToken, SECRET_KEY);
+    } catch (e) {
+        return res.status(401).json({ error: 'Session expired, please sign in again' });
+    }
+    // Yalnizca stage:'2fa' token'i kabul: gecerli bir OTURUM token'i ile bu uca
+    // gelip baskasinin adina oturum acilamasin.
+    if (!payload || payload.stage !== '2fa') {
+        return res.status(401).json({ error: 'Invalid session' });
+    }
+
+    const user = store.getUser(payload.id);
+    if (!user || user.totpEnabled !== true) {
+        return res.status(401).json({ error: 'Invalid session' });
+    }
+
+    const v = twofactor.verifyAny(user, code);
+    if (!v.ok) {
+        await logAction(user, 'LOGIN_2FA_FAILED', user.username, { ip: req.ip, reason: v.reused ? 'code-reused' : 'invalid' });
+        return res.status(401).json({
+            error: v.reused
+                ? 'That code was already used — wait for the next one'
+                : 'Invalid code',
+        });
+    }
+
+    const token = jwt.sign(
+        { id: user.id, username: user.username, role: user.role },
+        SECRET_KEY,
+        { expiresIn: JWT_EXPIRY }
+    );
+    setTokenCookie(res, token);
+    await logAction(user, 'LOGIN', user.username, { ip: req.ip, twoFactor: v.viaRecovery ? 'recovery-code' : 'totp' });
+
+    const fresh = store.getUser(user.id);
+    res.json({
+        role: fresh.role,
+        username: fresh.username,
+        mustChangePassword: fresh.mustChangePassword || false,
+        allowedCommands: fresh.allowedCommands || [],
+        fullSsh: fresh.fullSsh === true,
+        // Kurtarma koduyla girildiyse kullaniciya kalan sayiyi soyle
+        recoveryUsed: v.viaRecovery,
+        recoveryRemaining: Array.isArray(fresh.recoveryCodes) ? fresh.recoveryCodes.length : 0,
+    });
+});
+
 // Logout — clear cookie
 router.post('/logout', (req, res) => {
     clearTokenCookie(res);
@@ -90,7 +159,13 @@ router.get('/me', authenticate, (req, res) => {
         role: user.role,
         mustChangePassword: user.mustChangePassword || false,
         allowedCommands: user.allowedCommands || [],
-        fullSsh: user.fullSsh === true
+        fullSsh: user.fullSsh === true,
+        twoFactorEnabled: user.totpEnabled === true,
+        // Politika geregi kayit olmasi gerekiyorsa arayuz zorlayici ekrani acar
+        // (mevcut mustChangePassword deseninin aynisi).
+        mustSetup2fa: twofactor.isEnforced()
+            && (user.role === 'Administrator')
+            && user.totpEnabled !== true,
     });
 });
 

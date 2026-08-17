@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import AdSettingsCard from './AdSettingsCard';
+import TwoFactorCard from './TwoFactorCard';
 import BackupRestorePanel from './BackupRestorePanel';
 import GeneralSettingsCard from './GeneralSettingsCard';
 import { useViewport } from '../hooks/useViewport';
@@ -9,6 +10,7 @@ const TILES = [
   { id: 'general', icon: '🎛️', title: 'General', desc: 'Device-wide display & behavior' },
   { id: 'backup', icon: '📦', title: 'Backup & Restore', desc: 'Export or import the full configuration' },
   { id: 'ad', icon: '🪪', title: 'Active Directory', desc: 'LDAP sign-in for AD users' },
+  { id: 'security', icon: '🔐', title: 'Two-Factor Auth', desc: 'TOTP codes for sign-in' },
 ];
 
 // Kart (masaustu) ve satir (dar govde) gorunumleri. Modul seviyesinde:
@@ -112,6 +114,7 @@ export default function SettingsModal({ onClose }) {
               {panel === 'general' && <GeneralSettingsCard embedded />}
               {panel === 'backup' && <BackupRestorePanel />}
               {panel === 'ad' && <AdSettingsCard embedded />}
+              {panel === 'security' && <TwoFactorCard />}
             </div>
           </div>
         </div>
