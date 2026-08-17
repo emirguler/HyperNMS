@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
+import { useViewport } from '../hooks/useViewport';
 import BulkImportModal from '../components/BulkImportModal';
 import FindDeviceModal from '../components/FindDeviceModal';
 import ConfirmModal from '../components/ConfirmModal';
@@ -9,10 +10,36 @@ import { showToast } from '../Toast';
 import { t } from '../i18n';
 import { API_BASE } from '../config';
 
+// Dokunmatikte secim kutusu hucreyi kaplayan 44x44 bir etikete donusur;
+// masaustunde etiket ciplak kalir (stil yok) ki gorunum aynen korunsun.
+const TAP_BOX = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  minWidth: 44,
+  minHeight: 44,
+  margin: '-11px -12px',
+  cursor: 'pointer',
+};
+
+// <=600px'te thead gizlendigi icin siralama tablonun ustundeki select'e tasinir.
+const SORT_OPTIONS = [
+  { v: 'name|asc', label: 'Sort: Name A-Z' },
+  { v: 'name|desc', label: 'Sort: Name Z-A' },
+  { v: 'status|asc', label: 'Sort: Status' },
+  { v: 'ip|asc', label: 'Sort: IP Address' },
+  { v: 'latency|desc', label: 'Sort: Latency (high first)' },
+  { v: 'latency|asc', label: 'Sort: Latency (low first)' },
+];
+
 export default function DeviceListPage({ onEdit }) {
   const { rawDevices, topoTabs, fetchData } = useApp();
   const { isAdmin, authFetch } = useAuth();
+  const { isPhone, isShort, isTouch } = useViewport();
+  // "Dar govde": telefon genisligi VEYA kisa (yatay telefon) ekran
+  const compact = isPhone || isShort;
   const navigate = useNavigate();
+  const [showFilters, setShowFilters] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: 'name', dir: 'asc' });
   const [statusFilter, setStatusFilter] = useState('all');
@@ -63,12 +90,14 @@ export default function DeviceListPage({ onEdit }) {
 
   const handleSort = (key) => setSortConfig(prev => ({ key, dir: prev.key === key && prev.dir === 'asc' ? 'desc' : 'asc' }));
   const sortIcon = (key) => sortConfig.key === key ? (sortConfig.dir === 'asc' ? ' ▲' : ' ▼') : '';
+  const sortValue = `${sortConfig.key}|${sortConfig.dir}`;
 
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     const res = await authFetch(`/switches/${deleteTarget.id}`, { method: 'DELETE' });
-    if (res.ok) showToast(`"${deleteTarget.name}" ${t('deleted')}`, 'success');
-    else { const d = await res.json().catch(() => ({})); showToast(d.error || t('deleteFailed'), 'error'); }
+    // authFetch 401'de null doner; guard yoksa oturum dusunce uygulama ErrorBoundary'e cakiliyor
+    if (res && res.ok) showToast(`"${deleteTarget.name}" ${t('deleted')}`, 'success');
+    else { const d = res ? await res.json().catch(() => ({})) : {}; showToast(d.error || t('deleteFailed'), 'error'); }
     setDeleteTarget(null);
     fetchData();
   };
@@ -159,7 +188,7 @@ export default function DeviceListPage({ onEdit }) {
         setBatchForm({ sshUsername: '', sshPassword: '', snmpCommunity: '', tags: '', topologyPage: '', ipSlaEnabled: '', ipSlaOkLabel: '', ipSlaFailLabel: '' });
         fetchData();
       } else {
-        const d = await res.json().catch(() => ({}));
+        const d = res ? await res.json().catch(() => ({})) : {};
         showToast(d.error || 'Batch update failed', 'error');
       }
     } catch {
@@ -169,33 +198,49 @@ export default function DeviceListPage({ onEdit }) {
 
   return (
     <div className="list-container">
-      <div style={{ display: 'flex', gap: 12, marginBottom: 20, alignItems: 'center', flexWrap: 'wrap' }}>
+      {/* Arac cubugu: dar govdede arama + tek "Filters" dugmesi kalir, gerisi acilir.
+          Boylece yatay telefonda ~170px dikey alan geri kazanilir. */}
+      <div className="rw-actions" style={{ display: 'flex', gap: 12, marginBottom: 20, alignItems: 'center', flexWrap: 'wrap' }}>
         <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
-          <input className="modern-input" placeholder={t('searchPlaceholder')} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} style={{ paddingLeft: 40 }} />
+          {/* type="search" SADECE dokunmatikte: masaustu Chrome/Safari bu tipe kendi
+              temizle (x) dugmesini ve searchfield gorunumunu ekliyor -> masaustu degisirdi. */}
+          <input className="modern-input" type={isTouch ? 'search' : undefined} enterKeyHint="search" autoCapitalize="none" autoCorrect="off" spellCheck={false}
+            placeholder={t('searchPlaceholder')} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} style={{ paddingLeft: 40 }} />
           <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: '1rem', pointerEvents: 'none' }}>🔍</span>
         </div>
-        <div style={{ display: 'flex', gap: 6 }}>
-          {[{ label: t('all'), value: 'all' }, { label: 'UP', value: 'UP' }, { label: 'DOWN', value: 'DOWN' }].map(f => (
-            <button key={f.value} className={`nav-btn ${statusFilter === f.value ? 'active' : ''}`}
-              style={{ fontSize: '0.8rem', padding: '8px 14px', border: '1px solid var(--border-color)' }}
-              onClick={() => setStatusFilter(f.value)}>{f.label}</button>
-          ))}
-        </div>
-        <select className="modern-input" value={topoFilter} onChange={e => setTopoFilter(e.target.value)}
-          style={{ width: 'auto', minWidth: 140, fontSize: '0.8rem', padding: '8px 12px' }}>
-          <option value="all">All Pages</option>
-          {topoTabs.map(tab => (
-            <option key={tab.id} value={tab.id}>{tab.name}</option>
-          ))}
-        </select>
-        {isAdmin && <button className="btn btn-ghost btn-sm" onClick={() => setShowFindDevice(true)} title={t('findDeviceTitle')}>🔍 {t('findDevice')}</button>}
-        {isAdmin && <button className="btn btn-ghost btn-sm" onClick={() => setShowBulkImport(true)} title="Bulk Import">📤 Import List</button>}
-        {isAdmin && <button className="btn btn-ghost btn-sm" onClick={() => setShowDownloadMenu(true)} title="Export CSV">📥 Download List</button>}
+        {compact && (
+          <button className="btn btn-ghost btn-sm" aria-expanded={showFilters} onClick={() => setShowFilters(v => !v)}>
+            {showFilters ? '✕ Filters' : '⚙ Filters'}{(statusFilter !== 'all' || topoFilter !== 'all') ? ' •' : ''}
+          </button>
+        )}
+        {(!compact || showFilters) && (
+          <div style={{ display: 'flex', gap: 6, flexWrap: compact ? 'wrap' : undefined }}>
+            {[{ label: t('all'), value: 'all' }, { label: 'UP', value: 'UP' }, { label: 'DOWN', value: 'DOWN' }].map(f => (
+              <button key={f.value} className={`nav-btn ${statusFilter === f.value ? 'active' : ''}`}
+                style={{ fontSize: compact ? '0.85rem' : '0.8rem', padding: compact ? '10px 16px' : '8px 14px', border: '1px solid var(--border-color)' }}
+                onClick={() => setStatusFilter(f.value)}>{f.label}</button>
+            ))}
+          </div>
+        )}
+        {(!compact || showFilters) && (
+          <select className="modern-input" value={topoFilter} onChange={e => setTopoFilter(e.target.value)}
+            style={{ width: compact ? '100%' : 'auto', minWidth: compact ? 0 : 140, fontSize: compact ? '1rem' : '0.8rem', padding: compact ? '10px 12px' : '8px 12px' }}>
+            <option value="all">All Pages</option>
+            {topoTabs.map(tab => (
+              <option key={tab.id} value={tab.id}>{tab.name}</option>
+            ))}
+          </select>
+        )}
+        {isAdmin && (!compact || showFilters) && <button className="btn btn-ghost btn-sm" onClick={() => setShowFindDevice(true)} title={t('findDeviceTitle')}>🔍 {t('findDevice')}</button>}
+        {isAdmin && (!compact || showFilters) && <button className="btn btn-ghost btn-sm" onClick={() => setShowBulkImport(true)} title="Bulk Import">📤 Import List</button>}
+        {isAdmin && (!compact || showFilters) && <button className="btn btn-ghost btn-sm" onClick={() => setShowDownloadMenu(true)} title="Export CSV">📥 Download List</button>}
         <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{filteredDevices.length} / {rawDevices.length} {t('deviceCount')}</span>
       </div>
 
+      {/* Toplu islem cubugu. Satir kaydirma .rw-actions'tan gelir (<=1024px);
+          inline flexWrap masaustune de sizacagi icin bilerek yazilmadi. */}
       {isAdmin && selectedIds.size > 0 && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, padding: '10px 16px', background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.3)', borderRadius: 8 }}>
+        <div className="rw-actions" style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, padding: '10px 16px', background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.3)', borderRadius: 8 }}>
           <span style={{ fontWeight: 600, color: 'var(--primary)', fontSize: '0.85rem' }}>{selectedIds.size} selected</span>
           <button className="btn btn-primary btn-sm" onClick={() => setShowBatchEdit(true)}>Batch Edit</button>
           <button className="btn btn-danger btn-sm" onClick={() => setConfirmBatchDelete(true)}>Delete Selected</button>
@@ -203,52 +248,95 @@ export default function DeviceListPage({ onEdit }) {
         </div>
       )}
 
+      {/* <=600px'te thead gizlendigi icin siralama ve "hepsini sec" buraya tasindi. */}
+      <div className="rw-only-sm" style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+        <select className="modern-input" style={{ flex: 1, minWidth: 0 }}
+          value={sortValue}
+          onChange={e => { const [key, dir] = e.target.value.split('|'); setSortConfig({ key, dir }); }}>
+          {/* Masaustunde Page/Version'a gore siralanip pencere daraltilirsa select bos
+              gorunuyordu; mevcut siralamayi gecici bir secenek olarak ekle. */}
+          {!SORT_OPTIONS.some(o => o.v === sortValue) && (
+            <option value={sortValue}>Sort: {sortConfig.key}{sortConfig.dir === 'asc' ? ' ▲' : ' ▼'}</option>
+          )}
+          {SORT_OPTIONS.map(o => (
+            <option key={o.v} value={o.v}>{o.label}</option>
+          ))}
+        </select>
+        {isAdmin && (
+          <button className="btn btn-ghost btn-sm" style={{ flexShrink: 0 }} onClick={toggleSelectAll}>
+            {filteredDevices.length > 0 && selectedIds.size === filteredDevices.length ? 'None' : 'All'}
+          </button>
+        )}
+      </div>
+
       <div className="chart-container no-float" style={{ padding: 0, overflow: 'hidden' }}>
-        <table className="modern-table">
+        {/* Yatay kaydirma kabin ICINDE kalir: 812x375 telefon yatayda ve iPad
+            dikeyde tablo eskiden overflow:hidden altinda kirpiliyordu. */}
+        <div className="rw-scroll-x">
+        <table className="modern-table rw-cards">
           <thead>
             <tr>
-              {isAdmin && <th style={{ width: 40, textAlign: 'center' }}><input type="checkbox" checked={filteredDevices.length > 0 && selectedIds.size === filteredDevices.length} onChange={toggleSelectAll} /></th>}
+              {isAdmin && <th className="rw-tap-cell" style={{ width: 40, textAlign: 'center' }}>
+                <label style={isTouch ? TAP_BOX : undefined}>
+                  <input type="checkbox" checked={filteredDevices.length > 0 && selectedIds.size === filteredDevices.length} onChange={toggleSelectAll} />
+                </label>
+              </th>}
               <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('status')}>Status{sortIcon('status')}</th>
               <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('name')}>Name{sortIcon('name')}</th>
               <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('ip')}>IP Address{sortIcon('ip')}</th>
-              <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('type')}>Type{sortIcon('type')}</th>
-              <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('topologyPage')}>Page{sortIcon('topologyPage')}</th>
-              <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('latency')}>Latency{sortIcon('latency')}</th>
-              <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('version')}>Version{sortIcon('version')}</th>
-              <th>Tags</th>
-              {isAdmin && <th style={{ textAlign: 'right', paddingRight: 32 }}>Actions</th>}
+              <th className="rw-hide-sm" style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('type')}>Type{sortIcon('type')}</th>
+              <th className="rw-hide-md" style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('topologyPage')}>Page{sortIcon('topologyPage')}</th>
+              <th className="rw-hide-sm" style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('latency')}>Latency{sortIcon('latency')}</th>
+              <th className="rw-hide-md" style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('version')}>Version{sortIcon('version')}</th>
+              <th className="rw-hide-md">Tags</th>
+              {/* paddingRight inline kaldigi surece App.css'in <=768px "padding:10px 8px"
+                  kurali bu hucreye islemiyordu; telefon katmaninda birak devreye girsin. */}
+              {/* Actions HIC gizlenmez: cihaz detay sayfasinda Edit/Delete yok, tek erisim
+                  yolu bu kolon. <=600px'te kart modunda kendi satirini alir (data-label=""),
+                  601-768px'te tablo yatay kaydigi icin bugunku gibi kaydirarak erisilir. */}
+              {isAdmin && <th style={{ textAlign: 'right', paddingRight: isPhone ? undefined : 32 }}>Actions</th>}
             </tr>
           </thead>
           <tbody>
             {filteredDevices.length > 0 ? filteredDevices.map(d => (
-              <tr key={d.id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/devices/${d.id}`, { state: { from: '/devices' } })}>
-                {isAdmin && <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}><input type="checkbox" checked={selectedIds.has(d.id)} onChange={() => toggleSelect(d.id)} /></td>}
-                <td><span className={`status-badge ${d.status === 'UP' ? 'status-up' : 'status-down'}`}>{d.status}</span></td>
-                <td style={{ fontWeight: 600 }}>{d.name}</td>
-                <td style={{ fontFamily: 'monospace', color: 'var(--text-muted)' }}>{d.ip}</td>
-                <td style={{ textTransform: 'capitalize' }}>{d.type}</td>
-                <td style={{ color: 'var(--text-muted)' }}>{pageName(d.topologyPage)}</td>
-                <td style={{ color: d.latency > 100 ? 'var(--danger)' : 'var(--text-muted)' }}>{d.latency > 0 ? d.latency + ' ms' : '-'}</td>
-                <td style={{ fontFamily: 'monospace', color: 'var(--text-muted)', fontSize: '0.82rem' }}>{d.version || '-'}</td>
-                <td>
+              <tr key={d.id}
+                style={{ cursor: 'pointer', ...(isTouch ? { WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none' } : {}) }}
+                onClick={() => navigate(`/devices/${d.id}`, { state: { from: '/devices' } })}>
+                {isAdmin && (
+                  <td className="rw-tap-cell" data-label="Select" style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                    <label style={isTouch ? TAP_BOX : undefined}>
+                      <input type="checkbox" checked={selectedIds.has(d.id)} onChange={() => toggleSelect(d.id)} />
+                    </label>
+                  </td>
+                )}
+                <td data-label="Status"><span className={`status-badge ${d.status === 'UP' ? 'status-up' : 'status-down'}`}>{d.status}</span></td>
+                <td data-label="Name" style={{ fontWeight: 600 }}>{d.name}</td>
+                <td data-label="IP" style={{ fontFamily: 'monospace', color: 'var(--text-muted)' }}>{d.ip}</td>
+                <td data-label="Type" className="rw-hide-sm" style={{ textTransform: 'capitalize' }}>{d.type}</td>
+                <td data-label="Page" className="rw-hide-md" style={{ color: 'var(--text-muted)' }}>{pageName(d.topologyPage)}</td>
+                <td data-label="Latency" className="rw-hide-sm" style={{ color: d.latency > 100 ? 'var(--danger)' : 'var(--text-muted)' }}>{d.latency > 0 ? d.latency + ' ms' : '-'}</td>
+                <td data-label="Version" className="rw-hide-md" style={{ fontFamily: 'monospace', color: 'var(--text-muted)', fontSize: '0.82rem' }}>{d.version || '-'}</td>
+                <td data-label="Tags" className="rw-hide-md">
                   {(d.tags || []).map(tag => (
                     <span key={tag} style={{ background: 'rgba(99,102,241,0.15)', color: 'var(--primary)', padding: '2px 8px', borderRadius: 12, fontSize: '0.7rem', marginRight: 4 }}>{tag}</span>
                   ))}
                 </td>
                 {isAdmin && (
-                  <td style={{ textAlign: 'right' }}>
+                  <td data-label="" style={{ textAlign: 'right' }}>
                     <button className="btn btn-primary btn-sm" style={{ marginRight: 8 }} onClick={(e) => { e.stopPropagation(); onEdit(d); }}>{t('edit')}</button>
                     <button className="btn btn-danger btn-sm" onClick={(e) => { e.stopPropagation(); setDeleteTarget(d); }}>{t('delete')}</button>
                   </td>
                 )}
               </tr>
             )) : (
-              <tr><td colSpan={isAdmin ? 10 : 8} style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
+              // justifyContent sadece kart modunda (display:flex) etkili, masaustunde no-op
+              <tr><td colSpan={isAdmin ? 10 : 8} style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)', justifyContent: 'center' }}>
                 {searchQuery || statusFilter !== 'all' ? t('noFilterResult') : t('noDevicesYet')}
               </td></tr>
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       {deleteTarget && (
@@ -266,28 +354,29 @@ export default function DeviceListPage({ onEdit }) {
 
       {showBatchEdit && (
         <div className="modal-overlay" onClick={() => setShowBatchEdit(false)} onKeyDown={e => { if (e.key === 'Escape') setShowBatchEdit(false); }}>
-          <div className="modal-content" style={{ width: 460 }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+          <div className="modal-content rw-sheet" style={{ width: 460 }} onClick={e => e.stopPropagation()}>
+            <div className="rw-sheet-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: compact ? 0 : 20 }}>
               <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 600, color: 'var(--text-main)' }}>Batch Edit ({selectedIds.size} devices)</h2>
-              <button onClick={() => setShowBatchEdit(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '1.5rem', cursor: 'pointer' }}>&times;</button>
+              <button className="rw-tap rw-sheet-close" onClick={() => setShowBatchEdit(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '1.5rem', cursor: 'pointer' }}>&times;</button>
             </div>
+            <div className="rw-sheet-body">
             <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginBottom: 16 }}>Only filled fields will be updated. Leave blank to skip.</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div>
                 <label className="input-label" style={{ display: 'block', marginBottom: 6, color: 'var(--text-muted)' }}>SSH Username</label>
-                <input className="modern-input" value={batchForm.sshUsername} onChange={e => setBatchForm(p => ({ ...p, sshUsername: e.target.value }))} autoComplete="off" />
+                <input className="modern-input" value={batchForm.sshUsername} onChange={e => setBatchForm(p => ({ ...p, sshUsername: e.target.value }))} autoComplete="off" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
               </div>
               <div>
                 <label className="input-label" style={{ display: 'block', marginBottom: 6, color: 'var(--text-muted)' }}>SSH Password</label>
-                <input className="modern-input" type="password" value={batchForm.sshPassword} onChange={e => setBatchForm(p => ({ ...p, sshPassword: e.target.value }))} autoComplete="new-password" />
+                <input className="modern-input" type="password" value={batchForm.sshPassword} onChange={e => setBatchForm(p => ({ ...p, sshPassword: e.target.value }))} autoComplete="new-password" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
               </div>
               <div>
                 <label className="input-label" style={{ display: 'block', marginBottom: 6, color: 'var(--text-muted)' }}>SNMP Community</label>
-                <input className="modern-input" value={batchForm.snmpCommunity} onChange={e => setBatchForm(p => ({ ...p, snmpCommunity: e.target.value }))} />
+                <input className="modern-input" value={batchForm.snmpCommunity} onChange={e => setBatchForm(p => ({ ...p, snmpCommunity: e.target.value }))} autoCapitalize="none" autoCorrect="off" spellCheck={false} />
               </div>
               <div>
                 <label className="input-label" style={{ display: 'block', marginBottom: 6, color: 'var(--text-muted)' }}>Tags (comma-separated)</label>
-                <input className="modern-input" value={batchForm.tags} onChange={e => setBatchForm(p => ({ ...p, tags: e.target.value }))} placeholder="core, datacenter" />
+                <input className="modern-input" value={batchForm.tags} onChange={e => setBatchForm(p => ({ ...p, tags: e.target.value }))} placeholder="core, datacenter" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
               </div>
               <div>
                 <label className="input-label" style={{ display: 'block', marginBottom: 6, color: 'var(--text-muted)' }}>Topology Page</label>
@@ -307,19 +396,20 @@ export default function DeviceListPage({ onEdit }) {
                 </select>
               </div>
               {batchForm.ipSlaEnabled !== 'off' && (
-                <div className="grid-2col">
+                <div className="grid-2col rw-stack">
                   <div>
                     <label className="input-label" style={{ display: 'block', marginBottom: 6, color: 'var(--text-muted)' }}>{t('ipSlaOkLabel')}</label>
-                    <input className="modern-input" value={batchForm.ipSlaOkLabel} onChange={e => setBatchForm(p => ({ ...p, ipSlaOkLabel: e.target.value }))} placeholder="MD" maxLength={12} autoComplete="off" />
+                    <input className="modern-input" value={batchForm.ipSlaOkLabel} onChange={e => setBatchForm(p => ({ ...p, ipSlaOkLabel: e.target.value }))} placeholder="MD" maxLength={12} autoComplete="off" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
                   </div>
                   <div>
                     <label className="input-label" style={{ display: 'block', marginBottom: 6, color: 'var(--text-muted)' }}>{t('ipSlaFailLabel')}</label>
-                    <input className="modern-input" value={batchForm.ipSlaFailLabel} onChange={e => setBatchForm(p => ({ ...p, ipSlaFailLabel: e.target.value }))} placeholder="GSM" maxLength={12} autoComplete="off" />
+                    <input className="modern-input" value={batchForm.ipSlaFailLabel} onChange={e => setBatchForm(p => ({ ...p, ipSlaFailLabel: e.target.value }))} placeholder="GSM" maxLength={12} autoComplete="off" autoCapitalize="none" autoCorrect="off" spellCheck={false} enterKeyHint="done" />
                   </div>
                 </div>
               )}
             </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 24 }}>
+            </div>
+            <div className="rw-sheet-foot" style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: compact ? 0 : 24 }}>
               <button className="btn btn-ghost" onClick={() => setShowBatchEdit(false)}>{t('cancel')}</button>
               <button className="btn btn-primary" onClick={handleBatchSubmit}>Apply Changes</button>
             </div>
@@ -333,12 +423,12 @@ export default function DeviceListPage({ onEdit }) {
       {showDownloadMenu && (
         <div className="modal-overlay" onClick={() => !detailedLoading && setShowDownloadMenu(false)}
           onKeyDown={e => { if (e.key === 'Escape' && !detailedLoading) setShowDownloadMenu(false); }}>
-          <div className="modal-content" style={{ width: 420 }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+          <div className="modal-content rw-sheet" style={{ width: 420 }} onClick={e => e.stopPropagation()}>
+            <div className="rw-sheet-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: compact ? 0 : 20 }}>
               <h2 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 600, color: 'var(--text-main)' }}>{t('downloadTitle')}</h2>
-              <button onClick={() => !detailedLoading && setShowDownloadMenu(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '1.5rem', cursor: 'pointer' }}>&times;</button>
+              <button className="rw-tap rw-sheet-close" onClick={() => !detailedLoading && setShowDownloadMenu(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '1.5rem', cursor: 'pointer' }}>&times;</button>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div className="rw-sheet-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <button className="btn btn-ghost" onClick={handleExportCSV} disabled={detailedLoading}
                 style={{ textAlign: 'left', padding: '14px 16px', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
                 <span style={{ fontWeight: 600 }}>📄 {t('downloadSummary')}</span>

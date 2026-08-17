@@ -1,6 +1,7 @@
 import { useState, useRef, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
+import { useViewport } from '../hooks/useViewport';
 import { showToast } from '../Toast';
 import { t } from '../i18n';
 
@@ -29,6 +30,10 @@ const csvCell = (v) => String(v ?? '').replace(/[",\r\n]/g, ' ').trim();
 export default function FindDeviceModal({ onClose }) {
   const { authFetch } = useAuth();
   const { topoTabs } = useApp();
+  // "dar govde" = telefon VEYA kisa ekran. responsive.css'teki
+  // (max-width:768px),(max-height:500px) sorgusuyla birebir ayni kosul.
+  const { isPhone, isShort, isTouch } = useViewport();
+  const compact = isPhone || isShort;
   const [ipText, setIpText] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -121,14 +126,30 @@ export default function FindDeviceModal({ onClose }) {
     URL.revokeObjectURL(url);
   };
 
+  // Telefonda noktali IP'leri elle yazmak iskence — panodaki listeyi tek dokunusla ekle.
+  const pasteIps = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (!text || !text.trim()) { showToast('Clipboard is empty', 'error'); return; }
+      setIpText(prev => (prev.trim() ? prev.replace(/\s+$/, '') + '\n' + text : text));
+    } catch {
+      showToast('Clipboard is not available — paste into the box manually', 'error');
+    }
+  };
+
   return (
     <div className="modal-overlay" onClick={onClose} onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
-      <div className="modal-content" style={{ width: 640, maxHeight: '85vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 600, color: 'var(--text-main)' }}>🔍 {t('findDevice')}</h2>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '1.5rem', cursor: 'pointer' }}>&times;</button>
+      <div className={compact ? 'modal-content rw-sheet' : 'modal-content'} style={{ width: 640, maxHeight: '85dvh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
+        <div className={compact ? 'rw-sheet-head' : undefined} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: compact ? 0 : 20 }}>
+          <h2 style={{ margin: 0, fontSize: compact ? '1rem' : '1.25rem', fontWeight: 600, color: 'var(--text-main)' }}>🔍 {t('findDevice')}</h2>
+          {/* rw-tap SADECE (pointer:coarse) altinda calisir -> masaustunde tamamen etkisiz,
+              ama compact olmayan dokunmatik tablette (820x1180, 1024x768) 44x44 verir. */}
+          <button onClick={onClose} className={compact ? 'rw-sheet-close' : 'rw-tap'} aria-label={t('cancel')}
+            style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '1.5rem', cursor: 'pointer' }}>&times;</button>
         </div>
 
+        {/* Tek kaydirma bolgesi: baslik ve alt bar dar govdede yapisik kalir. */}
+        <div className={compact ? 'rw-sheet-body' : undefined}>
         <div style={{ background: 'rgba(56,189,248,0.08)', border: '1px solid rgba(56,189,248,0.2)', borderRadius: 8, padding: 12, marginBottom: 16, fontSize: '0.8rem', color: 'var(--text-muted)' }}>
           {t('findDeviceHint')}
         </div>
@@ -136,8 +157,16 @@ export default function FindDeviceModal({ onClose }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 16 }}>
           <div>
             <label className="input-label" style={{ display: 'block', marginBottom: 6, color: 'var(--text-muted)' }}>{t('findIpsLabel')}</label>
+            {/* Dokunmatikte panodan yapistirma dugmesi — masaustunde hic basilmaz. */}
+            {isTouch && (
+              <button type="button" className="btn btn-ghost btn-sm" onClick={pasteIps}
+                style={{ width: '100%', marginBottom: 8 }}>
+                📋 Paste IP list from clipboard
+              </button>
+            )}
             <textarea className="modern-input" value={ipText} onChange={e => setIpText(e.target.value)} rows={5}
               placeholder={'10.11.3.126\n10.11.8.126\n10.11.13.126'}
+              autoCapitalize="none" autoCorrect="off" spellCheck={false}
               style={{ width: '100%', fontFamily: 'monospace', fontSize: '0.78rem', resize: 'vertical' }} />
             <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 6 }}>
               {t('findIpsHint')} — {parsed.ips.length} IP
@@ -147,17 +176,20 @@ export default function FindDeviceModal({ onClose }) {
           <div className="grid-2col">
             <div>
               <label className="input-label" style={{ display: 'block', marginBottom: 6, color: 'var(--text-muted)' }}>{t('sshUser')}</label>
-              <input className="modern-input" value={username} onChange={e => setUsername(e.target.value)} autoComplete="off" />
+              <input className="modern-input" value={username} onChange={e => setUsername(e.target.value)} autoComplete="off"
+                autoCapitalize="none" autoCorrect="off" spellCheck={false} />
             </div>
             <div>
               <label className="input-label" style={{ display: 'block', marginBottom: 6, color: 'var(--text-muted)' }}>{t('sshPassword')}</label>
-              <input className="modern-input" type="password" value={password} onChange={e => setPassword(e.target.value)} autoComplete="new-password" />
+              <input className="modern-input" type="password" value={password} onChange={e => setPassword(e.target.value)} autoComplete="new-password"
+                autoCapitalize="none" autoCorrect="off" spellCheck={false} />
             </div>
           </div>
           <div className="grid-2col">
             <div>
               <label className="input-label" style={{ display: 'block', marginBottom: 6, color: 'var(--text-muted)' }}>{t('snmpCommunity')}</label>
-              <input className="modern-input" value={snmpCommunity} onChange={e => setSnmpCommunity(e.target.value)} autoComplete="off" placeholder="public" />
+              <input className="modern-input" value={snmpCommunity} onChange={e => setSnmpCommunity(e.target.value)} autoComplete="off" placeholder="public"
+                autoCapitalize="none" autoCorrect="off" spellCheck={false} enterKeyHint="done" />
             </div>
             <div>
               <label className="input-label" style={{ display: 'block', marginBottom: 6, color: 'var(--text-muted)' }}>{t('deviceType')}</label>
@@ -183,7 +215,7 @@ export default function FindDeviceModal({ onClose }) {
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 16 }}>
+        <div className={compact ? 'rw-actions' : undefined} style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: compact ? 'wrap' : undefined, marginBottom: 16 }}>
           <button className="btn btn-primary" onClick={() => runDiscovery(parsed.ips, true)} disabled={running || parsed.ips.length === 0}>
             {running ? t('findRunning') : t('findRun')}
           </button>
@@ -206,32 +238,39 @@ export default function FindDeviceModal({ onClose }) {
         </div>
 
         {results.length > 0 && (
-          <div style={{ maxHeight: 240, overflow: 'auto', border: '1px solid var(--border-color)', borderRadius: 8, marginBottom: 16 }}>
-            <table className="modern-table" style={{ fontSize: '0.75rem' }}>
+          /* Dar govdede kendi maxHeight'ini birakir: ic ice 3 kaydirma bolgesi yerine
+             tek kaydirma (rw-sheet-body). <=600px'te tablo karta doner. */
+          <div className={compact ? 'rw-scroll-x' : undefined}
+            style={compact
+              ? { border: '1px solid var(--border-color)', borderRadius: 8, marginBottom: 16, padding: 8 }
+              : { maxHeight: 240, overflow: 'auto', border: '1px solid var(--border-color)', borderRadius: 8, marginBottom: 16 }}>
+            <table className={isPhone ? 'modern-table rw-cards' : 'modern-table'} style={{ fontSize: '0.75rem' }}>
               <thead>
-                <tr>{['', 'IP', 'Name', 'Type', 'Model', 'Detail'].map(h => <th key={h} style={{ padding: '6px 10px' }}>{h}</th>)}</tr>
+                <tr>{(isPhone ? ['Status', 'IP', 'Name', 'Detail'] : ['', 'IP', 'Name', 'Type', 'Model', 'Detail'])
+                  .map(h => <th key={h} style={{ padding: isPhone ? undefined : '6px 10px' }}>{h}</th>)}</tr>
               </thead>
               <tbody>
                 {results.map(r => (
                   <tr key={r.ip}>
-                    <td style={{ padding: '4px 10px' }}>
+                    <td data-label="Status" style={{ padding: isPhone ? undefined : '4px 10px' }}>
                       {r.status === 'pending'
                         ? <span style={{ color: 'var(--text-muted)' }}>⏳</span>
                         : <span className={`status-badge ${r.status === 'ok' ? 'status-up' : 'status-down'}`}>{r.status === 'ok' ? 'OK' : 'FAIL'}</span>}
                     </td>
-                    <td style={{ padding: '4px 10px', fontFamily: 'monospace' }}>{r.ip}</td>
-                    <td style={{ padding: '4px 10px' }}>{r.name || '-'}</td>
-                    <td style={{ padding: '4px 10px' }}>{r.status === 'ok' ? effectiveType(r) : '-'}</td>
-                    <td style={{ padding: '4px 10px' }}>{r.model || '-'}</td>
-                    <td style={{ padding: '4px 10px', color: 'var(--text-muted)' }}>{r.error || r.vendor || ''}</td>
+                    <td data-label="IP" style={{ padding: isPhone ? undefined : '4px 10px', fontFamily: 'monospace' }}>{r.ip}</td>
+                    <td data-label="Name" style={{ padding: isPhone ? undefined : '4px 10px' }}>{r.name || '-'}</td>
+                    {!isPhone && <td data-label="Type" style={{ padding: '4px 10px' }}>{r.status === 'ok' ? effectiveType(r) : '-'}</td>}
+                    {!isPhone && <td data-label="Model" style={{ padding: '4px 10px' }}>{r.model || '-'}</td>}
+                    <td data-label="Detail" style={{ padding: isPhone ? undefined : '4px 10px', color: 'var(--text-muted)' }}>{r.error || r.vendor || ''}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         )}
+        </div>
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+        <div className={compact ? 'rw-sheet-foot' : undefined} style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
           <button className="btn btn-ghost" onClick={onClose}>{t('cancel')}</button>
           <button className="btn btn-primary" onClick={downloadFoundCsv} disabled={foundCount === 0}>
             ⬇ {t('findDownload')} ({foundCount})

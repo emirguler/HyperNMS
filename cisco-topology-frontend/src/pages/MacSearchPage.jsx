@@ -1,12 +1,17 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useViewport } from '../hooks/useViewport';
 
 // Önbellekte MAC'ler 12 hane ham tutulur → aa:bb:cc:dd:ee:ff olarak göster
 const fmtMac = (m) => String(m || '').replace(/(.{2})(?=.)/g, '$1:');
 
+// Telefon kartinda kullanilan kucuk basliklar
+const CARD_LABEL = { color: 'var(--text-muted)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '.5px', fontWeight: 600 };
+
 export default function MacSearchPage() {
   const { authFetch } = useAuth();
+  const { isPhone, isShort, isTouch } = useViewport();
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
@@ -55,23 +60,33 @@ export default function MacSearchPage() {
 
   return (
     <div className="list-container" style={{ maxWidth: 900, margin: '0 auto' }}>
-      <div style={{ textAlign: 'center', marginBottom: 40, marginTop: 20 }}>
-        <h1 style={{ fontSize: '1.8rem', fontWeight: 700, color: 'var(--text-main)', marginBottom: 8 }}>
+      {/* Yatayda ~180px'lik kahraman blogu ekranin yarisini yiyordu */}
+      <div style={{ textAlign: 'center', marginBottom: isShort ? 12 : (isPhone ? 20 : 40), marginTop: isShort ? 4 : 20 }}>
+        <h1 style={{ fontSize: isShort ? '1.2rem' : '1.8rem', fontWeight: 700, color: 'var(--text-main)', marginBottom: 8 }}>
           MAC Address Search
         </h1>
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+        <p className="rw-hide-short" style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
           Find which switch port a device is connected to by IP or MAC address
         </p>
       </div>
 
-      <form onSubmit={handleSearch} style={{ display: 'flex', gap: 12, marginBottom: 30, maxWidth: 600, margin: '0 auto 30px' }}>
+      {/* Satir kaydirma .rw-actions'tan gelir (<=1024px); inline flexWrap masaustune de sizardi. */}
+      <form className="rw-actions" onSubmit={handleSearch} style={{ display: 'flex', gap: 12, marginBottom: 30, maxWidth: 600, margin: '0 auto 30px' }}>
         <input
           className="modern-input"
+          // type="search" SADECE dokunmatikte: masaustu tarayicilari bu tipe kendi
+          // temizle (x) dugmesini ve searchfield gorunumunu ekliyor.
+          type={isTouch ? 'search' : undefined}
+          enterKeyHint="search"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
           value={query}
           onChange={e => setQuery(e.target.value)}
           placeholder="Enter IP (10.41.0.50) or MAC (aa:bb:cc:dd:ee:ff)"
-          style={{ flex: 1, fontSize: '1rem', padding: '12px 16px' }}
-          autoFocus
+          style={{ flex: 1, minWidth: 0, fontSize: '1rem', padding: '12px 16px' }}
+          // Dokunmatikte odaklanma yazilim klavyesini aciyor ve sonucu ekrandan siliyor
+          autoFocus={!isTouch}
         />
         <button
           className="btn btn-primary"
@@ -121,7 +136,7 @@ export default function MacSearchPage() {
                   className="btn btn-ghost btn-sm"
                   onClick={() => doSearch(true)}
                   disabled={loading}
-                  style={{ fontSize: '0.75rem', padding: '4px 12px', whiteSpace: 'nowrap' }}
+                  style={{ fontSize: isTouch ? '0.85rem' : '0.75rem', padding: isTouch ? '10px 16px' : '4px 12px', whiteSpace: 'nowrap' }}
                 >
                   🔄 Live Search
                 </button>
@@ -130,24 +145,60 @@ export default function MacSearchPage() {
           )}
 
           {result.results.length > 0 ? (
-            <div className="chart-container no-float" style={{ padding: 0, overflow: 'hidden' }}>
+            <>
+            {/* Telefonda cevabi one cikar: aranan sey zaten "hangi switch, hangi port". */}
+            <div className="rw-only-sm" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {result.results.map((r, i) => (
+                <div key={i}
+                  onClick={() => navigate(`/devices/${r.switchId}`, { state: { from: '/mac-search' } })}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer',
+                    background: 'var(--bg-card)', border: '1px solid var(--border-color)',
+                    borderRadius: 'var(--radius-lg)', padding: 14,
+                    WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none'
+                  }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={CARD_LABEL}>Switch</div>
+                    <div className="rw-truncate" style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--text-main)' }}>{r.switchName}</div>
+                    <div className="rw-truncate" style={{ fontFamily: 'monospace', fontSize: '0.8rem', color: 'var(--text-muted)' }}>{r.switchIp}</div>
+                    <div style={{ ...CARD_LABEL, marginTop: 10 }}>Port</div>
+                    <div style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '1.3rem', color: 'var(--primary)' }}>{r.port}</div>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
+                      <span style={{ background: 'rgba(99,102,241,0.15)', color: 'var(--primary)', padding: '4px 12px', borderRadius: 12, fontSize: '0.8rem' }}>VLAN {r.vlan}</span>
+                      <span style={{
+                        background: r.type === 'access' ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)',
+                        color: r.type === 'access' ? 'var(--success)' : '#f59e0b',
+                        padding: '4px 12px', borderRadius: 12, fontSize: '0.8rem', fontWeight: 500
+                      }}>{r.type}</span>
+                    </div>
+                  </div>
+                  <span aria-hidden="true" style={{ flexShrink: 0, color: 'var(--text-muted)', fontSize: '1.5rem', lineHeight: 1 }}>›</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Tablo tablet ve ustunde kalir; MAC/IP/Type dar ekranda dusulur. */}
+            <div className="chart-container no-float rw-hide-sm" style={{ padding: 0, overflow: 'hidden' }}>
+              <div className="rw-scroll-x">
               <table className="modern-table">
                 <thead>
                   <tr>
-                    <th>MAC</th>
+                    <th className="rw-hide-md">MAC</th>
                     <th>Switch</th>
-                    <th>IP</th>
+                    <th className="rw-hide-md">IP</th>
                     <th>Port</th>
                     <th>VLAN</th>
-                    <th>Type</th>
+                    <th className="rw-hide-md">Type</th>
                   </tr>
                 </thead>
                 <tbody>
                   {result.results.map((r, i) => (
-                    <tr key={i} style={{ cursor: 'pointer' }} onClick={() => navigate(`/devices/${r.switchId}`, { state: { from: '/mac-search' } })}>
-                      <td style={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{fmtMac(r.mac)}</td>
+                    <tr key={i}
+                      style={{ cursor: 'pointer', ...(isTouch ? { WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none' } : {}) }}
+                      onClick={() => navigate(`/devices/${r.switchId}`, { state: { from: '/mac-search' } })}>
+                      <td className="rw-hide-md" style={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{fmtMac(r.mac)}</td>
                       <td style={{ fontWeight: 600 }}>{r.switchName}</td>
-                      <td style={{ fontFamily: 'monospace', color: 'var(--text-muted)' }}>{r.switchIp}</td>
+                      <td className="rw-hide-md" style={{ fontFamily: 'monospace', color: 'var(--text-muted)' }}>{r.switchIp}</td>
                       <td style={{ fontFamily: 'monospace', fontWeight: 600, color: 'var(--primary)' }}>{r.port}</td>
                       <td>
                         <span style={{
@@ -157,7 +208,7 @@ export default function MacSearchPage() {
                           {r.vlan}
                         </span>
                       </td>
-                      <td>
+                      <td className="rw-hide-md">
                         <span style={{
                           background: r.type === 'access' ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)',
                           color: r.type === 'access' ? 'var(--success)' : '#f59e0b',
@@ -170,7 +221,9 @@ export default function MacSearchPage() {
                   ))}
                 </tbody>
               </table>
+              </div>
             </div>
+            </>
           ) : (
             <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
               <div style={{ fontSize: '2rem', marginBottom: 12 }}>🔍</div>

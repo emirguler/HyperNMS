@@ -1,5 +1,6 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useId } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useViewport } from '../hooks/useViewport';
 import PingIcon from './PingIcon';
 import PlayStopButton from './PlayStopButton';
 import { t } from '../i18n';
@@ -21,12 +22,18 @@ const STATUS_META = {
 // ip: başlangıç IP'si; lockIp: true ise IP alanı düzenlenemez (cihaz bazlı ping)
 export default function PingModal({ ip: initialIp = '', lockIp = false, onClose }) {
   const { authFetch } = useAuth();
+  // sheet: responsive.css'teki "dar govde" sorgusunun birebir karsiligi
+  // -> (max-width: 768px) VEYA (max-height: 500px). Bu durumda .rw-sheet devrede.
+  const { isPhone, isShort, isTouch } = useViewport();
+  const sheet = isPhone || isShort;
+  const contId = useId(); // sürekli-ping anahtarının etiketiyle eşleşmesi için
   const [ip, setIp] = useState(initialIp);
   const [running, setRunning] = useState(false);
   const [results, setResults] = useState([]); // [{ seq, status, latency }] — sürekli modda son MAX_DISPLAY tutulur
   const [continuous, setContinuous] = useState(() => localStorage.getItem('ping-continuous') === '1'); // sürekli ping (ping -t gibi)
   const [stats, setStats] = useState(EMPTY_STATS); // kümülatif: tüm çalışmayı kapsar (listeden bağımsız)
   const listRef = useRef(null); // otomatik en-alta kaydırma için
+  const bodyRef = useRef(null); // alt sayfa modunda TEK kaydırma bölgesi burasıdır
   const genRef = useRef(0); // çalışma nesli — her yeni runPing öncekini iptal eder (StrictMode çift-çağrı + modal kapanışı)
   const abortRef = useRef(null); // devam eden /ping isteğini iptal etmek için
 
@@ -39,8 +46,14 @@ export default function PingModal({ ip: initialIp = '', lockIp = false, onClose 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Yeni sonuç geldikçe listeyi en alta kaydır (sürekli modda akışı takip et)
-  useEffect(() => { const el = listRef.current; if (el) el.scrollTop = el.scrollHeight; }, [results]);
+  // Yeni sonuç geldikçe akışı takip et. Masaüstünde iç liste kayar; alt sayfa
+  // modunda iç liste kaymaz (maxHeight yok) ve asıl kaydırma .rw-sheet-body'dedir.
+  useEffect(() => {
+    const box = listRef.current;
+    if (box && box.scrollHeight > box.clientHeight) box.scrollTop = box.scrollHeight;
+    const body = bodyRef.current;
+    if (body && body.scrollHeight > body.clientHeight) body.scrollTop = body.scrollHeight;
+  }, [results]);
 
   // Play/Stop tek buton: çalışırken durdur → nesli artır (döngü durur) + isteği iptal et + takılı ⏳ satırını temizle
   const stop = () => {
@@ -90,58 +103,83 @@ export default function PingModal({ ip: initialIp = '', lockIp = false, onClose 
 
   return (
     <div className="modal-overlay" onClick={() => onClose()} onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
-      <div className="modal-content" style={{ width: 420 }} onClick={e => e.stopPropagation()}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: 8 }}><PingIcon size={20} /> {t('pingTool')}</h2>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '1.5rem', cursor: 'pointer' }}>&times;</button>
+      {/* .rw-sheet masaüstünde tanımsızdır (yalnızca dar gövde media query'sinde var),
+          bu yüzden sınıfı koşulsuz vermek masaüstünü etkilemez. DOM sırası masaüstü
+          sırasıdır; telefonda sıralamayı inline `order` yapar (blok düzende yok sayılır). */}
+      <div className="modal-content rw-sheet" style={{ width: 420 }} onClick={e => e.stopPropagation()}>
+        <div className="rw-sheet-head"
+          style={sheet ? undefined : { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+          <h2 style={{ margin: 0, fontSize: sheet ? '1rem' : '1.2rem', fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: 8 }}><PingIcon size={20} /> {t('pingTool')}</h2>
+          <button onClick={onClose} className="rw-sheet-close rw-tap" aria-label="Close"
+            style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '1.5rem', cursor: 'pointer' }}>&times;</button>
         </div>
 
-        <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
-          {lockIp ? (
-            <div className="modern-input" style={{ flex: 1, fontFamily: 'monospace', display: 'flex', alignItems: 'center', color: 'var(--text-muted)' }}>{ip}</div>
-          ) : (
-            <input className="modern-input" style={{ flex: 1, fontFamily: 'monospace' }} value={ip}
-              onChange={e => setIp(e.target.value)} placeholder="10.0.0.1" autoComplete="off"
-              onKeyDown={e => { if (e.key === 'Enter') runPing(); }} autoFocus />
+        {/* Alt bar: telefon/kısa ekranda ekranın altına yapışır, böylece sonuçlar
+            akarken IP alanı, başlat/durdur ve sürekli anahtarı hep parmak altında kalır. */}
+        <div className="rw-sheet-foot" style={sheet ? { order: 2 } : undefined}>
+          <div style={sheet
+            ? { display: 'flex', gap: 10, flex: '1 1 auto', minWidth: 0 }
+            : { display: 'flex', gap: 10, marginBottom: 16 }}>
+            {lockIp ? (
+              <div className="modern-input" style={{ flex: 1, minWidth: 0, fontFamily: 'monospace', display: 'flex', alignItems: 'center', color: 'var(--text-muted)' }}>{ip}</div>
+            ) : (
+              <input className="modern-input" style={{ flex: 1, minWidth: 0, fontFamily: 'monospace' }} value={ip}
+                onChange={e => setIp(e.target.value)} placeholder="10.0.0.1" autoComplete="off"
+                inputMode="decimal" autoCapitalize="none" autoCorrect="off" spellCheck={false} enterKeyHint="go"
+                onKeyDown={e => { if (e.key === 'Enter') runPing(); }}
+                /* Dokunmatikte autoFocus yok: açılışta klavye fırlar, yatay telefonda
+                   modalin tamamini kapatir ve iOS sayfayi zoomlar. */
+                autoFocus={!isTouch} />
+            )}
+            <PlayStopButton running={running} onStart={runPing} onStop={stop} disabled={!valid} />
+          </div>
+
+          <div style={sheet
+            ? { display: 'flex', alignItems: 'center', gap: 10, flex: '0 0 auto' }
+            : { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, marginTop: -4 }}>
+            <label className="toggle-switch" style={{ flexShrink: 0, opacity: running ? 0.5 : 1 }}>
+              <input id={contId} type="checkbox" checked={continuous} disabled={running}
+                onChange={e => { setContinuous(e.target.checked); localStorage.setItem('ping-continuous', e.target.checked ? '1' : '0'); }} />
+              <span className="toggle-slider" />
+            </label>
+            {/* span -> label: yazıya dokunmak da anahtarı çevirir (dokunmatikte satırın tamamı hedef) */}
+            <label htmlFor={contId}
+              style={isTouch
+                ? { fontSize: '0.85rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', alignSelf: 'stretch' }
+                : { fontSize: '0.85rem', color: 'var(--text-muted)' }}>{t('pingContinuous')}</label>
+          </div>
+        </div>
+
+        <div className="rw-sheet-body" ref={bodyRef} style={sheet ? { order: 1 } : undefined}>
+          {stats.sent > 0 && (
+            <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 10 }}>
+              <span>{t('pingSent')}: <b style={{ color: 'var(--text-main)' }}>{stats.sent}</b></span>
+              <span>{t('pingRecv')}: <b style={{ color: 'var(--success)' }}>{stats.ok}</b></span>
+              <span>{t('pingLoss')}: <b style={{ color: (stats.sent - stats.ok) > 0 ? 'var(--danger)' : 'var(--text-main)' }}>{Math.round((stats.sent - stats.ok) / stats.sent * 100)}%</b></span>
+              {stats.ok > 0 && <span>{t('pingAvg')}: <b style={{ color: 'var(--text-main)' }}>{Math.round(stats.sum / stats.ok)} ms</b> <span style={{ opacity: 0.7 }}>({stats.min}/{stats.max})</span></span>}
+            </div>
           )}
-          <PlayStopButton running={running} onStart={runPing} onStop={stop} disabled={!valid} />
+
+          {results.length > 0 && (
+            /* Alt sayfa modunda kendi maxHeight'ini birakir: iç içe kaydırma yerine
+               .rw-sheet-body'nin tek kaydırma bölgesi olması gerekiyor. */
+            <div ref={listRef} style={{ border: '1px solid var(--border-color)', borderRadius: 8, maxHeight: sheet ? 'none' : 300, overflowY: sheet ? 'hidden' : 'auto', overflowX: 'hidden' }}>
+              {results.map(r => {
+                const meta = STATUS_META[r.status];
+                return (
+                  <div key={r.seq} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', borderBottom: '1px solid rgba(255,255,255,0.05)', fontSize: '0.85rem' }}>
+                    <span style={{ color: 'var(--text-muted)', width: 44 }}>#{r.seq}</span>
+                    {r.status === 'pending' ? (
+                      <span style={{ color: 'var(--text-muted)' }}>⏳ {t('pingRunning')}</span>
+                    ) : (
+                      <span style={{ color: meta.color, fontWeight: 500 }}>{meta.icon} {meta.label(r)}</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, marginTop: -4 }}>
-          <label className="toggle-switch" style={{ flexShrink: 0, opacity: running ? 0.5 : 1 }}>
-            <input type="checkbox" checked={continuous} disabled={running}
-              onChange={e => { setContinuous(e.target.checked); localStorage.setItem('ping-continuous', e.target.checked ? '1' : '0'); }} />
-            <span className="toggle-slider" />
-          </label>
-          <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{t('pingContinuous')}</span>
-        </div>
-
-        {stats.sent > 0 && (
-          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 10 }}>
-            <span>{t('pingSent')}: <b style={{ color: 'var(--text-main)' }}>{stats.sent}</b></span>
-            <span>{t('pingRecv')}: <b style={{ color: 'var(--success)' }}>{stats.ok}</b></span>
-            <span>{t('pingLoss')}: <b style={{ color: (stats.sent - stats.ok) > 0 ? 'var(--danger)' : 'var(--text-main)' }}>{Math.round((stats.sent - stats.ok) / stats.sent * 100)}%</b></span>
-            {stats.ok > 0 && <span>{t('pingAvg')}: <b style={{ color: 'var(--text-main)' }}>{Math.round(stats.sum / stats.ok)} ms</b> <span style={{ opacity: 0.7 }}>({stats.min}/{stats.max})</span></span>}
-          </div>
-        )}
-
-        {results.length > 0 && (
-          <div ref={listRef} style={{ border: '1px solid var(--border-color)', borderRadius: 8, maxHeight: 300, overflowY: 'auto', overflowX: 'hidden' }}>
-            {results.map(r => {
-              const meta = STATUS_META[r.status];
-              return (
-                <div key={r.seq} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', borderBottom: '1px solid rgba(255,255,255,0.05)', fontSize: '0.85rem' }}>
-                  <span style={{ color: 'var(--text-muted)', width: 44 }}>#{r.seq}</span>
-                  {r.status === 'pending' ? (
-                    <span style={{ color: 'var(--text-muted)' }}>⏳ {t('pingRunning')}</span>
-                  ) : (
-                    <span style={{ color: meta.color, fontWeight: 500 }}>{meta.icon} {meta.label(r)}</span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
       </div>
     </div>
   );

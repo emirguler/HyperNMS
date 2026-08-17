@@ -4,6 +4,31 @@ import { API_BASE, WS_BASE } from '../config';
 
 const AppContext = createContext(null);
 
+// Terminal dock yuksekligi icin sinirlar. 350px sabit varsayilan, 375px yuksekligindeki
+// bir telefon yatay goruntusunun %93'unu kapatiyordu.
+const TERM_H_DEFAULT = 350;
+const TERM_H_MIN = 120;
+
+/** Verilen (ya da mevcut) viewport'a gore izin verilen en buyuk terminal yuksekligi. */
+function maxTerminalHeight() {
+  if (typeof window === 'undefined') return TERM_H_DEFAULT;
+  return Math.max(TERM_H_MIN, Math.round(window.innerHeight * 0.8));
+}
+
+/**
+ * Topoloji anketi araligi. Dokunmatik / "veri tasarrufu" cihazlarda 4sn'lik anket
+ * saatte ~900 istek demek; hucresel baglantida pil ve kota maliyeti yuksek.
+ * @returns {number} ms
+ */
+function pollIntervalMs() {
+  try {
+    if (typeof navigator !== 'undefined' && navigator.connection && navigator.connection.saveData) return 15000;
+    if (typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+      && window.matchMedia('(pointer: coarse)').matches) return 10000;
+  } catch (e) { /* ignore */ }
+  return 4000;
+}
+
 export function AppProvider({ children }) {
   const { authFetch, isAdmin, isAuthenticated } = useAuth();
   const [rawDevices, setRawDevices] = useState([]);
@@ -17,7 +42,31 @@ export function AppProvider({ children }) {
   // SSH Sessions
   const [sshSessions, setSshSessions] = useState([]);
   const [activeSshTabId, setActiveSshTabId] = useState(null);
-  const [terminalHeight, setTerminalHeight] = useState(350);
+  // Baslangicta viewport'un yarisini gecmesin. Kisitlama YALNIZCA kisa viewport'ta
+  // (<=500px, telefon yatay / bolunmus ekran) devreye girer: yuksekligi 700px'in altinda
+  // olan bir masaustu penceresi (or. 1366x768 dizustu) eski 350px varsayilanini korumali.
+  const [terminalHeight, setTerminalHeight] = useState(() => {
+    if (typeof window === 'undefined') return TERM_H_DEFAULT;
+    if (window.innerHeight > 500) return TERM_H_DEFAULT;
+    return Math.max(TERM_H_MIN, Math.min(TERM_H_DEFAULT, Math.round(window.innerHeight * 0.5)));
+  });
+
+  // Dondurme / yeniden boyutlandirmada kaydedilmis yukseklik yeni viewport'u yutmasin:
+  // dikeyde secilen 350px, 375px yuksekligindeki yatay goruntude tum ekrani kaplıyordu.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const clamp = () => {
+      const max = maxTerminalHeight();
+      setTerminalHeight(h => (h > max ? max : h));
+    };
+    clamp();
+    window.addEventListener('resize', clamp, { passive: true });
+    window.addEventListener('orientationchange', clamp, { passive: true });
+    return () => {
+      window.removeEventListener('resize', clamp);
+      window.removeEventListener('orientationchange', clamp);
+    };
+  }, []);
 
   // Bildirimler — tek kaynak: hem zil hem dashboard bloğu bunu okur (tek WebSocket)
   const [notifications, setNotifications] = useState([]);
@@ -41,9 +90,23 @@ export function AppProvider({ children }) {
       .then(applyHistory)
       .catch(() => {});
 
-    // Canlı akış — backend restart olunca WS kopar; otomatik yeniden bağlan
+    // Canlı akış — backend restart olunca WS kopar; otomatik yeniden bağlan.
+    // MOBIL: sabit 3sn'lik döngü, sinyal kaybında/arka planda telsizi sürekli uyandırıyordu.
+    // Üstel geri çekilme (30sn tavan) + sekme gizli / çevrimdışıyken bekle, geri gelince hemen dene.
+    let retry = 0;
+
+    const scheduleReconnect = () => {
+      if (closed) return;
+      if (document.hidden || navigator.onLine === false) return; // 'wake' tetikleyecek
+      const wait = Math.min(30000, 3000 * Math.pow(2, retry));
+      retry += 1;
+      clearTimeout(reconnectTimer);
+      reconnectTimer = setTimeout(connect, wait);
+    };
+
     const connect = () => {
       ws = new WebSocket(`${WS_BASE}/ws/notifications`);
+      ws.onopen = () => { retry = 0; };
       ws.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data);
@@ -55,12 +118,29 @@ export function AppProvider({ children }) {
           }
         } catch (e) { /* ignore */ }
       };
-      ws.onclose = () => { if (!closed) reconnectTimer = setTimeout(connect, 3000); };
+      ws.onclose = () => { scheduleReconnect(); };
       ws.onerror = () => { try { ws.close(); } catch (e) { /* ignore */ } };
     };
     connect();
 
-    return () => { closed = true; clearTimeout(reconnectTimer); try { ws && ws.close(); } catch (e) { /* ignore */ } };
+    // Sekme öne gelince / ağ dönünce bekleyen geri çekilmeyi atla, hemen bağlan.
+    const wake = () => {
+      if (closed || document.hidden || navigator.onLine === false) return;
+      if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+      clearTimeout(reconnectTimer);
+      retry = 0;
+      connect();
+    };
+    window.addEventListener('online', wake);
+    document.addEventListener('visibilitychange', wake);
+
+    return () => {
+      closed = true;
+      clearTimeout(reconnectTimer);
+      window.removeEventListener('online', wake);
+      document.removeEventListener('visibilitychange', wake);
+      try { ws && ws.close(); } catch (e) { /* ignore */ }
+    };
   }, [isAuthenticated]);
 
   useEffect(() => {
@@ -128,7 +208,7 @@ export function AppProvider({ children }) {
   // Topoloji poll'ü: sekme gizliyken duraklat (arka planda gereksiz istek/render yok)
   useEffect(() => {
     let timer = null;
-    const start = () => { if (!timer) timer = setInterval(fetchData, 4000); };
+    const start = () => { if (!timer) timer = setInterval(fetchData, pollIntervalMs()); };
     const stop = () => { if (timer) { clearInterval(timer); timer = null; } };
     fetchData();
     start();

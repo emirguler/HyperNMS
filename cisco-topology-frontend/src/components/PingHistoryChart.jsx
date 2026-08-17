@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useViewport } from '../hooks/useViewport';
 import { t } from '../i18n';
 
 // Birleşik nokta şekli (backend): { t, avg, min, max, up, down }
@@ -40,11 +41,16 @@ function fmtMs(v) {
   return Math.round(v) + ' ms';
 }
 
-// X ekseni etiketi — aralığa göre tarih içerir (çok günlük görünümlerde belirsizliği önler)
-function fmtAxis(ts, range) {
+// X ekseni etiketi — aralığa göre tarih içerir (çok günlük görünümlerde belirsizliği önler).
+// compact: dar tuvalde 1W etiketi "14.08 12:00" yerine "14 12h" (~62px -> ~30px).
+function fmtAxis(ts, range, compact) {
   const d = new Date(ts);
   if (range === '1H' || range === '1D') return pad2(d.getHours()) + ':' + pad2(d.getMinutes());
-  if (range === '1W') return pad2(d.getDate()) + '.' + pad2(d.getMonth() + 1) + ' ' + pad2(d.getHours()) + ':00';
+  if (range === '1W') {
+    return compact
+      ? pad2(d.getDate()) + ' ' + pad2(d.getHours()) + 'h'
+      : pad2(d.getDate()) + '.' + pad2(d.getMonth() + 1) + ' ' + pad2(d.getHours()) + ':00';
+  }
   return pad2(d.getDate()) + '.' + pad2(d.getMonth() + 1); // 1M
 }
 
@@ -137,7 +143,14 @@ export default function PingHistoryChart({ deviceId }) {
   const containerRef = useRef(null);
   const geomRef = useRef(null);
   const reqIdRef = useRef(0);
+  const pressingRef = useRef(false); // dokunmada sadece basiliyken surukleme
   const { authFetch } = useAuth();
+  const { isPhone, isShort } = useViewport();
+  // narrow  -> baslik/aralik/KPI yeniden dizilir (telefon genisligi)
+  // compact -> tuval ic olculeri + kart yuksekligi (telefon VEYA kisa ekran)
+  // Masaustunde ikisi de false: tum cizim ve yerlesim bugunku haliyle ayni.
+  const narrow = isPhone;
+  const compact = isPhone || isShort;
 
   const fetchHistory = useCallback(async () => {
     const myId = ++reqIdRef.current;
@@ -187,7 +200,8 @@ export default function PingHistoryChart({ deviceId }) {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, W, H);
 
-    const PAD_L = 46, PAD_R = 12, PAD_T = 8;
+    // Dar tuvalde sol dolgu 46 -> 32: Y etiketleri " ms" ekini birakiyor (birim KPI'da yaziyor).
+    const PAD_L = compact ? 32 : 46, PAD_R = 12, PAD_T = 8;
     const STRIP_H = 12, XLBL_H = 16, GAP = 6;
     const chartBottom = H - STRIP_H - XLBL_H - GAP;
     const chartH = Math.max(1, chartBottom - PAD_T);
@@ -197,7 +211,9 @@ export default function PingHistoryChart({ deviceId }) {
     const tMin = tMax - rangeMs;
     const axisRange = payload?._range || range; // etiket formatı çizilen payload'ın aralığına göre
 
-    const N = Math.max(30, Math.min(320, Math.floor(chartW / 3)));
+    // Parmak ~10px genisligindedir: dar tuvalde kovalari 3px yerine 5px yaparak
+    // hedeflemeyi kolaylastir (masaustunde 3px cozunurluk aynen korunur).
+    const N = Math.max(30, Math.min(320, Math.floor(chartW / (compact ? 5 : 3))));
     const buckets = bucketize(points, tMin, tMax, N);
 
     // Y üst sınırı: P95 ile tek gecikme sıçramasının tabanı ezmesini önle (tepe KPI'da görünür)
@@ -225,16 +241,18 @@ export default function PingHistoryChart({ deviceId }) {
     for (let i = 0; i <= 4; i++) {
       const y = PAD_T + (chartH / 4) * i;
       ctx.beginPath(); ctx.moveTo(PAD_L, y); ctx.lineTo(W - PAD_R, y); ctx.stroke();
-      ctx.fillText(Math.round(yMax * (4 - i) / 4) + ' ms', PAD_L - 6, y + 3);
+      const yv = Math.round(yMax * (4 - i) / 4);
+      ctx.fillText(compact ? String(yv) : yv + ' ms', PAD_L - 6, y + 3);
     }
 
-    // X etiketleri (aralığa duyarlı; kenarları hizala, kırpma yok)
-    const nLabels = 5;
+    // X etiketleri (aralığa duyarlı; kenarları hizala, kırpma yok).
+    // Dar tuvalde etiket sayisi genislikten turetilir, yoksa ust uste binerler.
+    const nLabels = compact ? Math.max(2, Math.min(5, Math.floor(chartW / 70))) : 5;
     for (let i = 0; i < nLabels; i++) {
       const ts = tMin + (tMax - tMin) * i / (nLabels - 1);
       ctx.textAlign = i === 0 ? 'left' : i === nLabels - 1 ? 'right' : 'center';
       const x = Math.max(PAD_L, Math.min(W - PAD_R, toX(ts)));
-      ctx.fillText(fmtAxis(ts, axisRange), x, chartBottom + 12);
+      ctx.fillText(fmtAxis(ts, axisRange, compact), x, chartBottom + 12);
     }
 
     const segs = lineSegments(buckets);
@@ -298,7 +316,7 @@ export default function PingHistoryChart({ deviceId }) {
       ctx.fillStyle = state === 'down' ? C_DOWN : state === 'up' ? C_UP : C_EMPTY;
       ctx.fillRect(x0, stripY, Math.max(1, x1 - x0), STRIP_H);
     }
-  }, [payload, sizeTick, range, stats, points, rangeMs]);
+  }, [payload, sizeTick, range, stats, points, rangeMs, compact]);
 
   // Hover overlay (ayrı canvas -> mousemove taban grafiği yeniden çizmez)
   useEffect(() => {
@@ -325,17 +343,43 @@ export default function PingHistoryChart({ deviceId }) {
     }
   }, [hover, payload, sizeTick]);
 
-  const handleMouseMove = useCallback((e) => {
+  // Tek giris noktasi: fare de parmak da buradan gecer.
+  const pickBucket = useCallback((clientX) => {
     const g = geomRef.current;
-    if (!g) return;
+    if (!g || !overlayRef.current) return;
     const rect = overlayRef.current.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    if (mouseX < g.PAD_L || mouseX > g.W - g.PAD_R) { setHover(null); return; }
-    const frac = (mouseX - g.PAD_L) / g.chartW;
-    const idx = Math.max(0, Math.min(g.buckets.length - 1, Math.floor(frac * g.buckets.length)));
+    const px = clientX - rect.left;
+    if (px < g.PAD_L || px > g.W - g.PAD_R) { setHover(null); return; }
+    const frac = (px - g.PAD_L) / g.chartW;
+    let idx = Math.max(0, Math.min(g.buckets.length - 1, Math.floor(frac * g.buckets.length)));
+    // Parmak bir kovadan cok daha genis: bos kovaya denk gelirse en yakin DOLU kovaya kay.
+    // Masaustunde (compact=false) bu tolerans yok, imlec nereyi gosteriyorsa o.
+    if (compact && g.buckets[idx] && g.buckets[idx].empty) {
+      for (let d = 1; d <= 4; d++) {
+        if (g.buckets[idx - d] && !g.buckets[idx - d].empty) { idx -= d; break; }
+        if (g.buckets[idx + d] && !g.buckets[idx + d].empty) { idx += d; break; }
+      }
+    }
     setHover(idx);
+  }, [compact]);
+
+  const handlePointerDown = useCallback((e) => {
+    pressingRef.current = true;
+    pickBucket(e.clientX);
+  }, [pickBucket]);
+
+  const handlePointerMove = useCallback((e) => {
+    // Fare: hover ile takip eder. Dokunma/kalem: yalnizca basiliyken surukleme.
+    if (e.pointerType === 'mouse' || pressingRef.current) pickBucket(e.clientX);
+  }, [pickBucket]);
+
+  const handlePointerUp = useCallback(() => { pressingRef.current = false; }, []);
+
+  const handlePointerLeave = useCallback((e) => {
+    pressingRef.current = false;
+    // Dokunmatikte tooltip bir SONRAKI dokunusa kadar sabit kalir (parmak kalkinca kaybolmasin).
+    if (e.pointerType === 'mouse') setHover(null);
   }, []);
-  const handleMouseLeave = useCallback(() => setHover(null), []);
 
   // Tooltip konumu (geomRef güncel; hover değişimi zaten yeniden render tetikler)
   let tip = null;
@@ -358,46 +402,75 @@ export default function PingHistoryChart({ deviceId }) {
     { label: t('statMax'), value: fmtMs(stats.max) },
   ];
 
+  // Kart yuksekligi: sabit 400px telefon yatayda (375px) ekrandan buyuk.
+  // 88vh (=330px @375) navbar 44 + .list-container dolgusu 16 dusunce kalan 315px'i
+  // asiyordu; 78vh (=292px) sigar ve ayni sayfadaki Config/Importable kartlariyla esitlenir.
+  const cardHeight = isShort ? 'clamp(250px, 78vh, 340px)'
+    : isPhone ? 'clamp(360px, 56vh, 460px)'
+      : 400;
+
+  // Tooltip: masaustunde noktayi takip eder; dar govdede parmagin altinda kalmamasi icin
+  // grafik alaninin USTUNE sabitlenir ve kaba genislikle iki yandan kirpilir.
+  const contW = containerRef.current?.clientWidth || 300;
+  const tipStyle = !tip ? null : compact
+    ? { left: Math.max(0, Math.min(tip.x - 70, contW - 150)), top: 0, whiteSpace: 'normal', maxWidth: Math.max(140, contW - 8) }
+    : { left: Math.min(tip.x + 12, contW - 130), top: Math.max(tip.y - 52, 0), whiteSpace: 'nowrap' };
+
   return (
-    <div className="chart-container" style={{ height: 400, display: 'flex', flexDirection: 'column' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--primary)' }}>{t('pingHistory')}</h3>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontSize: '0.68rem', color: 'var(--text-muted)' }}>
+    <div className="chart-container" style={{ height: cardHeight, display: 'flex', flexDirection: 'column' }}>
+      <div style={narrow
+        ? { display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 10, marginBottom: 12 }
+        : { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+          <h3 className="rw-truncate" style={{ margin: 0, fontSize: narrow ? '1rem' : '1.1rem', color: 'var(--primary)' }}>{t('pingHistory')}</h3>
+          {/* Alt seritteki yesil/kirmizi zaten ayni bilgiyi tasiyor -> telefonda gizle. */}
+          <span className="rw-hide-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontSize: '0.68rem', color: 'var(--text-muted)' }}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><i style={{ width: 9, height: 9, borderRadius: 2, background: C_UP }} />UP</span>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><i style={{ width: 9, height: 9, borderRadius: 2, background: C_DOWN }} />DOWN</span>
           </span>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          {RANGES.map((r) => (
+        {/* Telefonda tam genislik, 44px yuksekliginde segment kontrolu. */}
+        <div style={narrow
+          ? { display: 'grid', gridTemplateColumns: `repeat(${RANGES.length}, 1fr)`, width: '100%', border: '1px solid var(--border-color)', borderRadius: 8, overflow: 'hidden' }
+          : { display: 'flex', gap: 8 }}>
+          {RANGES.map((r, i) => (
             <button key={r} onClick={() => setRange(r)} className={`nav-btn ${range === r ? 'active' : ''}`}
-              style={{ fontSize: '0.75rem', padding: '6px 12px', border: '1px solid var(--border-color)' }}>{r}</button>
+              style={narrow
+                ? { fontSize: '0.85rem', minHeight: 44, padding: '0 6px', border: 'none', borderLeft: i === 0 ? 'none' : '1px solid var(--border-color)', borderRadius: 0 }
+                : { fontSize: '0.75rem', padding: '6px 12px', border: '1px solid var(--border-color)' }}>{r}</button>
           ))}
         </div>
       </div>
 
-      <div style={{ display: 'flex', marginBottom: 12, background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)', borderRadius: 8, padding: '8px 4px' }}>
+      {/* KPI: masaustunde 5'li serit, telefonda 2 kolonlu izgara (5. karo iki kolona yayilir). */}
+      <div style={narrow
+        ? { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 1, marginBottom: 12, background: 'var(--border-color)', border: '1px solid var(--border-color)', borderRadius: 8, overflow: 'hidden' }
+        : { display: 'flex', marginBottom: 12, background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)', borderRadius: 8, padding: '8px 4px' }}>
         {tiles.map((tile, i) => (
-          <div key={i} style={{ flex: 1, textAlign: 'center', borderRight: i < tiles.length - 1 ? '1px solid var(--border-color)' : 'none' }}>
+          <div key={i} style={narrow
+            ? { background: 'var(--bg-card)', textAlign: 'center', padding: '7px 4px', minWidth: 0, gridColumn: (tiles.length % 2 === 1 && i === tiles.length - 1) ? 'span 2' : undefined }
+            : { flex: 1, textAlign: 'center', borderRight: i < tiles.length - 1 ? '1px solid var(--border-color)' : 'none' }}>
             <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3 }}>{tile.label}</div>
-            <div style={{ fontSize: '1.02rem', fontWeight: 600, color: tile.color || 'var(--text-main)' }}>{tile.value}</div>
+            <div style={{ fontSize: narrow ? '0.95rem' : '1.02rem', fontWeight: 600, color: tile.color || 'var(--text-main)' }}>{tile.value}</div>
           </div>
         ))}
       </div>
 
       <div ref={containerRef} style={{ position: 'relative', flex: 1, minHeight: 0 }}>
         <canvas ref={baseRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
-        <canvas ref={overlayRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', cursor: 'crosshair' }}
-          onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave} />
+        {/* touchAction pan-y: dikey sayfa kaydirma korunur, YATAY suruklemeyi biz aliriz. */}
+        <canvas ref={overlayRef}
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', cursor: 'crosshair', touchAction: compact ? 'pan-y' : undefined }}
+          onPointerDown={handlePointerDown} onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp} onPointerCancel={handlePointerUp} onPointerLeave={handlePointerLeave} />
         {tip && (
           <div style={{
             position: 'absolute',
-            left: Math.min(tip.x + 12, (containerRef.current?.clientWidth || 300) - 130),
-            top: Math.max(tip.y - 52, 0),
+            ...tipStyle,
             background: 'var(--bg-panel)',
             border: `1px solid ${tip.b.down > 0 && tip.b.up === 0 ? 'var(--danger)' : 'var(--primary)'}`,
             borderRadius: 8, padding: '6px 10px', boxShadow: '0 8px 20px rgba(0,0,0,0.5)',
-            pointerEvents: 'none', zIndex: 10, whiteSpace: 'nowrap'
+            pointerEvents: 'none', zIndex: 10
           }}>
             <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{fmtTip(tip.b.t + tip.b.width / 2, activeRange)}</div>
             {tip.b.avg != null ? (

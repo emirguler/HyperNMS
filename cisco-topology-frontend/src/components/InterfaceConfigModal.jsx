@@ -1,13 +1,28 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { t } from '../i18n';
+import { useViewport } from '../hooks/useViewport';
 
 // Cihaz detayı → fiziksel arayüz satırındaki "Config" butonu bunu açar.
 // Sol: arayüzün mevcut ayarları (show running-config interface <name>).
 // Sağ: mode (access/trunk) + VLAN seçimleriyle yeni ayar uygula. Hem user hem admin.
 export default function InterfaceConfigModal({ deviceId, iface, onClose }) {
   const { authFetch } = useAuth();
+  const { isPhone, isShort, isTablet, isTouch } = useViewport();
   const name = iface?.name || '';
+
+  // responsive.css'teki .rw-sheet sorgusunun birebir esi: telefon VEYA kisa ekran.
+  const sheet = isPhone || isShort;
+  // Kolonlari YALNIZCA telefonda yigiyoruz. Telefon YATAY (812x375) genis ama alcak:
+  // orada iki kolon dogru cevap, yigmak formu 2 ekran boyu uzatirdi.
+  const stack = isPhone;
+  // Tablet ama alt sayfa degil (or. 1024x768 iPad yatay): 780px'lik modal
+  // 768px yuksekligindeki ekrandan uzun kaliyordu, kaydirilabilir olsun.
+  const midTablet = isTablet && !sheet;
+  // VLAN etiketi: 1024x768 ve 820x1180 iPad alt sayfa esigine GIRMIYOR, ama orada da
+  // hover yok -> title= hic gorunmez. Kirpilmis "1234 — VOICE-B..." okunamaz kalirdi,
+  // bu yuzden kolon genisligi + satir sarma dokunmatigin TAMAMINDA aciliyor.
+  const vlanTouch = sheet || isTouch;
 
   const [output, setOutput] = useState('');
   const [outLoading, setOutLoading] = useState(true);
@@ -26,6 +41,16 @@ export default function InterfaceConfigModal({ deviceId, iface, onClose }) {
   const [save, setSave] = useState(false);
   const [applying, setApplying] = useState(false);
   const [applyMsg, setApplyMsg] = useState(null); // { ok, text }
+
+  // Arka plana dokunarak kapatma: basma VE birakma ikisi de arka plana denk gelmeli,
+  // ve dokunmatikte hic calismasin — yarim doldurulmus ayar kazara kaybolmasin.
+  const downOnBackdrop = useRef(false);
+  const handleBackdropDown = (e) => { downOnBackdrop.current = e.target === e.currentTarget; };
+  const handleBackdropClick = (e) => {
+    const onBackdrop = downOnBackdrop.current && e.target === e.currentTarget;
+    downOnBackdrop.current = false;
+    if (onBackdrop && !isTouch) onClose();
+  };
 
   const loadOutput = (fillForm = false) => {
     setOutLoading(true); setOutErr('');
@@ -79,145 +104,229 @@ export default function InterfaceConfigModal({ deviceId, iface, onClose }) {
       .finally(() => setApplying(false));
   };
 
-  const label = { fontSize: '0.78rem', color: 'var(--text-muted)', display: 'block', marginBottom: 6, marginTop: 14 };
+  const label = { fontSize: sheet ? '0.85rem' : '0.78rem', color: 'var(--text-muted)', display: 'block', marginBottom: 6, marginTop: 14 };
+
+  // Telefonda iki kolon tam genislige duser; masaustunde 320px tabanli esnek kolonlar.
+  const colStyle = stack ? { flex: '1 1 100%', minWidth: 0 } : { flex: '1 1 320px', minWidth: 280 };
+
+  // Apply butonu ve sonuc mesaji: masaustunde sag kolonun altinda, alt sayfada
+  // yapisik alt barda duruyor. Ikisi de ayni JSX'ten uretiliyor.
+  const applyBtn = (
+    <button className="btn btn-primary" onClick={apply} disabled={applying}
+      style={{ width: '100%', marginTop: sheet ? 0 : 16 }}>
+      {applying ? `⏳ ${t('ifaceApplying')}` : t('ifaceApply')}
+    </button>
+  );
+  const applyMsgBox = applyMsg ? (
+    <div style={{
+      marginTop: sheet ? 0 : 12, padding: '9px 12px', borderRadius: 8, fontSize: '0.8rem',
+      background: applyMsg.ok ? 'rgba(52,211,153,0.12)' : 'rgba(239,68,68,0.12)',
+      border: `1px solid ${applyMsg.ok ? 'rgba(52,211,153,0.35)' : 'rgba(239,68,68,0.35)'}`,
+      color: applyMsg.ok ? 'var(--success)' : 'var(--danger)'
+    }}>
+      {applyMsg.ok ? '✓' : '✕'} {applyMsg.text}
+    </div>
+  ) : null;
+
+  const currentCfg = (
+    <CurrentConfig compact={sheet} touch={isTouch} outLoading={outLoading} outErr={outErr}
+      output={output} onReload={() => loadOutput(true)} />
+  );
 
   return (
-    <div className="modal-overlay" onClick={() => onClose()} onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
-      <div className="modal-content" style={{ width: 780, maxWidth: '95vw' }} onClick={e => e.stopPropagation()}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
-          <h2 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 600, color: 'var(--text-main)' }}>
-            {t('ifaceConfigTitle')} — <span style={{ fontFamily: 'monospace', color: 'var(--primary)' }}>{name}</span>
-          </h2>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '1.5rem', cursor: 'pointer' }}>&times;</button>
-        </div>
-
-        <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>
-          {/* SOL: mevcut ayarlar */}
-          <div style={{ flex: '1 1 320px', minWidth: 280 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-              <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)' }}>{t('ifaceCurrentCfg')}</span>
-              <button className="btn btn-sm" onClick={() => loadOutput(true)} disabled={outLoading}
-                title={t('ifaceRefreshRevert')}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: '0.72rem', fontWeight: 600,
-                  padding: '4px 11px', color: 'var(--primary)', background: 'rgba(59,130,246,0.12)',
-                  border: '1px solid var(--primary)', borderRadius: 6 }}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="23 4 23 10 17 10" />
-                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-                </svg>
-                {t('ifaceReload')}
-              </button>
-            </div>
-            <pre style={{
-              margin: 0, background: '#000', color: '#e5e7eb', border: '1px solid var(--border-color)', borderRadius: 8,
-              padding: 12, fontSize: '0.78rem', fontFamily: 'monospace', minHeight: 220, maxHeight: 340, overflow: 'auto', whiteSpace: 'pre-wrap'
-            }}>
-              {outLoading ? `⏳ ${t('loading')}...` : (outErr ? `✕ ${outErr}` : (output || '—'))}
-            </pre>
-          </div>
-
-          {/* SAĞ: yeni ayar */}
-          <div style={{ flex: '1 1 320px', minWidth: 280 }}>
-            <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)' }}>{t('ifaceNewCfg')}</span>
-
-            <label style={label}>{t('ifaceMode')}</label>
-            <select className="modern-input" style={{ width: '100%' }} value={mode} onChange={e => setMode(e.target.value)}>
-              <option value="access">Access</option>
-              <option value="trunk">Trunk</option>
-            </select>
-
-            {mode === 'access' ? (
-              <>
-                <label style={label}>{t('ifaceAccessVlan')}</label>
-                <VlanPick vlans={vlans} value={accessVlan} onChange={setAccessVlan} />
-              </>
+    <div className="modal-overlay"
+      onPointerDown={handleBackdropDown}
+      onClick={handleBackdropClick}
+      onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
+      {/* Genislik masaustunde 780px kalir; responsive.css dar/kisa ekranda !important ile ezer. */}
+      <div className="modal-content rw-sheet" style={{
+        width: 780,
+        maxWidth: '95vw',
+        maxHeight: midTablet ? 'calc(100dvh - 32px)' : undefined,
+        overflowY: midTablet ? 'auto' : undefined,
+      }}>
+        <div className="rw-sheet-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: sheet ? 0 : 18 }}>
+          {/* Alt sayfada baslik tek satira kirpiliyor (.rw-sheet-head > :first-child).
+              O yuzden orada ONCE arayuz adi geliyor: kirpilan yari genel etiket olsun. */}
+          <h2 style={{ margin: 0, fontSize: sheet ? undefined : '1.15rem', fontWeight: 600, color: 'var(--text-main)' }}>
+            {sheet ? (
+              <><span style={{ fontFamily: 'monospace', color: 'var(--primary)' }}>{name}</span> — {t('ifaceConfigTitle')}</>
             ) : (
-              <>
-                <label style={label}>{t('ifaceNativeVlan')}</label>
-                <VlanPick vlans={vlans} value={nativeVlan} onChange={setNativeVlan} />
-
-                <label style={label}>{t('ifaceAllowedVlans')}</label>
-                {vlans.length ? (
-                  <div style={{ border: '1px solid var(--border-color)', borderRadius: 8, padding: '8px 10px', maxHeight: 168, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(115px, 1fr))', gap: '5px 12px' }}>
-                    {vlans.map(v => {
-                      const vid = String(v.id);
-                      const checked = allowedAll || allowedVlans.includes(vid);
-                      return (
-                        <label key={v.id} title={`${v.id} — ${v.name}`}
-                          style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.78rem', cursor: 'pointer', color: 'var(--text-main)' }}>
-                          <input type="checkbox" checked={checked}
-                            onChange={e => {
-                              if (allowedAll) { // "hepsi izinli"den açık listeye geç: tıklanan hariç hepsi işaretli kalır
-                                const all = vlans.map(x => String(x.id));
-                                setAllowedAll(false);
-                                setAllowedVlans(e.target.checked ? all : all.filter(x => x !== vid));
-                              } else {
-                                setAllowedVlans(prev => e.target.checked ? [...prev, vid] : prev.filter(x => x !== vid));
-                              }
-                            }} />
-                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.id} — {v.name}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <input className="modern-input" style={{ width: '100%' }}
-                    value={allowedVlans.join(',')}
-                    onChange={e => { setAllowedAll(false); setAllowedVlans(e.target.value.split(',').map(s => s.trim()).filter(Boolean)); }}
-                    placeholder="10,20,30" />
-                )}
-                <div style={{ fontSize: '0.68rem', color: 'var(--text-dim)', marginTop: 4 }}>{t('ifaceAllowedHint')}</div>
-              </>
+              <>{t('ifaceConfigTitle')} — <span style={{ fontFamily: 'monospace', color: 'var(--primary)' }}>{name}</span></>
             )}
+          </h2>
+          {/* rw-sheet-close/rw-tap: 44x44 dokunma hedefi (masaustunde etkisiz). */}
+          <button type="button" onClick={onClose} aria-label={t('cancel')} className="rw-sheet-close rw-tap"
+            style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '1.5rem', cursor: 'pointer', flexShrink: 0 }}>&times;</button>
+        </div>
 
-            {/* Power inline (auto/never) ve Shutdown — mod'dan bağımsız, toggle */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 18, paddingTop: 14, borderTop: '1px solid var(--border-color)' }}>
-              <div>
-                <div style={{ fontSize: '0.82rem', color: 'var(--text-main)' }}>{t('ifacePowerInline')}</div>
-                <div style={{ fontSize: '0.7rem', fontFamily: 'monospace', color: 'var(--text-muted)' }}>{powerAuto ? 'auto' : 'never'}</div>
-              </div>
-              <label className="toggle-switch" style={{ flexShrink: 0 }}>
-                <input type="checkbox" checked={powerAuto} onChange={e => setPowerAuto(e.target.checked)} />
-                <span className="toggle-slider" />
-              </label>
+        <div className="rw-sheet-body">
+          <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>
+            {/* SOL: mevcut ayarlar. Telefonda order:2 ile forma yer acar ve
+                kapali bir aciklama kutusunun ardina cekilir — Mode -> VLAN -> Apply
+                hicbir sey kaydirmadan ulasilabilir olsun diye. */}
+            <div style={{ ...colStyle, order: stack ? 2 : undefined }}>
+              {stack ? (
+                <details style={{ border: '1px solid var(--border-color)', borderRadius: 8, padding: '0 10px', background: 'rgba(255,255,255,0.02)' }}>
+                  <summary style={{ minHeight: 44, padding: '12px 2px', fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-main)', cursor: 'pointer', lineHeight: 1.4 }}>
+                    Current config
+                  </summary>
+                  <div style={{ paddingBottom: 12 }}>{currentCfg}</div>
+                </details>
+              ) : currentCfg}
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 12 }}>
-              <div>
-                <div style={{ fontSize: '0.82rem', color: 'var(--text-main)' }}>{t('ifaceShutdown')}</div>
-                <div style={{ fontSize: '0.7rem', fontFamily: 'monospace', color: shut ? 'var(--danger)' : '#facc15' }}>{shut ? 'shutdown' : 'no shutdown'}</div>
+            {/* SAĞ: yeni ayar */}
+            <div style={{ ...colStyle, order: stack ? 1 : undefined }}>
+              <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)' }}>{t('ifaceNewCfg')}</span>
+
+              <label style={label}>{t('ifaceMode')}</label>
+              <select className="modern-input" style={{ width: '100%' }} value={mode} onChange={e => setMode(e.target.value)}>
+                <option value="access">Access</option>
+                <option value="trunk">Trunk</option>
+              </select>
+
+              {mode === 'access' ? (
+                <>
+                  <label style={label}>{t('ifaceAccessVlan')}</label>
+                  <VlanPick vlans={vlans} value={accessVlan} onChange={setAccessVlan} />
+                </>
+              ) : (
+                <>
+                  <label style={label}>{t('ifaceNativeVlan')}</label>
+                  <VlanPick vlans={vlans} value={nativeVlan} onChange={setNativeVlan} />
+
+                  <label style={label}>{t('ifaceAllowedVlans')}</label>
+                  {vlans.length ? (
+                    // Alt sayfada ic ice sabit yukseklikli kaydirici OLMAZ: liste akar,
+                    // tek kaydirma bolgesi .rw-sheet-body kalir. Satirlar 44px.
+                    <div style={{
+                      border: '1px solid var(--border-color)', borderRadius: 8, padding: '8px 10px',
+                      maxHeight: sheet ? 'none' : 168, overflowY: sheet ? 'visible' : 'auto', display: 'grid',
+                      gridTemplateColumns: vlanTouch ? 'repeat(auto-fill, minmax(150px, 1fr))' : 'repeat(auto-fill, minmax(115px, 1fr))',
+                      gap: sheet ? '2px 12px' : '5px 12px'
+                    }}>
+                      {vlans.map(v => {
+                        const vid = String(v.id);
+                        const checked = allowedAll || allowedVlans.includes(vid);
+                        return (
+                          <label key={v.id} title={`${v.id} — ${v.name}`}
+                            style={sheet
+                              ? { display: 'flex', alignItems: 'center', gap: 10, minHeight: 44, padding: '2px 2px', fontSize: '0.85rem', cursor: 'pointer', color: 'var(--text-main)' }
+                              : { display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.78rem', cursor: 'pointer', color: 'var(--text-main)' }}>
+                            <input type="checkbox" checked={checked}
+                              onChange={e => {
+                                if (allowedAll) { // "hepsi izinli"den açık listeye geç: tıklanan hariç hepsi işaretli kalır
+                                  const all = vlans.map(x => String(x.id));
+                                  setAllowedAll(false);
+                                  setAllowedVlans(e.target.checked ? all : all.filter(x => x !== vid));
+                                } else {
+                                  setAllowedVlans(prev => e.target.checked ? [...prev, vid] : prev.filter(x => x !== vid));
+                                }
+                              }} />
+                            {/* Dokunmatikte title gorunmez: alt sayfada etiket kirpilmaz, sarilir. */}
+                            <span style={vlanTouch
+                              ? { whiteSpace: 'normal', overflowWrap: 'anywhere', lineHeight: 1.25 }
+                              : { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.id} — {v.name}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <input className="modern-input" style={{ width: '100%' }}
+                      value={allowedVlans.join(',')}
+                      onChange={e => { setAllowedAll(false); setAllowedVlans(e.target.value.split(',').map(s => s.trim()).filter(Boolean)); }}
+                      inputMode="numeric" autoCapitalize="none" autoCorrect="off" spellCheck={false}
+                      placeholder="10,20,30" />
+                  )}
+                  <div style={{ fontSize: '0.68rem', color: 'var(--text-dim)', marginTop: 4 }}>{t('ifaceAllowedHint')}</div>
+                </>
+              )}
+
+              {/* Power inline (auto/never) ve Shutdown — mod'dan bağımsız, toggle */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 18, paddingTop: 14, borderTop: '1px solid var(--border-color)' }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: '0.82rem', color: 'var(--text-main)' }}>{t('ifacePowerInline')}</div>
+                  <div style={{ fontSize: '0.7rem', fontFamily: 'monospace', color: 'var(--text-muted)' }}>{powerAuto ? 'auto' : 'never'}</div>
+                </div>
+                <label className="toggle-switch" style={{ flexShrink: 0 }}>
+                  <input type="checkbox" checked={powerAuto} onChange={e => setPowerAuto(e.target.checked)} />
+                  <span className="toggle-slider" />
+                </label>
               </div>
-              {/* Sağ/açık = no shutdown (sarı), sol/kapalı = shutdown (kırmızı) → checked = !shut */}
-              <label className="toggle-switch toggle-shutdown" style={{ flexShrink: 0 }}>
-                <input type="checkbox" checked={!shut} onChange={e => setShut(!e.target.checked)} />
-                <span className="toggle-slider" />
+
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 12 }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: '0.82rem', color: 'var(--text-main)' }}>{t('ifaceShutdown')}</div>
+                  <div style={{ fontSize: '0.7rem', fontFamily: 'monospace', color: shut ? 'var(--danger)' : '#facc15' }}>{shut ? 'shutdown' : 'no shutdown'}</div>
+                </div>
+                {/* Sağ/açık = no shutdown (sarı), sol/kapalı = shutdown (kırmızı) → checked = !shut */}
+                <label className="toggle-switch toggle-shutdown" style={{ flexShrink: 0 }}>
+                  <input type="checkbox" checked={!shut} onChange={e => setShut(!e.target.checked)} />
+                  <span className="toggle-slider" />
+                </label>
+              </div>
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16, cursor: 'pointer', fontSize: '0.8rem', color: 'var(--text-muted)', minHeight: isTouch ? 44 : undefined }}>
+                <input type="checkbox" checked={save} onChange={e => setSave(e.target.checked)} />
+                {t('ifaceSaveStartup')}
               </label>
+
+              {!sheet && applyBtn}
+              {!sheet && applyMsgBox}
             </div>
-
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16, cursor: 'pointer', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-              <input type="checkbox" checked={save} onChange={e => setSave(e.target.checked)} />
-              {t('ifaceSaveStartup')}
-            </label>
-
-            <button className="btn btn-primary" onClick={apply} disabled={applying}
-              style={{ width: '100%', marginTop: 16 }}>
-              {applying ? `⏳ ${t('ifaceApplying')}` : t('ifaceApply')}
-            </button>
-
-            {applyMsg && (
-              <div style={{
-                marginTop: 12, padding: '9px 12px', borderRadius: 8, fontSize: '0.8rem',
-                background: applyMsg.ok ? 'rgba(52,211,153,0.12)' : 'rgba(239,68,68,0.12)',
-                border: `1px solid ${applyMsg.ok ? 'rgba(52,211,153,0.35)' : 'rgba(239,68,68,0.35)'}`,
-                color: applyMsg.ok ? 'var(--success)' : 'var(--danger)'
-              }}>
-                {applyMsg.ok ? '✓' : '✕'} {applyMsg.text}
-              </div>
-            )}
           </div>
         </div>
+
+        {/* Alt sayfada Apply yapisik alt barda: VLAN listesi ne kadar uzarsa uzasin ulasilabilir. */}
+        {sheet && (
+          <div className="rw-sheet-foot">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%' }}>
+              {applyMsgBox}
+              {applyBtn}
+            </div>
+          </div>
+        )}
       </div>
     </div>
+  );
+}
+
+// Sol sutunun icerigi: "show running-config interface" ciktisi + yenile butonu.
+// MODUL SEVIYESINDE tanimli — bilesenin govdesinde tanimlanirsa her render'da yeni
+// bilesen tipi olur ve <pre> her guncellemede remount olup kaydirmasi sifirlanirdi.
+function CurrentConfig({ compact, touch, outLoading, outErr, output, onReload }) {
+  return (
+    <>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
+        <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)' }}>{t('ifaceCurrentCfg')}</span>
+        <button className="btn btn-sm" onClick={onReload} disabled={outLoading}
+          title={t('ifaceRefreshRevert')}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: touch ? '0.85rem' : '0.72rem', fontWeight: 600,
+            padding: '4px 11px', color: 'var(--primary)', background: 'rgba(59,130,246,0.12)',
+            border: '1px solid var(--primary)', borderRadius: 6, flexShrink: 0 }}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="23 4 23 10 17 10" />
+            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+          </svg>
+          {t('ifaceReload')}
+        </button>
+      </div>
+      {/* title= dokunmatikte hic gorunmez; "yenilemek duzenlemelerini geri alir"
+          uyarisi orada gorunur metne cevrilir. */}
+      {touch && (
+        <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginBottom: 8, lineHeight: 1.35 }}>
+          {t('ifaceRefreshRevert')}
+        </div>
+      )}
+      <pre style={{
+        margin: 0, background: '#000', color: '#e5e7eb', border: '1px solid var(--border-color)', borderRadius: 8,
+        padding: 12, fontSize: '0.78rem', fontFamily: 'monospace',
+        minHeight: compact ? 0 : 220, maxHeight: compact ? '38dvh' : 340, overflow: 'auto', whiteSpace: 'pre-wrap'
+      }}>
+        {outLoading ? `⏳ ${t('loading')}...` : (outErr ? `✕ ${outErr}` : (output || '—'))}
+      </pre>
+    </>
   );
 }
 
@@ -232,6 +341,7 @@ function VlanPick({ vlans, value, onChange }) {
     </select>
   ) : (
     <input className="modern-input" style={{ width: '100%' }} type="number" min="1" max="4094"
+      inputMode="numeric" autoCapitalize="none" autoCorrect="off" spellCheck={false}
       value={value} onChange={e => onChange(e.target.value)} placeholder="VLAN id" />
   );
 }

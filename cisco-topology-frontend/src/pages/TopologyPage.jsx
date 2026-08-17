@@ -20,6 +20,8 @@ import { API_BASE } from '../config';
 import { t } from '../i18n';
 import { showToast } from '../Toast';
 import { useTopologyTabs } from '../hooks/useTopologyTabs';
+import { useViewport } from '../hooks/useViewport';
+import { useLongPress } from '../hooks/useLongPress';
 
 const nodeTypes = { switchNode: SwitchNode };
 const edgeTypes = { cable: CableEdge };
@@ -28,6 +30,160 @@ const edgeTypes = { cable: CableEdge };
 const minimapNodeColor = (node) =>
   node.data?.status === 'DOWN' ? '#ef4444' : node.data?.status === 'UP' ? '#34d399' : '#64748b';
 
+/* ==========================================================================
+   DOKUNMATIK KATMANI - modul seviyesi yardimcilar
+   React 19: bilesen govdesi ICINDE bilesen tanimlanmaz (her render'da remount eder).
+   Bu yuzden TopoMenu ve tum stil sabitleri burada, modul kapsaminda duruyor.
+   ========================================================================== */
+
+/**
+ * Yuzen baglam menusunu goruntu alaninin icinde tutar.
+ * .context-menu position:fixed oldugu icin clientX/clientY dogrudan kullanilir;
+ * kirpma olmadan 375px genislikte sag kenardan tasip erisilemez hale geliyordu.
+ * @param   {number} x clientX
+ * @param   {number} y clientY
+ * @param   {number} w menunun tahmini genisligi
+ * @param   {number} h menunun tahmini yuksekligi
+ * @returns {{top:number,left:number}}
+ */
+function clampMenu(x, y, w = 200, h = 200) {
+  if (typeof window === 'undefined') return { top: y, left: x };
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  return {
+    left: Math.max(8, Math.min(x, vw - w - 8)),
+    top: Math.max(8, Math.min(y, vh - h - 8)),
+  };
+}
+
+// --- Alt sayfa (bottom sheet) sunumu ---
+const SHEET_BACKDROP = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 10004 };
+const SHEET_BOX = {
+  position: 'fixed', left: 0, right: 0, bottom: 0, top: 'auto',
+  width: '100%', minWidth: 0, maxWidth: '100%',
+  padding: 0, paddingBottom: 'calc(6px + env(safe-area-inset-bottom))',
+  borderRadius: '18px 18px 0 0', borderBottom: 'none',
+  overflowY: 'auto', overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch',
+  // iOS'ta tam genislikte backdrop-filter her kaydirma karesinde repaint eder
+  backdropFilter: 'none', WebkitBackdropFilter: 'none',
+  zIndex: 10005,
+};
+const SHEET_HEAD = {
+  display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+  padding: '10px 16px', borderBottom: '1px solid var(--border-color)',
+  position: 'sticky', top: 0, background: 'var(--bg-panel)', zIndex: 1,
+};
+const SHEET_TITLE = {
+  fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-main)',
+  minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+};
+const SHEET_CLOSE = {
+  minWidth: 44, minHeight: 44, background: 'none', border: 'none', color: 'var(--text-muted)',
+  fontSize: '1.4rem', lineHeight: 1, cursor: 'pointer', borderRadius: 8, touchAction: 'manipulation',
+};
+const SHEET_ROW = { minHeight: 48, padding: '0 16px', fontSize: '0.95rem', gap: 12, whiteSpace: 'normal', borderRadius: 0 };
+const POPUP_TITLE = { padding: '4px 10px', fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 };
+
+/**
+ * TopoMenu - TEK menu govdesi, iki sunum.
+ *   sheet=false -> ekran icine kirpilmis yuzen popup (fare)
+ *   sheet=true  -> alt sayfa: tam genislik, 48px satirlar, guvenli alan dolgusu
+ *
+ * Menu DURUM nesneleri (menu/edgeMenu/tabMenu/selMenu) aynen kalir; yalnizca sunum
+ * degisir - menu mantigi catallanmaz. .context-menu sinifi iki modda da korunur ki
+ * disari-tiklama koruyucusu (.closest('.context-menu')) ve responsive.css calissin.
+ *
+ * @param {Object}  props
+ * @param {boolean} props.sheet  alt sayfa sunumu mu
+ * @param {boolean} props.short  kisa ekran (yatay telefon) - sayfa daha yuksek olabilir
+ * @param {{key:string,label:any,onClick:Function,danger?:boolean,style?:Object}[]} props.items
+ */
+function TopoMenu({ sheet, short, top, left, zIndex, title, popupTitle, items, onClose }) {
+  const rows = (items || []).filter(Boolean);
+  if (rows.length === 0) return null;
+
+  if (!sheet) {
+    return (
+      <div className="context-menu" style={{ top, left, zIndex }}
+        onClick={e => e.stopPropagation()} onContextMenu={e => e.preventDefault()}>
+        {popupTitle ? <div style={POPUP_TITLE}>{popupTitle}</div> : null}
+        {rows.map(it => (
+          <div key={it.key} className="context-menu-item"
+            style={{ ...(it.style || null), ...(it.danger ? { color: 'var(--danger)' } : null) }}
+            onClick={it.onClick}>{it.label}</div>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div style={SHEET_BACKDROP} onClick={onClose} />
+      <div className="context-menu" style={{ ...SHEET_BOX, maxHeight: short ? '88vh' : '70vh' }}
+        onClick={e => e.stopPropagation()} onContextMenu={e => e.preventDefault()}>
+        <div style={SHEET_HEAD}>
+          <span style={SHEET_TITLE}>{title || 'Actions'}</span>
+          <button type="button" style={SHEET_CLOSE} onClick={onClose} aria-label="Close">&times;</button>
+        </div>
+        {rows.map(it => (
+          <div key={it.key} className="context-menu-item"
+            style={{ ...SHEET_ROW, ...(it.danger ? { color: 'var(--danger)' } : null) }}
+            onClick={it.onClick}>{it.label}</div>
+        ))}
+      </div>
+    </>
+  );
+}
+
+// --- Dokunmatik arac cubugu ---
+const TB_WRAP = {
+  display: 'flex', alignItems: 'center', gap: 6,
+  padding: '6px 10px',
+  paddingLeft: 'max(10px, env(safe-area-inset-left))',
+  paddingRight: 'max(10px, env(safe-area-inset-right))',
+  background: 'var(--bg-panel)', borderBottom: '1px solid var(--border-color)',
+  flexShrink: 0, overflowX: 'auto', overflowY: 'hidden',
+};
+const TB_BTN = {
+  minWidth: 44, minHeight: 44, padding: '0 12px', borderRadius: 10,
+  border: '1px solid var(--border-color)', background: 'transparent',
+  color: 'var(--text-muted)', fontSize: '0.85rem', fontWeight: 600, lineHeight: 1,
+  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+  cursor: 'pointer', flexShrink: 0, touchAction: 'manipulation',
+};
+const TB_BTN_ON = { ...TB_BTN, borderColor: 'var(--primary)', color: 'var(--primary)', background: 'var(--primary-light)' };
+const TB_SEARCH_ROW = {
+  display: 'flex', alignItems: 'center', gap: 6, padding: '0 10px 8px',
+  paddingLeft: 'max(10px, env(safe-area-inset-left))',
+  paddingRight: 'max(10px, env(safe-area-inset-right))',
+  background: 'var(--bg-panel)', borderBottom: '1px solid var(--border-color)', flexShrink: 0,
+};
+const TB_RESULTS = {
+  maxHeight: '40vh', overflowY: 'auto', overscrollBehavior: 'contain',
+  background: 'var(--bg-panel)', borderBottom: '1px solid var(--border-color)', flexShrink: 0,
+};
+const TB_RESULT_ROW = {
+  display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+  minHeight: 48, padding: '0 14px', cursor: 'pointer', color: 'var(--text-main)',
+  fontSize: '0.9rem', borderTop: '1px solid var(--border-color)', touchAction: 'manipulation',
+};
+
+// --- Sekme seridi (dokunmatik) ---
+const TAB_STRIP_TOUCH = {
+  WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none',
+  scrollSnapType: 'x proximity',
+};
+const TAB_FADE_L = {
+  position: 'absolute', left: 0, top: 0, bottom: 0, width: 12, pointerEvents: 'none',
+  background: 'linear-gradient(90deg, var(--bg-panel), rgba(0,0,0,0))',
+};
+const TAB_FADE_R = {
+  position: 'absolute', right: 0, top: 0, bottom: 0, width: 12, pointerEvents: 'none',
+  background: 'linear-gradient(270deg, var(--bg-panel), rgba(0,0,0,0))',
+};
+// Uzun basmada iOS metin secme balonunu / suruk onizlemesini bastir
+const CANVAS_TOUCH = { WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' };
+
 function TopologyInner({ onEdit, onClone }) {
   const { rawDevices, edges, setEdges, fetchData, openSshSession } = useApp();
   const { isAdmin, isOperator, authFetch, csrfToken, allowedCommands } = useAuth();
@@ -35,8 +191,15 @@ function TopologyInner({ onEdit, onClone }) {
   const [searchParams] = useSearchParams();
   const { tabId } = useParams();
   const reactFlowWrapper = useRef(null);
-  const { fitView, setCenter } = useReactFlow();
+  const { fitView, setCenter, zoomIn, zoomOut } = useReactFlow();
   const { tabs, addTab, removeTab, renameTab, reorderTabs } = useTopologyTabs();
+
+  // Dokunmatik / dar govde kararlari - responsive.css ile birebir ayni kirilma noktalari
+  const { isPhone, isShort, isTouch } = useViewport();
+  // Parmak arayuzu: dokunmatik cihaz VEYA dar/kisa govde (kucuk masaustu penceresi dahil)
+  const showTouchBar = isTouch || isPhone || isShort;
+  // Tuvalin daraldigi durum: MiniMap gizlenir, minZoom duser
+  const compactCanvas = isPhone || isShort;
 
   const activeTabId = tabId || 'main';
   const [menu, setMenu] = useState(null);
@@ -53,7 +216,21 @@ function TopologyInner({ onEdit, onClone }) {
   const [renamingTab, setRenamingTab] = useState(null);
   const [renameValue, setRenameValue] = useState('');
   const [zoomLevel, setZoomLevel] = useState(1);
+  // --- Dokunmatik durum ---
+  const [touchEdit, setTouchEdit] = useState(false);   // parmakla taşıma/bağlama kilidi (varsayılan KAPALI)
+  const [selectMode, setSelectMode] = useState(false); // kutu ile çoklu seçim modu
+  const [selectedIds, setSelectedIds] = useState([]);  // çoklu seçimdeki node id'leri
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQ, setSearchQ] = useState('');
   const prevTabId = useRef(activeTabId);
+
+  // Tüm bağlam menülerini kapat — pan, yön değişimi, dışarı tıklama ve Escape ortak yolu
+  const closeAllMenus = useCallback(() => {
+    setMenu(null);
+    setEdgeMenu(null);
+    setTabMenu(null);
+    setSelMenu(null);
+  }, []);
 
   // FitView on tab change
   useEffect(() => {
@@ -63,19 +240,24 @@ function TopologyInner({ onEdit, onClone }) {
     }
   }, [activeTabId, fitView]);
 
-  // Close all context menus on outside click
+  // Close all context menus on outside click.
+  // pointerdown (mousedown değil): dokunmatikte sentetik mousedown ancak touchend'den
+  // SONRA geldiği için menü geç kapanıyordu; pointerdown hem farede hem parmakta anında gelir.
   useEffect(() => {
     const handleClick = (e) => {
-      if (!e.target.closest('.context-menu')) {
-        setMenu(null);
-        setEdgeMenu(null);
-        setTabMenu(null);
-        setSelMenu(null);
-      }
+      if (!e.target.closest || !e.target.closest('.context-menu')) closeAllMenus();
     };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, []);
+    document.addEventListener('pointerdown', handleClick);
+    return () => document.removeEventListener('pointerdown', handleClick);
+  }, [closeAllMenus]);
+
+  // Yön değişiminde açık menü ekranın ortasında asılı kalmasın
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const onOrient = () => closeAllMenus();
+    window.addEventListener('orientationchange', onOrient);
+    return () => window.removeEventListener('orientationchange', onOrient);
+  }, [closeAllMenus]);
 
   // Node'ları sync — main tab tüm cihazları gösterir, diğer tab'lar kendi cihazlarını.
   // Perf: değişmeyen node'ların kimliğini KORU (aynı obje) → memo(SwitchNode) kısa devre
@@ -139,10 +321,65 @@ function TopologyInner({ onEdit, onClone }) {
 
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.key === 'Escape') { setMenu(null); setEdgeMenu(null); setTabMenu(null); setSelMenu(null); }
+      if (e.key === 'Escape') closeAllMenus();
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [closeAllMenus]);
+
+  /* --- UZUN BASMA -> AYNI menü durumu --------------------------------------
+     Dokunmatik cihaz `contextmenu` olayını üretmez; node/edge menüsüne giden tek yol
+     sağ tıktı. Burada 500ms uzun basma AYNI setMenu/setEdgeMenu çağrısını yapar.
+     Hedefi pointerdown'ın target'ından çözüyoruz: ReactFlow node sarmalayıcısında
+     data-id, edge grubunda data-testid="rf__edge-<id>" var. */
+  const openMenuFromTarget = useCallback((ev) => {
+    const start = (ev.target && ev.target.closest)
+      ? ev.target
+      : (typeof document !== 'undefined' ? document.elementFromPoint(ev.clientX, ev.clientY) : null);
+    if (!start || !start.closest) return;
+
+    const nodeEl = start.closest('.react-flow__node');
+    if (nodeEl) {
+      const id = nodeEl.getAttribute('data-id');
+      const n = localNodesRef.current.find(x => x.id === id);
+      if (!n) return;
+      setEdgeMenu(null); setTabMenu(null); setSelMenu(null);
+      setMenu({ id: n.id, label: n.data.label, data: n.data, ...clampMenu(ev.clientX, ev.clientY, 220, 300) });
+      return;
+    }
+
+    if (!isAdmin) return;
+    const edgeEl = start.closest('.react-flow__edge');
+    if (edgeEl) {
+      const testId = edgeEl.getAttribute('data-testid') || '';
+      if (!testId.startsWith('rf__edge-')) return;
+      setMenu(null); setTabMenu(null); setSelMenu(null);
+      setEdgeMenu({ id: testId.slice('rf__edge-'.length), ...clampMenu(ev.clientX, ev.clientY, 200, 70) });
+    }
+  }, [isAdmin]);
+  const canvasLongPress = useLongPress(openMenuFromTarget);
+
+  // Sekme şeridi uzun basma -> rename/delete/move menüsü (sağ tıkın dokunmatik karşılığı)
+  const openTabMenuFromTarget = useCallback((ev) => {
+    if (!isAdmin) return;
+    const el = (ev.target && ev.target.closest) ? ev.target.closest('.topology-tab') : null;
+    if (!el) return;
+    const id = el.getAttribute('data-tab-id');
+    const tab = tabs.find(tb => tb.id === id);
+    if (!tab) return;
+    const r = el.getBoundingClientRect();
+    setMenu(null); setEdgeMenu(null); setSelMenu(null);
+    setTabMenu({ id: tab.id, name: tab.name, ...clampMenu(ev.clientX, r.bottom, 200, 200) });
+    // useLongPress handler'ı bir ref'te tuttuğu için kimliğin değişmesi maliyetsiz
+  }, [isAdmin, tabs]);
+  const tabsLongPress = useLongPress(openTabMenuFromTarget);
+
+  // Çoklu seçim: yalnızca dokunmatik araç çubuğu açıkken dinlenir (masaüstü render'ı değişmesin)
+  const handleSelectionChange = useCallback(({ nodes }) => {
+    const ids = nodes.map(n => n.id);
+    setSelectedIds(prev =>
+      (prev.length === ids.length && prev.every((v, i) => v === ids[i])) ? prev : ids
+    );
   }, []);
 
   // Cihaz kimliğe göre O(1) lookup — styledEdges'teki O(E×D) find'ı önler
@@ -228,6 +465,17 @@ function TopologyInner({ onEdit, onClone }) {
     reorderTabs(ids);
   };
 
+  // Dokunmatik sıralama: HTML5 sürükle-bırak parmakla ateşlenmez → menüden taşı
+  const moveTab = (id, delta) => {
+    const ids = tabs.map(t => t.id);
+    const from = ids.indexOf(id);
+    const to = from + delta;
+    setTabMenu(null);
+    if (from < 0 || to < 0 || to >= ids.length) return;
+    ids.splice(to, 0, ids.splice(from, 1)[0]);
+    reorderTabs(ids);
+  };
+
   const handleAddTab = async () => {
     const name = `Sub Page ${tabs.length}`;
     const id = await addTab(name);
@@ -237,7 +485,15 @@ function TopologyInner({ onEdit, onClone }) {
   const handleTabContextMenu = (tab, e) => {
     e.preventDefault();
     e.stopPropagation();
-    setTabMenu({ id: tab.id, name: tab.name, top: e.clientY, left: e.clientX });
+    setTabMenu({ id: tab.id, name: tab.name, ...clampMenu(e.clientX, e.clientY, 200, 200) });
+  };
+
+  // Sekme "kebap" düğmesi (dokunmatik): menüyü düğmenin altına açar
+  const handleTabKebab = (tab, e) => {
+    e.stopPropagation();
+    const r = e.currentTarget.getBoundingClientRect();
+    setMenu(null); setEdgeMenu(null); setSelMenu(null);
+    setTabMenu({ id: tab.id, name: tab.name, ...clampMenu(r.left, r.bottom + 4, 200, 200) });
   };
 
   const handleStartRename = (tabId, name) => {
@@ -254,6 +510,23 @@ function TopologyInner({ onEdit, onClone }) {
       return null;
     });
   }, [renameValue, renameTab]);
+
+  // Cihaz arama / atlama listesi — büyük bir grafiği parmakla taramak imkânsız.
+  // "Zoom Here" ile aynı setCenter yolunu kullanır.
+  const searchResults = useMemo(() => {
+    const q = searchQ.trim().toLowerCase();
+    if (!q) return [];
+    return localNodes
+      .filter(n => (n.data.label || '').toLowerCase().includes(q) || (n.data.ip || '').toLowerCase().includes(q))
+      .slice(0, 40);
+  }, [searchQ, localNodes]);
+
+  const focusNode = useCallback((id) => {
+    const pos = localNodesRef.current.find(n => n.id === id)?.position;
+    if (pos) setCenter(pos.x + 65, pos.y + 40, { zoom: 1.6, duration: 400 });
+    setSearchOpen(false);
+    setSearchQ('');
+  }, [setCenter]);
 
   // Cihaz web arayüzü popup'ı (backend reverse proxy üzerinden)
   const [webModal, setWebModal] = useState(null); // { id, label, ip, scheme }
@@ -305,70 +578,312 @@ function TopologyInner({ onEdit, onClone }) {
     setDiscovering(false);
   };
 
+  /* ---------------------------------------------------------------------
+     BAĞLAM MENÜSÜ SATIRLARI — tek kaynak, iki sunum.
+     Aynı diziler hem masaüstü popup'ında hem dokunmatik alt sayfada kullanılır.
+     --------------------------------------------------------------------- */
+  const tabIndex = tabMenu ? tabs.findIndex(tb => tb.id === tabMenu.id) : -1;
+  const tabMenuItems = tabMenu ? [
+    { key: 'rename', label: '✏️ Rename', onClick: () => handleStartRename(tabMenu.id, tabMenu.name) },
+    // Dokunmatikte HTML5 sürükle-bırak yok → sırayı menüden değiştir
+    showTouchBar && tabIndex > 0 && { key: 'left', label: '⬅️ Move left', onClick: () => moveTab(tabMenu.id, -1) },
+    showTouchBar && tabIndex >= 0 && tabIndex < tabs.length - 1 && { key: 'right', label: '➡️ Move right', onClick: () => moveTab(tabMenu.id, 1) },
+    tabMenu.id !== 'main' && {
+      key: 'delete', danger: true, label: '🗑️ Delete',
+      onClick: () => {
+        const { id, name } = tabMenu;
+        setTabMenu(null);
+        setConfirmState({
+          title: t('deletePage'),
+          message: `"${name}" ${t('deletePageConfirm')}`,
+          onConfirm: () => { removeTab(id); if (activeTabId === id) navigate('/topology'); }
+        });
+      }
+    },
+  ] : [];
+
+  const nodeMenuItems = menu ? [
+    {
+      key: 'details', label: '📊 Details',
+      // Geri dönünce Devices'a değil, bulunduğumuz topoloji sekmesine dönsün
+      onClick: () => {
+        navigate(`/devices/${menu.id}`, {
+          state: { from: activeTabId === 'main' ? '/topology' : `/topology/${activeTabId}` }
+        });
+        setMenu(null);
+      }
+    },
+    menu.data?.ip && {
+      key: 'ping', style: { display: 'flex', alignItems: 'center', gap: 8 },
+      label: <><PingIcon size={15} /> Ping</>,
+      onClick: () => { setPingIp(menu.data.ip); setMenu(null); }
+    },
+    menu.data?.ip && {
+      key: 'trace', style: { display: 'flex', alignItems: 'center', gap: 8 },
+      label: <><TraceIcon size={15} /> Trace</>,
+      onClick: () => { setTraceIp(menu.data.ip); setMenu(null); }
+    },
+    isAdmin && { key: 'edit', label: '✏️ Edit', onClick: () => { onEdit(rawDevices.find(d => d.id === menu.id)); setMenu(null); } },
+    isAdmin && { key: 'clone', label: '⧉ Clone', onClick: () => { onClone(rawDevices.find(d => d.id === menu.id)); setMenu(null); } },
+    isOperator && (isAdmin || allowedCommands.length > 0) && {
+      key: 'ssh', label: '💻 SSH Terminal',
+      onClick: () => { openSshSession(menu.id, menu.label); setMenu(null); }
+    },
+    menu.data?.type === 'antenna' && {
+      key: 'web', label: '🌐 Web',
+      onClick: () => { setWebModal({ id: menu.id, label: menu.label, ip: menu.data.ip, scheme: 'http' }); setMenu(null); }
+    },
+    {
+      key: 'zoom', label: '🔍 Zoom Here',
+      onClick: () => {
+        const pos = localNodes.find(n => n.id === menu.id)?.position;
+        if (pos) setCenter(pos.x + 65, pos.y + 40, { zoom: 2, duration: 500 });
+        setMenu(null);
+      }
+    },
+    isAdmin && {
+      key: 'delete', danger: true, label: '🗑️ Delete Device',
+      onClick: () => {
+        const nodeId = menu.id;
+        const nodeName = menu.label;
+        setMenu(null);
+        setConfirmState({
+          title: t('deleteDevice'),
+          message: `"${nodeName}" ${t('deleteDeviceConfirmShort')}`,
+          onConfirm: async () => {
+            try {
+              const res = await authFetch('/switches/' + nodeId, { method: 'DELETE' });
+              if (res && res.ok) {
+                showToast(`"${nodeName}" deleted`, 'success');
+                fetchData();
+              } else {
+                const d = await res.json().catch(() => ({}));
+                showToast(d.error || 'Delete failed', 'error');
+              }
+            } catch { showToast('Delete failed', 'error'); }
+          }
+        });
+      }
+    },
+  ] : [];
+
+  const selMenuItems = selMenu ? [
+    { key: 'batch', label: '✏️ Batch Edit', onClick: () => { setBatchEditIds(selMenu.ids); setSelMenu(null); } },
+    {
+      key: 'delete', danger: true, label: '🗑️ Delete Selected',
+      onClick: () => {
+        const ids = selMenu.ids;
+        setSelMenu(null);
+        setConfirmState({
+          title: t('deleteDevice'),
+          message: `${ids.length} ${t('deleteSelectedConfirm')}`,
+          onConfirm: async () => {
+            let deleted = 0;
+            for (const id of ids) {
+              try { const res = await authFetch('/switches/' + id, { method: 'DELETE' }); if (res && res.ok) deleted++; } catch { /* ignore */ }
+            }
+            showToast(`${deleted} device(s) deleted`, 'success');
+            fetchData();
+          }
+        });
+      }
+    },
+  ] : [];
+
+  const edgeMenuItems = edgeMenu ? [
+    {
+      key: 'delete', danger: true, label: <>🗑️ {t('deleteConnection')}</>,
+      onClick: () => {
+        authFetch(`/edges/${edgeMenu.id}`, { method: 'DELETE' });
+        setEdges(eds => eds.filter(e => e.id !== edgeMenu.id));
+        setEdgeMenu(null);
+      }
+    },
+  ] : [];
+
+  // Şerit yüksekliği: coarse pointer'da 48px (responsive.css), kısa ekranda 36px,
+  // fare + dar pencerede App.css'in 36px'i. Düğme şeridi taşırmamalı.
+  const tabBtn = (isTouch && !isShort) ? 44 : 32;
+  const tabIconBtnStyle = {
+    background: 'none', border: '1px solid var(--border-color)', color: 'inherit',
+    borderRadius: 8, minWidth: tabBtn, height: tabBtn, padding: 0, flexShrink: 0,
+    fontSize: '0.9rem', lineHeight: 1, cursor: 'pointer', touchAction: 'manipulation',
+    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+  };
+
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative', display: 'flex', flexDirection: 'column' }}>
 
-      {/* Tab Bar */}
-      <div className="topology-tabs">
-        {tabs.map(tab => (
-          <div
-            key={tab.id}
-            className={`topology-tab ${activeTabId === tab.id ? 'active' : ''}`}
-            // Yeniden sıralama: admin sürükleyebilir (rename sırasında kapalı — metin seçimi bozulmasın)
-            draggable={isAdmin && renamingTab !== tab.id}
-            onDragStart={(e) => { setDragTabId(tab.id); e.dataTransfer.effectAllowed = 'move'; }}
-            onDragOver={(e) => { if (!dragTabId) return; e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (dragOverTabId !== tab.id) setDragOverTabId(tab.id); }}
-            onDragLeave={() => setDragOverTabId(prev => (prev === tab.id ? null : prev))}
-            onDrop={(e) => { e.preventDefault(); handleTabDrop(tab.id); }}
-            onDragEnd={() => { setDragTabId(null); setDragOverTabId(null); }}
-            style={{
-              opacity: dragTabId === tab.id ? 0.4 : 1,
-              boxShadow: dragOverTabId === tab.id && dragTabId !== tab.id ? 'inset 3px 0 0 var(--primary)' : undefined,
-              cursor: isAdmin ? 'grab' : 'pointer'
-            }}
-            onClick={() => navigate(tab.id === 'main' ? '/topology' : `/topology/${tab.id}`)}
-            onContextMenu={isAdmin ? ((e) => handleTabContextMenu(tab, e)) : undefined}
-          >
-            {renamingTab === tab.id ? (
-              <input
-                className="topology-tab-rename"
-                value={renameValue}
-                onChange={e => setRenameValue(e.target.value)}
-                onBlur={handleFinishRename}
-                onKeyDown={e => { if (e.key === 'Enter') handleFinishRename(); if (e.key === 'Escape') setRenamingTab(null); }}
-                onClick={e => e.stopPropagation()}
-                autoFocus
-              />
-            ) : (
-              <span>{tab.name}</span>
-            )}
-            {/* Silme yalnızca sağ-tık menüsünden — yanlışlıkla tıklamayla sayfa silinmesin */}
-          </div>
-        ))}
-        {isAdmin && <button className="topology-tab-add" onClick={handleAddTab} title="Add sub page">+</button>}
+      {/* Tab Bar — dokunmatikte kenar solmaları için saran kap */}
+      <div style={{ position: 'relative', flexShrink: 0 }}>
+        {/* Uzun basma YALNIZCA gerçek dokunmatikte bağlanır (isTouch = hover:none).
+            Dar bir masaüstü penceresinde fare hâlâ sağ tıklayabildiği için orada
+            bağlamak sadece zarar veriyordu: 500ms basılı tutulan SOL tık menüyü
+            açıyor ve ardından gelen tıklamayı yutuyordu. */}
+        <div
+          className="topology-tabs"
+          style={isTouch ? TAB_STRIP_TOUCH : undefined}
+          {...(isTouch ? tabsLongPress : null)}
+        >
+          {tabs.map(tab => (
+            <div
+              key={tab.id}
+              data-tab-id={tab.id}
+              className={`topology-tab ${activeTabId === tab.id ? 'active' : ''}`}
+              // Yeniden sıralama: admin sürükleyebilir (rename sırasında kapalı — metin seçimi bozulmasın).
+              // Dokunmatikte HTML5 DnD ateşlenmez ve iPadOS'ta uzun basmayı yutar → kapalı, menüden taşınır.
+              draggable={isAdmin && !isTouch && renamingTab !== tab.id}
+              onDragStart={(e) => { setDragTabId(tab.id); e.dataTransfer.effectAllowed = 'move'; }}
+              onDragOver={(e) => { if (!dragTabId) return; e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (dragOverTabId !== tab.id) setDragOverTabId(tab.id); }}
+              onDragLeave={() => setDragOverTabId(prev => (prev === tab.id ? null : prev))}
+              onDrop={(e) => { e.preventDefault(); handleTabDrop(tab.id); }}
+              onDragEnd={() => { setDragTabId(null); setDragOverTabId(null); }}
+              style={{
+                opacity: dragTabId === tab.id ? 0.4 : 1,
+                boxShadow: dragOverTabId === tab.id && dragTabId !== tab.id ? 'inset 3px 0 0 var(--primary)' : undefined,
+                cursor: isAdmin && !isTouch ? 'grab' : 'pointer'
+              }}
+              onClick={() => navigate(tab.id === 'main' ? '/topology' : `/topology/${tab.id}`)}
+              onContextMenu={isAdmin ? ((e) => handleTabContextMenu(tab, e)) : undefined}
+            >
+              {renamingTab === tab.id ? (
+                <>
+                  <input
+                    className="topology-tab-rename"
+                    value={renameValue}
+                    onChange={e => setRenameValue(e.target.value)}
+                    // Dokunmatikte blur=kaydet, yazılım klavyesi açılıp kapanırken kazara commit ediyor
+                    onBlur={showTouchBar ? undefined : handleFinishRename}
+                    onKeyDown={e => { if (e.key === 'Enter') handleFinishRename(); if (e.key === 'Escape') setRenamingTab(null); }}
+                    onClick={e => e.stopPropagation()}
+                    enterKeyHint="done"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    autoFocus
+                  />
+                  {showTouchBar && (
+                    <>
+                      <button type="button" style={tabIconBtnStyle} aria-label="Save name"
+                        onClick={e => { e.stopPropagation(); handleFinishRename(); }}>✓</button>
+                      <button type="button" style={tabIconBtnStyle} aria-label="Cancel rename"
+                        onClick={e => { e.stopPropagation(); setRenamingTab(null); }}>✕</button>
+                    </>
+                  )}
+                </>
+              ) : (
+                <span>{tab.name}</span>
+              )}
+              {/* Silme yalnızca menüden — yanlışlıkla tıklamayla sayfa silinmesin.
+                  Dokunmatikte sağ tık yok: kebap düğmesi + uzun basma aynı menüyü açar. */}
+              {isAdmin && showTouchBar && renamingTab !== tab.id && (
+                <button type="button" style={tabIconBtnStyle} aria-label={`${tab.name} actions`}
+                  onClick={(e) => handleTabKebab(tab, e)}>⋮</button>
+              )}
+            </div>
+          ))}
+          {isAdmin && <button className="topology-tab-add" onClick={handleAddTab} title="Add sub page">+</button>}
+        </div>
+        {/* Kaydırılabilir olduğunu belli eden kenar solmaları */}
+        {showTouchBar && (
+          <>
+            <div style={TAB_FADE_L} />
+            <div style={TAB_FADE_R} />
+          </>
+        )}
       </div>
 
-      {/* Tab sağ tık menüsü */}
+      {/* Tab menüsü — dokunmatikte alt sayfa, farede kırpılmış popup */}
       {isAdmin && tabMenu && (
-        <div className="context-menu" style={{ top: tabMenu.top, left: tabMenu.left, zIndex: 9999 }}
-          onClick={e => e.stopPropagation()} onContextMenu={e => e.preventDefault()}>
-          <div className="context-menu-item" onClick={() => handleStartRename(tabMenu.id, tabMenu.name)}>✏️ Rename</div>
-          {tabMenu.id !== 'main' && (
-            <div className="context-menu-item" style={{ color: 'var(--danger)' }} onClick={() => {
-              const { id, name } = tabMenu;
-              setTabMenu(null);
-              setConfirmState({
-                title: t('deletePage'),
-                message: `"${name}" ${t('deletePageConfirm')}`,
-                onConfirm: () => { removeTab(id); if (activeTabId === id) navigate('/topology'); }
-              });
-            }}>🗑️ Delete</div>
+        <TopoMenu
+          sheet={showTouchBar}
+          short={isShort}
+          top={tabMenu.top}
+          left={tabMenu.left}
+          zIndex={9999}
+          title={tabMenu.name}
+          items={tabMenuItems}
+          onClose={() => setTabMenu(null)}
+        />
+      )}
+
+      {/* Dokunmatik araç çubuğu — ReactFlow'un 26px Controls'unun yerini alır.
+          KISA EKRANDA ARAMA ACIKKEN GIZLENIR: 812x375'te navbar 44 + sekme seridi 36
+          + arac cubugu 56 + arama satiri 52 + sonuc listesi 150 = 338px chrome ediyor
+          ve tuvale 37px kaliyordu. Gizlenince tuval ~93px'e cikar; arama satirindaki
+          x dugmesi (ve bir sonuca dokunmak) cubugu geri getirir. */}
+      {showTouchBar && !(isShort && searchOpen) && (
+        <div className="rw-scroll-x" style={TB_WRAP}>
+          <button type="button" style={searchOpen ? TB_BTN_ON : TB_BTN}
+            onClick={() => setSearchOpen(o => !o)} aria-label="Search device">🔍</button>
+          <button type="button" style={TB_BTN}
+            onClick={() => fitView({ duration: 300, padding: 0.15 })}>Fit</button>
+          <button type="button" style={TB_BTN}
+            onClick={() => zoomOut({ duration: 200 })} aria-label="Zoom out">−</button>
+          <button type="button" style={TB_BTN}
+            onClick={() => zoomIn({ duration: 200 })} aria-label="Zoom in">+</button>
+          {isAdmin && isTouch && (
+            <button type="button" style={touchEdit ? TB_BTN_ON : TB_BTN}
+              onClick={() => setTouchEdit(v => !v)}>
+              {touchEdit ? '🔓 Edit' : '🔒 Locked'}
+            </button>
+          )}
+          {isAdmin && (
+            <button type="button" style={selectMode ? TB_BTN_ON : TB_BTN}
+              onClick={() => { setSelectMode(v => !v); setSelectedIds([]); }}>☑ Select</button>
+          )}
+          {isAdmin && selectedIds.length >= 2 && (
+            <button type="button" style={TB_BTN_ON}
+              onClick={() => { closeAllMenus(); setSelMenu({ ids: selectedIds, top: 60, left: 12 }); }}>
+              ⋯ {selectedIds.length}
+            </button>
+          )}
+          {isAdmin && (
+            <button type="button" style={TB_BTN} disabled={discovering}
+              onClick={() => { setSelectedRootIds([]); setShowDiscoverDialog(true); }}>
+              {discovering ? '⏳' : '🔍 Auto'}
+            </button>
           )}
         </div>
       )}
 
+      {showTouchBar && searchOpen && (
+        <div style={TB_SEARCH_ROW}>
+          <input
+            type="search"
+            className="modern-input"
+            placeholder="Search device or IP..."
+            value={searchQ}
+            onChange={e => setSearchQ(e.target.value)}
+            enterKeyHint="search"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            style={{ flex: 1, minWidth: 0 }}
+          />
+          <button type="button" style={TB_BTN}
+            onClick={() => { setSearchOpen(false); setSearchQ(''); }} aria-label="Close search">✕</button>
+        </div>
+      )}
+      {showTouchBar && searchOpen && searchResults.length > 0 && (
+        <div style={TB_RESULTS}>
+          {searchResults.map(n => (
+            <div key={n.id} style={TB_RESULT_ROW} onClick={() => focusNode(n.id)}>
+              {/* .rw-truncate yalnızca <=1024px'te tanımlı; geniş bir tablette de
+                  kırpılsın diye aynı kurallar inline tekrarlanıyor */}
+              <span className="rw-truncate" style={{ fontWeight: 600, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.data.label}</span>
+              <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem', fontFamily: 'monospace', flexShrink: 0 }}>{n.data.ip}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* React Flow Canvas */}
-      <div className={`topology-canvas ${zoomLevel < 0.45 ? 'zoom-minimal' : zoomLevel < 0.7 ? 'zoom-compact' : ''}`} style={{ flex: 1, position: 'relative' }} ref={reactFlowWrapper}>
+      <div
+        className={`topology-canvas ${zoomLevel < 0.45 ? 'zoom-minimal' : zoomLevel < 0.7 ? 'zoom-compact' : ''}`}
+        style={isTouch ? { flex: 1, position: 'relative', ...CANVAS_TOUCH } : { flex: 1, position: 'relative' }}
+        ref={reactFlowWrapper}
+        {...(isTouch ? canvasLongPress : null)}
+      >
         <ReactFlow
           nodes={localNodes}
           edges={styledEdges}
@@ -378,25 +893,44 @@ function TopologyInner({ onEdit, onClone }) {
           onEdgesChange={isAdmin ? onEdgesChange : undefined}
           onConnect={isAdmin ? onConnect : undefined}
           onEdgesDelete={isAdmin ? onEdgesDelete : undefined}
-          onEdgeContextMenu={isAdmin ? ((e, edge) => { e.preventDefault(); setEdgeMenu({ id: edge.id, top: e.clientY, left: e.clientX }); setMenu(null); }) : undefined}
-          onNodeContextMenu={(e, n) => { e.preventDefault(); setMenu({ id: n.id, label: n.data.label, top: e.clientY, left: e.clientX, data: n.data }); setEdgeMenu(null); }}
-          onSelectionContextMenu={isAdmin ? ((e, nodes) => { e.preventDefault(); if (nodes.length >= 2) { setSelMenu({ ids: nodes.map(n => n.id), top: e.clientY, left: e.clientX }); setMenu(null); setEdgeMenu(null); } }) : undefined}
-          onPaneClick={() => { setMenu(null); setEdgeMenu(null); setTabMenu(null); setSelMenu(null); }}
+          onEdgeContextMenu={isAdmin ? ((e, edge) => { e.preventDefault(); setEdgeMenu({ id: edge.id, ...clampMenu(e.clientX, e.clientY, 200, 70) }); setMenu(null); }) : undefined}
+          onNodeContextMenu={(e, n) => { e.preventDefault(); setMenu({ id: n.id, label: n.data.label, data: n.data, ...clampMenu(e.clientX, e.clientY, 220, 300) }); setEdgeMenu(null); }}
+          onSelectionContextMenu={isAdmin ? ((e, nodes) => { e.preventDefault(); if (nodes.length >= 2) { setSelMenu({ ids: nodes.map(n => n.id), ...clampMenu(e.clientX, e.clientY, 200, 120) }); setMenu(null); setEdgeMenu(null); } }) : undefined}
+          // Dokunmatikte 20px'lik kenara parmakla basmak imkânsız → tek dokunuş menüyü açar
+          onEdgeClick={isAdmin && showTouchBar ? ((e, edge) => { setMenu(null); setTabMenu(null); setSelMenu(null); setEdgeMenu({ id: edge.id, ...clampMenu(e.clientX, e.clientY, 200, 70) }); }) : undefined}
+          onSelectionChange={showTouchBar ? handleSelectionChange : undefined}
+          onPaneClick={closeAllMenus}
+          // Pan başlayınca position:fixed menü havada asılı kalmasın (yalnızca dar gövde)
+          onMoveStart={showTouchBar ? closeAllMenus : undefined}
           onMoveEnd={(_, viewport) => setZoomLevel(viewport.zoom)}
           isValidConnection={(c) => c.source !== c.target} // kendine bağlanma (loop) yok
-          nodesDraggable={isAdmin}
-          nodesConnectable={isAdmin}
+          // Dokunmatikte varsayılan KİLİTLİ: parmak teması düzeni yeniden yazıyordu
+          // (/switches PUT) veya kazara /edges POST atıyordu. Araç çubuğundaki "Edit" açar.
+          nodesDraggable={isAdmin && (!isTouch || touchEdit)}
+          nodesConnectable={isAdmin && (!isTouch || touchEdit)}
+          nodeDragThreshold={isTouch ? 8 : 0}
+          connectionRadius={isTouch ? 40 : 20}
           elementsSelectable
           connectionMode="loose"
-          selectionOnDrag={isAdmin}
+          // Kutu seçimi ancak panOnDrag kapalıyken çalışır → "Select" ikisini birlikte çevirir.
+          // showTouchBar şartı ZORUNLU: Select açıkken pencere masaüstü genişliğine
+          // büyütülürse düğme kaybolur, selectMode true kalır ve pan kalıcı olarak kapanırdı.
+          panOnDrag={showTouchBar && selectMode ? false : true}
+          selectionOnDrag={isAdmin && (!isTouch || (showTouchBar && selectMode))}
           multiSelectionKeyCode="Shift"
+          minZoom={compactCanvas ? 0.15 : undefined}
+          maxZoom={compactCanvas ? 3 : undefined}
           fitView
+          fitViewOptions={compactCanvas ? { padding: 0.15, minZoom: 0.1 } : undefined}
         >
           <Background color="var(--primary)" gap={25} size={1} style={{ opacity: 0.1 }} />
-          <Controls style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-color)', borderRadius: 8 }} />
+          {/* 26x26 Controls parmakla kullanılamaz; dokunmatikte yerini 44px araç çubuğu alır */}
+          {!showTouchBar && (
+            <Controls style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-color)', borderRadius: 8 }} />
+          )}
 
-          {/* Auto Topology Button */}
-          {isAdmin && (
+          {/* Auto Topology Button — dokunmatikte araç çubuğuna taşınır */}
+          {isAdmin && !showTouchBar && (
             <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 5, display: 'flex', gap: 6 }}>
               <button
                 className="btn btn-primary btn-sm"
@@ -409,130 +943,131 @@ function TopologyInner({ onEdit, onClone }) {
             </div>
           )}
 
-          <MiniMap
-            nodeColor={minimapNodeColor}
-            nodeStrokeWidth={2}
-            style={{ background: 'var(--bg-dark)', border: '1px solid var(--border-color)', borderRadius: 8, height: 100, width: 150 }}
-            maskColor="rgba(0,0,0,0.6)"
-          />
+          {/* 150x100 MiniMap yatay telefonda tuvalin üçte birini yiyor ve dokunuşları yutuyor */}
+          {!compactCanvas && (
+            <MiniMap
+              nodeColor={minimapNodeColor}
+              nodeStrokeWidth={2}
+              style={{ background: 'var(--bg-dark)', border: '1px solid var(--border-color)', borderRadius: 8, height: 100, width: 150 }}
+              maskColor="rgba(0,0,0,0.6)"
+            />
+          )}
         </ReactFlow>
-
-        {menu && (
-          <div className="context-menu" style={{ top: menu.top, left: menu.left }}>
-            {/* Geri dönünce Devices'a değil, bulunduğumuz topoloji sekmesine dönsün */}
-            <div className="context-menu-item" onClick={() => {
-              navigate(`/devices/${menu.id}`, {
-                state: { from: activeTabId === 'main' ? '/topology' : `/topology/${activeTabId}` }
-              });
-              setMenu(null);
-            }}>📊 Details</div>
-            {menu.data?.ip && <div className="context-menu-item" onClick={() => { setPingIp(menu.data.ip); setMenu(null); }} style={{ display: 'flex', alignItems: 'center', gap: 8 }}><PingIcon size={15} /> Ping</div>}
-            {menu.data?.ip && <div className="context-menu-item" onClick={() => { setTraceIp(menu.data.ip); setMenu(null); }} style={{ display: 'flex', alignItems: 'center', gap: 8 }}><TraceIcon size={15} /> Trace</div>}
-            {isAdmin && <div className="context-menu-item" onClick={() => { onEdit(rawDevices.find(d => d.id === menu.id)); setMenu(null); }}>✏️ Edit</div>}
-            {isAdmin && <div className="context-menu-item" onClick={() => { onClone(rawDevices.find(d => d.id === menu.id)); setMenu(null); }}>⧉ Clone</div>}
-            {isOperator && (isAdmin || allowedCommands.length > 0) && <div className="context-menu-item" onClick={() => { openSshSession(menu.id, menu.label); setMenu(null); }}>💻 SSH Terminal</div>}
-            {menu.data?.type === 'antenna' && <div className="context-menu-item" onClick={() => { setWebModal({ id: menu.id, label: menu.label, ip: menu.data.ip, scheme: 'http' }); setMenu(null); }}>🌐 Web</div>}
-            <div className="context-menu-item" onClick={() => {
-              const pos = localNodes.find(n => n.id === menu.id)?.position;
-              if (pos) setCenter(pos.x + 65, pos.y + 40, { zoom: 2, duration: 500 });
-              setMenu(null);
-            }}>🔍 Zoom Here</div>
-            {isAdmin && <div className="context-menu-item" style={{ color: 'var(--danger)' }} onClick={async () => {
-              const nodeId = menu.id;
-              const nodeName = menu.label;
-              setMenu(null);
-              setConfirmState({
-                title: t('deleteDevice'),
-                message: `"${nodeName}" ${t('deleteDeviceConfirmShort')}`,
-                onConfirm: async () => {
-                  try {
-                    const res = await authFetch('/switches/' + nodeId, { method: 'DELETE' });
-                    if (res && res.ok) {
-                      showToast(`"${nodeName}" deleted`, 'success');
-                      fetchData();
-                    } else {
-                      const d = await res.json().catch(() => ({}));
-                      showToast(d.error || 'Delete failed', 'error');
-                    }
-                  } catch { showToast('Delete failed', 'error'); }
-                }
-              });
-            }}>🗑️ Delete Device</div>}
-          </div>
-        )}
-
-        {/* Çoklu seçim sağ-tık menüsü */}
-        {isAdmin && selMenu && (
-          <div className="context-menu" style={{ top: selMenu.top, left: selMenu.left }}>
-            <div style={{ padding: '4px 10px', fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>{selMenu.ids.length} selected</div>
-            <div className="context-menu-item" onClick={() => { setBatchEditIds(selMenu.ids); setSelMenu(null); }}>✏️ Batch Edit</div>
-            <div className="context-menu-item" style={{ color: 'var(--danger)' }} onClick={async () => {
-              const ids = selMenu.ids;
-              setSelMenu(null);
-              setConfirmState({
-                title: t('deleteDevice'),
-                message: `${ids.length} ${t('deleteSelectedConfirm')}`,
-                onConfirm: async () => {
-                  let deleted = 0;
-                  for (const id of ids) {
-                    try { const res = await authFetch('/switches/' + id, { method: 'DELETE' }); if (res && res.ok) deleted++; } catch { /* ignore */ }
-                  }
-                  showToast(`${deleted} device(s) deleted`, 'success');
-                  fetchData();
-                }
-              });
-            }}>🗑️ Delete Selected</div>
-          </div>
-        )}
-
-        {isAdmin && edgeMenu && (
-          <div className="context-menu" style={{ top: edgeMenu.top, left: edgeMenu.left }}>
-            <div className="context-menu-item" style={{ color: 'var(--danger)' }} onClick={() => {
-              authFetch(`/edges/${edgeMenu.id}`, { method: 'DELETE' });
-              setEdges(eds => eds.filter(e => e.id !== edgeMenu.id));
-              setEdgeMenu(null);
-            }}>🗑️ {t('deleteConnection')}</div>
-          </div>
-        )}
       </div>
+
+      {/* Menüler tuvalin DIŞINDA duruyor. .context-menu position:fixed olduğu için
+          konumları değişmez (tuvalin transform'u yok), ama uzun basmadan sonra gelen
+          "tıklamayı yut" koruyucusu (useLongPress -> onClickCapture, tuval sarmalayıcıya
+          yayılıyor) menü satırına giden dokunuşu capture fazında yiyemez. */}
+      {menu && (
+        <TopoMenu
+          sheet={showTouchBar}
+          short={isShort}
+          top={menu.top}
+          left={menu.left}
+          title={menu.label}
+          items={nodeMenuItems}
+          onClose={() => setMenu(null)}
+        />
+      )}
+
+      {/* Çoklu seçim menüsü */}
+      {isAdmin && selMenu && (
+        <TopoMenu
+          sheet={showTouchBar}
+          short={isShort}
+          top={selMenu.top}
+          left={selMenu.left}
+          title={`${selMenu.ids.length} selected`}
+          popupTitle={`${selMenu.ids.length} selected`}
+          items={selMenuItems}
+          onClose={() => setSelMenu(null)}
+        />
+      )}
+
+      {isAdmin && edgeMenu && (
+        <TopoMenu
+          sheet={showTouchBar}
+          short={isShort}
+          top={edgeMenu.top}
+          left={edgeMenu.left}
+          title="Connection"
+          items={edgeMenuItems}
+          onClose={() => setEdgeMenu(null)}
+        />
+      )}
 
       {/* Cihaz Web Arayüzü — backend proxy üzerinden iframe */}
       {webModal && (
         <div className="modal-overlay" onClick={() => setWebModal(null)} onKeyDown={e => { if (e.key === 'Escape') setWebModal(null); }}>
-          <div onClick={e => e.stopPropagation()} style={{
-            width: '85vw', height: '85vh', background: 'var(--bg-panel)',
-            border: '1px solid var(--border-color)', borderRadius: 12,
-            display: 'flex', flexDirection: 'column', overflow: 'hidden',
-            boxShadow: '0 24px 60px rgba(0,0,0,0.6)'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', borderBottom: '1px solid var(--border-color)', flexShrink: 0 }}>
-              <strong style={{ fontSize: '0.9rem' }}>🌐 {webModal.label}</strong>
+          {/* Telefonda tam ekran sayfa, kısa ekranda kenardan 8px. 85vh iOS'ta URL çubuğu
+              olmayan uzun viewport'a göre ölçülüp içeriği kırpıyordu.
+              height + maxHeight ikilisi dvh yoksa güvenle vh'ye düşer. */}
+          <div onClick={e => e.stopPropagation()} style={
+            isPhone
+              ? {
+                  width: '100%', maxWidth: '100%', height: '100vh', maxHeight: '100dvh',
+                  background: 'var(--bg-panel)', border: 'none', borderRadius: 0,
+                  display: 'flex', flexDirection: 'column', overflow: 'hidden', boxSizing: 'border-box',
+                  paddingBottom: 'env(safe-area-inset-bottom)'
+                }
+              : isShort
+                ? {
+                    width: 'calc(100vw - 16px)', maxWidth: 'calc(100vw - 16px)',
+                    height: 'calc(100vh - 16px)', maxHeight: 'calc(100dvh - 16px)',
+                    background: 'var(--bg-panel)', border: '1px solid var(--border-color)', borderRadius: 10,
+                    display: 'flex', flexDirection: 'column', overflow: 'hidden', boxSizing: 'border-box'
+                  }
+                : {
+                    width: '85vw', height: '85vh', background: 'var(--bg-panel)',
+                    border: '1px solid var(--border-color)', borderRadius: 12,
+                    display: 'flex', flexDirection: 'column', overflow: 'hidden',
+                    boxShadow: '0 24px 60px rgba(0,0,0,0.6)'
+                  }
+          }>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px',
+              borderBottom: '1px solid var(--border-color)', flexShrink: 0,
+              ...(showTouchBar ? { flexWrap: 'wrap', minWidth: 0, rowGap: 6 } : null)
+            }}>
+              {/* Kırpma yalnızca dar gövdede: masaüstünde başlık eskisi gibi tam görünür */}
+              <strong style={{
+                fontSize: '0.9rem',
+                ...(showTouchBar ? { minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } : null)
+              }}>🌐 {webModal.label}</strong>
               <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem', fontFamily: 'monospace' }}>{webModal.ip}</span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: showTouchBar ? 0 : 12 }}>
                 {['http', 'https'].map(s => (
                   <button key={s} onClick={() => setWebModal(w => ({ ...w, scheme: s }))}
                     style={{
                       padding: '3px 10px', fontSize: '0.7rem', borderRadius: 6, cursor: 'pointer',
                       border: '1px solid var(--border-color)', fontWeight: 600,
                       background: webModal.scheme === s ? 'var(--primary)' : 'transparent',
-                      color: webModal.scheme === s ? '#0f172a' : 'var(--text-muted)'
+                      color: webModal.scheme === s ? '#0f172a' : 'var(--text-muted)',
+                      ...(showTouchBar ? { minWidth: 56, minHeight: 44, fontSize: '0.8rem', touchAction: 'manipulation' } : null)
                     }}>{s.toUpperCase()}</button>
                 ))}
                 {/* reloadKey artışı iframe'i remount ederek sayfayı yeniler */}
                 <button onClick={() => setWebModal(w => ({ ...w, reloadKey: (w.reloadKey || 0) + 1 }))}
                   title={t('refresh')}
+                  aria-label={t('refresh')}
                   style={{
                     padding: '3px 9px', fontSize: '0.85rem', lineHeight: 1, borderRadius: 6, cursor: 'pointer',
-                    border: '1px solid var(--border-color)', background: 'transparent', color: 'var(--text-muted)'
+                    border: '1px solid var(--border-color)', background: 'transparent', color: 'var(--text-muted)',
+                    ...(showTouchBar ? { minWidth: 44, minHeight: 44, touchAction: 'manipulation' } : null)
                   }}>⟳</button>
               </div>
-              <button onClick={() => setWebModal(null)} className="btn btn-ghost" style={{ marginLeft: 'auto', fontSize: '1.3rem', lineHeight: 1, padding: '0 8px' }}>&times;</button>
+              <button onClick={() => setWebModal(null)} className="btn btn-ghost" aria-label="Close"
+                style={{
+                  marginLeft: 'auto', fontSize: '1.3rem', lineHeight: 1, padding: '0 8px',
+                  ...(showTouchBar ? { minWidth: 44, minHeight: 44 } : null)
+                }}>&times;</button>
             </div>
             <iframe
               key={`${webModal.id}-${webModal.scheme}-${webModal.reloadKey || 0}`}
               src={`${API_BASE}/webproxy/${webModal.id}/${webModal.scheme}/`}
               title={`${webModal.label} Web UI`}
-              style={{ flex: 1, border: 'none', background: '#fff' }}
+              style={{ flex: 1, minHeight: 0, border: 'none', background: '#fff' }}
             />
           </div>
         </div>
@@ -640,7 +1175,8 @@ function TopologyInner({ onEdit, onClone }) {
 
             <div className="confirm-actions">
               <button className="btn btn-ghost" onClick={() => setShowDiscoverDialog(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={handleAutoDiscover} autoFocus>
+              {/* autoFocus telefonda odak/scroll zıplamasına yol açıyor → yalnızca farede */}
+              <button className="btn btn-primary" onClick={handleAutoDiscover} autoFocus={!showTouchBar}>
                 Start Discovery
               </button>
             </div>

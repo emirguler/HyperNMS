@@ -2,17 +2,58 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { useApp } from '../context/AppContext';
+import { useViewport } from '../hooks/useViewport';
 import { severityColor } from '../components/NotificationBell';
 import { t } from '../i18n';
+
+// Telefonda bildirimler 190px'lik ic kaydirma kutusuna hapsedilmiyor; once bu
+// kadari gosterilir, kalani "Show all" ile acilir (sayfa tek parca kayar).
+const NOTIF_PREVIEW = 5;
+
+// Dokunmatikte toLocaleString hem ~90px genislik yiyor hem 10.9px'e sikisiyordu.
+// Masaustu yolu eski bicimi aynen kullanmaya devam eder.
+function timeAgo(ts) {
+  const ms = new Date(ts).getTime();
+  if (!Number.isFinite(ms)) return '';
+  const sec = Math.max(0, Math.round((Date.now() - ms) / 1000));
+  if (sec < 60) return `${sec}s ago`;
+  const min = Math.round(sec / 60);
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.round(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  return `${Math.round(hr / 24)}d ago`;
+}
+
+// Sabit-px ic kaydirma kutulari (190/190/340) parmakla yonetilemiyor: kaydirma
+// zincirlenir, sayfanin kendisi kimildamaz.
+//   telefon    -> kutu tamamen kalkar, tek surekli sayfa kaydirmasi
+//   kisa ekran -> dvh ile sinirlanir + zincirleme kesilir
+//   masaustu   -> birebir eski deger
+function innerScroll(px, dvh, isPhone, isShort) {
+  if (isPhone) return { maxHeight: 'none', overflowY: 'visible' };
+  if (isShort) return { maxHeight: `min(${px}px, ${dvh}dvh)`, overflowY: 'auto', overscrollBehavior: 'contain' };
+  return { maxHeight: px, overflowY: 'auto' };
+}
 
 export default function DashboardPage() {
   const { rawDevices, topoTabs, notifications } = useApp();
   const navigate = useNavigate();
+  // compact = responsive.css'teki "dar govde" sorgusu: (max-width:768px) VEYA (max-height:500px)
+  const { isPhone, isTablet, isShort, isTouch, width } = useViewport();
+  const compact = isPhone || isShort;
+  // grid-dash-main'in TEK kolona dustugu hal. Iki yoldan olur:
+  //   App.css @media (max-width:900px)                        -> telefon dikey
+  //   responsive.css @media (max-height:500px) and (max-width:600px) -> dar VE kisa
+  //     (or. yazilim klavyesi acikken 390x400)
+  // Kisa ama GENIS ekranda (812x375) responsive.css kolonlari geri veriyor,
+  // orada siralama yapilmaz - `order` cok kolonlu gridde sutun sirasini bozardi.
+  const stackedGrid = isPhone && (!isShort || width <= 600);
 
   // DOWN cihazlar tablosu — topoloji sayfası + tip filtresi
   const [downPage, setDownPage] = useState('all');
   const [downType, setDownType] = useState('all');
   const [healthType, setHealthType] = useState('all'); // Network Health kartı cihaz-tipi filtresi
+  const [showAllNotifs, setShowAllNotifs] = useState(false); // telefonda bildirim listesini aç
 
   const downDevices = useMemo(() => rawDevices.filter(d => d.status !== 'UP'), [rawDevices]);
   const downTypes = useMemo(() => [...new Set(downDevices.map(d => d.type || 'switch'))].sort(), [downDevices]);
@@ -44,9 +85,30 @@ export default function DashboardPage() {
   }, [rawDevices, healthType]);
   const healthPie = [{ name: 'UP', value: healthStats.up }, { name: 'DOWN', value: healthStats.down }];
 
+  // Filtre <select>'leri: dokunmatikte inline fontSize/padding KALKAR, boylece
+  // responsive.css'in 16px + 44px tabani devreye girer (yoksa iOS odakta zoomlar)
+  // ve select.modern-input'un 40px'lik ok payi geri gelir. Telefonda tam genislik.
+  const healthSelectStyle = isTouch
+    ? (isPhone ? { width: '100%', minWidth: 0 } : { width: 'auto', minWidth: 110 })
+    : { width: 'auto', minWidth: 84, fontSize: '0.72rem', padding: '5px 8px' };
+  const downSelectStyle = isTouch
+    ? (isPhone ? { width: '100%', minWidth: 0 } : { width: 'auto', minWidth: 160 })
+    : { width: 'auto', minWidth: 140, fontSize: '0.8rem', padding: '8px 12px' };
+
+  // Kart basliklari: 375px ekranda 48px'lik yatay dolgu israf.
+  const cardHeadPad = isPhone ? '12px 14px' : '16px 24px';
+  // Tablo hucrelerindeki inline 24px, App.css'in <=768px 10px/8px kuralini eziyordu.
+  const tdPadL = isPhone ? undefined : 24;
+  const tdPadR = isPhone ? undefined : 24;
+
+  const visibleNotifs = (isPhone && !showAllNotifs) ? notifications.slice(0, NOTIF_PREVIEW) : notifications;
+
   return (
-    <div className="list-container">
-      <div className="grid-stats" style={{ marginBottom: 14 }}>
+    // Dar govdede kolon flex: kartlar arasi sira `order` ile degisir. Masaustunde
+    // kap duz blok kalir, `order` yok sayilir -> masaustu duzeni birebir ayni.
+    <div className="list-container" style={compact ? { display: 'flex', flexDirection: 'column', gap: 14 } : undefined}>
+      {/* order 2: DOWN listesinden sonra, dekoratif kartlardan once */}
+      <div className="grid-stats" style={compact ? { order: 2, flexShrink: 0 } : { marginBottom: 14 }}>
         {[
           { label: t('totalDevices'), value: rawDevices.length, color: undefined },
           { label: t('activeUp'), value: stats.upCount, color: 'var(--success)' },
@@ -62,21 +124,29 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      <div className="grid-dash-main">
+      {/* order 3: dekoratif kartlar en sona */}
+      <div className="grid-dash-main" style={compact ? { order: 3, flexShrink: 0 } : undefined}>
         {/* Network Health Pie — cihaz tipine göre filtrelenebilir */}
-        <div className="chart-container" style={{ textAlign: 'center' }}>
+        {/* Tek kolona dusen gridde donut EN SONA gider (sadece dekoratif). */}
+        <div className="chart-container" style={stackedGrid ? { textAlign: 'center', order: 3 } : { textAlign: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
             <h3 className="dash-section-title" style={{ margin: 0 }}>{t('networkHealth')}</h3>
             <select className="modern-input" value={healthType} onChange={e => setHealthType(e.target.value)}
-              style={{ width: 'auto', minWidth: 84, fontSize: '0.72rem', padding: '5px 8px' }}>
+              aria-label={t('networkHealth')} style={healthSelectStyle}>
               <option value="all">{t('allTypes')}</option>
               {healthTypes.map(ty => <option key={ty} value={ty} style={{ textTransform: 'capitalize' }}>{ty}</option>)}
             </select>
           </div>
-          <div style={{ position: 'relative', display: 'inline-block' }}>
-            <ResponsiveContainer width={130} height={130}>
+          {/* Tablet ve altinda akiskan: 130px sabit donut, tek kolona dusen kartta
+              kaybolacak kadar kucuk kaliyordu. Yaricaplar yuzde -> orani korur. */}
+          <div style={isTablet
+            ? { position: 'relative', width: '100%', maxWidth: 220, margin: '0 auto' }
+            : { position: 'relative', display: 'inline-block' }}>
+            <ResponsiveContainer width={isTablet ? '100%' : 130} height={isTablet ? undefined : 130} aspect={isTablet ? 1 : undefined}>
               <PieChart>
-                <Pie data={healthPie} cx="50%" cy="50%" innerRadius={42} outerRadius={58} dataKey="value" strokeWidth={0}>
+                <Pie data={healthPie} cx="50%" cy="50%"
+                  innerRadius={isTablet ? '70%' : 42} outerRadius={isTablet ? '96%' : 58}
+                  dataKey="value" strokeWidth={0}>
                   {healthPie.map((_, i) => <Cell key={i} fill={COLORS[i]} />)}
                 </Pie>
               </PieChart>
@@ -92,9 +162,9 @@ export default function DashboardPage() {
         </div>
 
         {/* Device Types */}
-        <div className="chart-container">
+        <div className="chart-container" style={stackedGrid ? { order: 2 } : undefined}>
           <h3 className="dash-section-title">{t('deviceTypes')}</h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 12, maxHeight: 190, overflowY: 'auto' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 12, ...innerScroll(190, 40, isPhone, isShort) }}>
             {Object.entries(stats.typeGroups).map(([type, count]) => (
               <div key={type} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span style={{ fontSize: '0.85rem', textTransform: 'capitalize' }}>{type}</span>
@@ -110,25 +180,30 @@ export default function DashboardPage() {
         </div>
 
         {/* Notifications (zil ile aynı veri) */}
-        <div className="chart-container" style={{ padding: 0, overflow: 'hidden' }}>
-          <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border-color)' }}>
+        <div className="chart-container" style={stackedGrid ? { padding: 0, overflow: 'hidden', order: 1 } : { padding: 0, overflow: 'hidden' }}>
+          <div style={{ padding: cardHeadPad, borderBottom: '1px solid var(--border-color)' }}>
             <h3 className="dash-section-title" style={{ margin: 0 }}>🔔 {t('notifications')}</h3>
           </div>
-          <div style={{ maxHeight: 190, overflowY: 'auto' }}>
-            {notifications.length > 0 ? notifications.map(n => (
+          <div style={innerScroll(190, 45, isPhone, isShort)}>
+            {visibleNotifs.length > 0 ? visibleNotifs.map(n => (
               <div key={n.id}
                 className={n.deviceId ? 'notif-clickable' : undefined}
                 onClick={n.deviceId ? () => navigate(`/devices/${n.deviceId}`) : undefined}
                 title={n.deviceId ? n.deviceName : undefined}
-                style={{ padding: '10px 16px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                style={{ padding: isTouch ? '12px 16px' : '10px 16px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                 <span style={{ fontSize: '1rem', lineHeight: 1.2 }}>{n.severity === 'critical' ? '🔴' : '🟢'}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: '0.82rem', fontWeight: 600, color: severityColor(n.severity) }}>{n.title}</div>
+                  <div style={{ fontSize: isTouch ? '0.875rem' : '0.82rem', fontWeight: 600, color: severityColor(n.severity) }}>{n.title}</div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3, flexWrap: 'wrap' }}>
-                    {n.topologyPage && (
-                      <span style={{ background: 'rgba(56,189,248,0.15)', color: 'var(--primary)', padding: '1px 6px', borderRadius: 10, fontSize: '0.65rem', fontWeight: 600 }}>🗺️ {n.topologyPage}</span>
+                    {/* Cihaz adi masaustunde title= ile hover'da cikiyor; dokunmatikte
+                        hover olmadigi icin gorunur metne cevriliyor (sadece orada). */}
+                    {isTouch && n.deviceId && n.deviceName && (
+                      <span className="rw-truncate" style={{ fontSize: '0.78rem', color: 'var(--text-main)', fontWeight: 500, maxWidth: '100%' }}>{n.deviceName}</span>
                     )}
-                    <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>{new Date(n.timestamp).toLocaleString()}</span>
+                    {n.topologyPage && (
+                      <span style={{ background: 'rgba(56,189,248,0.15)', color: 'var(--primary)', padding: '1px 6px', borderRadius: 10, fontSize: isTouch ? '0.75rem' : '0.65rem', fontWeight: 600 }}>🗺️ {n.topologyPage}</span>
+                    )}
+                    <span style={{ fontSize: isTouch ? '0.75rem' : '0.68rem', color: 'var(--text-muted)' }}>{isTouch ? timeAgo(n.timestamp) : new Date(n.timestamp).toLocaleString()}</span>
                   </div>
                 </div>
               </div>
@@ -136,53 +211,75 @@ export default function DashboardPage() {
               <div style={{ padding: 30, textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>{t('noNotifications')}</div>
             )}
           </div>
+          {isPhone && !showAllNotifs && notifications.length > NOTIF_PREVIEW && (
+            <button type="button" className="btn btn-ghost" onClick={() => setShowAllNotifs(true)}
+              style={{ width: '100%', borderRadius: 0, borderTop: '1px solid var(--border-color)' }}>
+              Show all ({notifications.length})
+            </button>
+          )}
         </div>
 
       </div>
 
       {/* DOWN cihazlar — sayfa sekmeleri + tip filtresi */}
-      <div className="chart-container no-float" style={{ padding: 0, overflow: 'hidden', marginTop: 14 }}>
-        <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+      {/* order 1: sayfanin TEK eyleme donuk karti, dar govdede en uste gelir. */}
+      <div className="chart-container no-float"
+        style={compact ? { padding: 0, overflow: 'hidden', order: 1, flexShrink: 0 } : { padding: 0, overflow: 'hidden', marginTop: 14 }}>
+        <div style={{ padding: cardHeadPad, borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
           <h3 className="dash-section-title" style={{ margin: 0 }}>
             🔴 {t('downDevices')} <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>({filteredDown.length})</span>
           </h3>
           <select className="modern-input" value={downType} onChange={e => setDownType(e.target.value)}
-            style={{ width: 'auto', minWidth: 140, fontSize: '0.8rem', padding: '8px 12px' }}>
+            aria-label={t('downDevices')} style={downSelectStyle}>
             <option value="all">{t('allTypes')}</option>
             {downTypes.map(ty => <option key={ty} value={ty} style={{ textTransform: 'capitalize' }}>{ty}</option>)}
           </select>
         </div>
 
-        {/* Sayfa sekmeleri */}
-        <div className="topology-tabs" style={{ padding: '0 12px', flexWrap: 'wrap' }}>
-          <div className={`topology-tab ${downPage === 'all' ? 'active' : ''}`} onClick={() => setDownPage('all')}>{t('allPages')}</div>
+        {/* Sayfa sekmeleri — dokunmatikte sarmak yerine tek satir yatay kaydirma:
+            36px'lik kutuda sarilan satirlar erisilemez oluyordu. */}
+        <div className="topology-tabs rw-scroll-x" style={{ padding: '0 12px', flexWrap: isTouch ? 'nowrap' : 'wrap' }}>
+          <div className={`topology-tab ${downPage === 'all' ? 'active' : ''}`} role="button" tabIndex={0}
+            onClick={() => setDownPage('all')}
+            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDownPage('all'); } }}>{t('allPages')}</div>
           {topoTabs.map(tab => (
-            <div key={tab.id} className={`topology-tab ${downPage === tab.id ? 'active' : ''}`} onClick={() => setDownPage(tab.id)}>{tab.name}</div>
+            <div key={tab.id} className={`topology-tab ${downPage === tab.id ? 'active' : ''}`} role="button" tabIndex={0}
+              onClick={() => setDownPage(tab.id)}
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDownPage(tab.id); } }}>{tab.name}</div>
           ))}
         </div>
 
-        <div style={{ maxHeight: 340, overflowY: 'auto' }}>
-          <table className="modern-table">
+        {/* rw-scroll-x: <=1024px'te yatay kaydirma kabi. Telefonda dikey kutu
+            kalktigi icin (maxHeight:none) tabloyu karti asan tek eksen yatay kalir;
+            responsive.css bu kalibi (.chart-container:has(> .rw-scroll-x > table.rw-cards))
+            zaten taniyor ve kart modunda yatay kaydirmayi kapatiyor. */}
+        <div className="rw-scroll-x" style={{ ...innerScroll(340, 55, isPhone, isShort), ...(isPhone ? { padding: '10px 12px' } : null) }}>
+          {/* .rw-cards: <=600px'te satirlar yigin karta doner (yatay kaydirma biter).
+              Kartta yalnizca Name + IP kalir; Status/Type/Page rw-hide-sm ile duser
+              (kartin basligi zaten "DOWN devices"). */}
+          <table className="modern-table rw-cards">
             <thead>
               <tr>
-                <th style={{ paddingLeft: 24 }}>Status</th>
+                <th className="rw-hide-sm" style={{ paddingLeft: tdPadL }}>Status</th>
                 <th>Name</th>
                 <th>IP</th>
-                <th>Type</th>
-                <th style={{ paddingRight: 24 }}>Page</th>
+                <th className="rw-hide-sm">Type</th>
+                <th className="rw-hide-sm" style={{ paddingRight: tdPadR }}>Page</th>
               </tr>
             </thead>
             <tbody>
               {filteredDown.length > 0 ? filteredDown.map(d => (
                 <tr key={d.id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/devices/${d.id}`, { state: { from: '/dashboard' } })}>
-                  <td style={{ paddingLeft: 24 }}><span className="status-badge status-down" style={{ fontSize: '0.7rem', padding: '3px 8px' }}>DOWN</span></td>
-                  <td style={{ fontWeight: 500, fontSize: '0.85rem' }}>{d.name}</td>
-                  <td style={{ fontFamily: 'monospace', fontSize: '0.8rem', color: 'var(--text-muted)' }}>{d.ip}</td>
-                  <td style={{ fontSize: '0.8rem', textTransform: 'capitalize' }}>{d.type || 'switch'}</td>
-                  <td style={{ fontSize: '0.8rem', color: 'var(--text-muted)', paddingRight: 24 }}>{pageName(d.topologyPage)}</td>
+                  <td className="rw-hide-sm" data-label="Status" style={{ paddingLeft: tdPadL }}><span className="status-badge status-down" style={{ fontSize: isTouch ? '0.75rem' : '0.7rem', padding: '3px 8px' }}>DOWN</span></td>
+                  <td data-label="Name" style={{ fontWeight: 500, fontSize: '0.85rem' }}>{d.name}</td>
+                  <td data-label="IP" style={{ fontFamily: 'monospace', fontSize: '0.8rem', color: 'var(--text-muted)' }}>{d.ip}</td>
+                  <td className="rw-hide-sm" data-label="Type" style={{ fontSize: '0.8rem', textTransform: 'capitalize' }}>{d.type || 'switch'}</td>
+                  <td className="rw-hide-sm" data-label="Page" style={{ fontSize: '0.8rem', color: 'var(--text-muted)', paddingRight: tdPadR }}>{pageName(d.topologyPage)}</td>
                 </tr>
               )) : (
-                <tr><td colSpan={5} style={{ textAlign: 'center', padding: 30, color: 'var(--text-muted)' }}>{t('noDownDevices')}</td></tr>
+                <tr><td colSpan={5} data-label="" style={{ textAlign: 'center', padding: 30, color: 'var(--text-muted)' }}>
+                  <div style={{ flex: 1, textAlign: 'center' }}>{t('noDownDevices')}</div>
+                </td></tr>
               )}
             </tbody>
           </table>

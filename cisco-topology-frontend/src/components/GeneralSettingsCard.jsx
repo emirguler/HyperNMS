@@ -1,5 +1,6 @@
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
+import { useViewport } from '../hooks/useViewport';
 import { showToast } from '../Toast';
 
 // Genel (cihaz geneli) ayarlar — sistem geneli, admin ayarlar. Ayarlar hub'indaki
@@ -7,6 +8,18 @@ import { showToast } from '../Toast';
 export default function GeneralSettingsCard({ embedded }) {
   const { general, setGeneral } = useApp();
   const { authFetch, isAdmin } = useAuth();
+  // isTouch = (hover: none). Hover olmayan cihazda title= ipucu HIC gorunmez,
+  // bu yuzden "neden kapali" bilgisi satirin icine yazilir.
+  const { isPhone, isShort, isTouch } = useViewport();
+  const compact = isPhone || isShort;
+  // Dokunmatikte SATIRIN TAMAMI hedef olsun: satir <label> olur, ic anahtar
+  // <span>'e iner (ic ice <label> gecersiz HTML'dir).
+  // Masaustunde (hover'li + genis + yuksek) ESKI yapi birebir korunur:
+  // satir <div>, anahtar <label> — yoksa aciklama metnine tiklamak/secmek
+  // ayari degistirirdi ki bu bir masaustu davranis degisikligidir.
+  const rowAsLabel = isTouch || compact;
+  const Row = rowAsLabel ? 'label' : 'div';
+  const Switch = rowAsLabel ? 'span' : 'label';
 
   const cometOn = general.cometAnimation !== false;
   const wirelessOn = general.wirelessAnimation !== false;
@@ -43,33 +56,40 @@ export default function GeneralSettingsCard({ embedded }) {
         Device-wide display &amp; behavior for the whole system. Applies to every user.
       </p>
 
-      {/* Kablolu comet animasyonu */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '14px 0', borderTop: '1px solid var(--border-color)' }}>
+      {/* Kablolu comet animasyonu.
+          Dokunmatikte satirin tamami <label> (bkz. rowAsLabel), masaustunde <div>. */}
+      <Row style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '14px 0', minHeight: compact ? 44 : undefined, borderTop: '1px solid var(--border-color)' }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)' }}>Wired link comet animation</div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 3, lineHeight: 1.45 }}>
             The sliding light that travels along active wired connections. Turn off to reduce CPU on large maps.
           </div>
+          {isTouch && !isAdmin && (
+            <div style={{ fontSize: '0.75rem', color: 'var(--danger)', marginTop: 4 }}>Locked — administrators only</div>
+          )}
         </div>
-        <label className="toggle-switch" title={isAdmin ? '' : 'Administrators only'} style={{ flexShrink: 0 }}>
+        <Switch className="toggle-switch" title={isAdmin ? '' : 'Administrators only'} style={{ flexShrink: 0 }}>
           <input type="checkbox" checked={cometOn} disabled={!isAdmin} onChange={e => save({ cometAnimation: e.target.checked })} />
           <span className="toggle-slider" />
-        </label>
-      </div>
+        </Switch>
+      </Row>
 
-      {/* Kablosuz (anten) animasyonu */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '14px 0', borderTop: '1px solid var(--border-color)' }}>
+      {/* Kablosuz (anten) animasyonu — ayni satir duzeni */}
+      <Row style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '14px 0', minHeight: compact ? 44 : undefined, borderTop: '1px solid var(--border-color)' }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)' }}>Wireless link animation</div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 3, lineHeight: 1.45 }}>
             The flowing dashes on active antenna-to-antenna links. Turn off to reduce CPU on large maps.
           </div>
+          {isTouch && !isAdmin && (
+            <div style={{ fontSize: '0.75rem', color: 'var(--danger)', marginTop: 4 }}>Locked — administrators only</div>
+          )}
         </div>
-        <label className="toggle-switch" title={isAdmin ? '' : 'Administrators only'} style={{ flexShrink: 0 }}>
+        <Switch className="toggle-switch" title={isAdmin ? '' : 'Administrators only'} style={{ flexShrink: 0 }}>
           <input type="checkbox" checked={wirelessOn} disabled={!isAdmin} onChange={e => save({ wirelessAnimation: e.target.checked })} />
           <span className="toggle-slider" />
-        </label>
-      </div>
+        </Switch>
+      </Row>
 
       {!isAdmin && (
         <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 6 }}>

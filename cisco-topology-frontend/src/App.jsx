@@ -105,7 +105,10 @@ function AppLayout() {
   return (
     <div className="app-container">
       <Navbar onAddDevice={isAdmin ? handleAddDevice : undefined} />
-      <main style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+      {/* .app-main: tek icerik bolgesi. Sinif tamamen ek — hicbir masaustu kurali
+          buna bakmiyor; mobil katmanin overflow/dvh davranisini inline stile
+          dokunmadan hedefleyebilmesi icin var. */}
+      <main className="app-main" style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
         <Suspense fallback={<div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>…</div>}>
           <Routes>
             <Route path="/dashboard" element={<DashboardPage />} />

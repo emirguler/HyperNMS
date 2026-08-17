@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
+import { useViewport } from '../hooks/useViewport';
 import { showToast } from '../Toast';
 
 // Basit CSV/TSV parser
@@ -51,6 +52,10 @@ function parseCSV(text) {
 export default function BulkImportModal({ onClose }) {
   const { authFetch } = useAuth();
   const { fetchData } = useApp();
+  // "dar govde" = telefon VEYA kisa ekran; responsive.css'teki
+  // (max-width:768px),(max-height:500px) sorgusuyla birebir ayni.
+  const { isPhone, isShort } = useViewport();
+  const compact = isPhone || isShort;
   const [devices, setDevices] = useState([]);
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -132,30 +137,38 @@ export default function BulkImportModal({ onClose }) {
 
   return (
     <div className="modal-overlay" onClick={onClose} onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
-      <div className="modal-content" style={{ width: 600, maxHeight: '80vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 600, color: 'var(--text-main)' }}>Bulk Import Devices</h2>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '1.5rem', cursor: 'pointer' }}>&times;</button>
+      <div className={compact ? 'modal-content rw-sheet' : 'modal-content'} style={{ width: 600, maxHeight: '80dvh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
+        <div className={compact ? 'rw-sheet-head' : undefined} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: compact ? 0 : 20 }}>
+          <h2 style={{ margin: 0, fontSize: compact ? '1rem' : '1.25rem', fontWeight: 600, color: 'var(--text-main)' }}>Bulk Import Devices</h2>
+          {/* rw-tap SADECE (pointer:coarse) altinda calisir -> masaustunde etkisiz,
+              compact olmayan dokunmatik tablette 44x44 hedef verir. */}
+          <button onClick={onClose} className={compact ? 'rw-sheet-close' : 'rw-tap'} aria-label="Close"
+            style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '1.5rem', cursor: 'pointer' }}>&times;</button>
         </div>
 
+        {/* Tek kaydirma bolgesi: baslik ve alt bar dar govdede yapisik kalir. */}
+        <div className={compact ? 'rw-sheet-body' : undefined}>
         {/* Instructions */}
         <div style={{ background: 'rgba(56,189,248,0.08)', border: '1px solid rgba(56,189,248,0.2)', borderRadius: 8, padding: 12, marginBottom: 16, fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: compact ? 'wrap' : undefined }}>
             <div>
               Upload a CSV/Excel file or paste data. Required columns: <strong>Name</strong> and <strong>IP</strong>.
               Optional: Type, Model, SSH Username, SSH Password, SNMP Community, Tags, Topology Page
             </div>
             <button type="button" className="btn btn-ghost btn-sm" onClick={downloadExampleCsv}
               title="Download a sample CSV with all columns"
-              style={{ flexShrink: 0, whiteSpace: 'nowrap', color: 'var(--primary)', fontWeight: 600 }}>
+              style={{ flexShrink: 0, whiteSpace: 'nowrap', color: 'var(--primary)', fontWeight: 600, width: isPhone ? '100%' : undefined }}>
               ⬇ Example CSV
             </button>
           </div>
         </div>
 
         {/* File upload */}
-        <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
-          <input type="file" ref={fileRef} accept=".csv,.tsv,.txt,.xlsx" onChange={handleFile} style={{ display: 'none' }} />
+        {/* accept: iOS'un dosya secici UTI ile suzuyor, sadece uzanti verilirse
+            gecerli dosyalar gri kalir — MIME tipleri de listelenmeli. */}
+        <div className={compact ? 'rw-actions' : undefined} style={{ display: 'flex', gap: 12, flexWrap: compact ? 'wrap' : undefined, alignItems: compact ? 'center' : undefined, marginBottom: 16 }}>
+          <input type="file" ref={fileRef} onChange={handleFile} style={{ display: 'none' }}
+            accept=".csv,text/csv,.tsv,text/tab-separated-values,.txt,text/plain,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
           <button className="btn btn-primary" onClick={() => fileRef.current?.click()}>Choose File (CSV)</button>
           <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem', alignSelf: 'center' }}>or paste below</span>
         </div>
@@ -166,7 +179,8 @@ export default function BulkImportModal({ onClose }) {
           value={rawText}
           onChange={e => handlePaste(e.target.value)}
           placeholder={'Name,IP,Type,SNMP Community,Topology Page\nSwitch-01,192.168.1.1,switch,public,main\nRouter-01,10.0.0.1,router,public,tab-123'}
-          style={{ width: '100%', height: 120, fontFamily: 'monospace', fontSize: '0.75rem', resize: 'vertical', marginBottom: 16 }}
+          autoCapitalize="none" autoCorrect="off" spellCheck={false}
+          style={{ width: '100%', height: compact ? 'clamp(96px, 22dvh, 200px)' : 120, fontFamily: 'monospace', fontSize: '0.75rem', resize: 'vertical', marginBottom: 16 }}
         />
 
         {/* Preview */}
@@ -175,25 +189,30 @@ export default function BulkImportModal({ onClose }) {
             <h4 style={{ margin: '0 0 8px', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
               Preview ({devices.length} devices)
             </h4>
-            <div style={{ maxHeight: 200, overflow: 'auto', border: '1px solid var(--border-color)', borderRadius: 8 }}>
-              <table className="modern-table" style={{ fontSize: '0.75rem' }}>
+            {/* Dar govdede 200px'lik ic kaydirici kalkar (ic ice kaydirma yerine tek
+                kaydirma), <=600px'te tablo karta doner, telefonda Type/SNMP/Topology duser. */}
+            <div className={compact ? 'rw-scroll-x' : undefined}
+              style={compact
+                ? { border: '1px solid var(--border-color)', borderRadius: 8, padding: 8 }
+                : { maxHeight: 200, overflow: 'auto', border: '1px solid var(--border-color)', borderRadius: 8 }}>
+              <table className={isPhone ? 'modern-table rw-cards' : 'modern-table'} style={{ fontSize: '0.75rem' }}>
                 <thead>
                   <tr>
-                    <th style={{ padding: '6px 10px' }}>Name</th>
-                    <th style={{ padding: '6px 10px' }}>IP</th>
-                    <th style={{ padding: '6px 10px' }}>Type</th>
-                    <th style={{ padding: '6px 10px' }}>SNMP</th>
-                    <th style={{ padding: '6px 10px' }}>Topology</th>
+                    <th style={{ padding: isPhone ? undefined : '6px 10px' }}>Name</th>
+                    <th style={{ padding: isPhone ? undefined : '6px 10px' }}>IP</th>
+                    {!isPhone && <th style={{ padding: '6px 10px' }}>Type</th>}
+                    {!isPhone && <th style={{ padding: '6px 10px' }}>SNMP</th>}
+                    {!isPhone && <th style={{ padding: '6px 10px' }}>Topology</th>}
                   </tr>
                 </thead>
                 <tbody>
                   {devices.slice(0, 50).map((d, i) => (
                     <tr key={i}>
-                      <td style={{ padding: '4px 10px' }}>{d.name}</td>
-                      <td style={{ padding: '4px 10px', fontFamily: 'monospace' }}>{d.ip}</td>
-                      <td style={{ padding: '4px 10px' }}>{d.type || 'switch'}</td>
-                      <td style={{ padding: '4px 10px' }}>{d.snmpCommunity || '-'}</td>
-                      <td style={{ padding: '4px 10px' }}>{d.topologyPage || 'main'}</td>
+                      <td data-label="Name" style={{ padding: isPhone ? undefined : '4px 10px' }}>{d.name}</td>
+                      <td data-label="IP" style={{ padding: isPhone ? undefined : '4px 10px', fontFamily: 'monospace' }}>{d.ip}</td>
+                      {!isPhone && <td data-label="Type" style={{ padding: '4px 10px' }}>{d.type || 'switch'}</td>}
+                      {!isPhone && <td data-label="SNMP" style={{ padding: '4px 10px' }}>{d.snmpCommunity || '-'}</td>}
+                      {!isPhone && <td data-label="Topology" style={{ padding: '4px 10px' }}>{d.topologyPage || 'main'}</td>}
                     </tr>
                   ))}
                 </tbody>
@@ -217,8 +236,10 @@ export default function BulkImportModal({ onClose }) {
           </div>
         )}
 
+        </div>
+
         {/* Actions */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+        <div className={compact ? 'rw-sheet-foot' : undefined} style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
           <button className="btn btn-ghost" onClick={onClose}>Close</button>
           <button className="btn btn-primary" onClick={handleImport} disabled={devices.length === 0 || loading}>
             {loading ? 'Importing...' : `Import ${devices.length} Device(s)`}

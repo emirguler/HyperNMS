@@ -1,0 +1,943 @@
+/* =============================================================================
+   responsive.css - NetPulse mobil / dokunmatik katmani
+   -----------------------------------------------------------------------------
+   Bu dosya cascade'de EN SON yuklenir (main.jsx icinde App.css'ten sonra),
+   bu yuzden gerektiginde React inline style'larini !important ile ezebilir.
+
+   ALTIN KURAL: :root token blogu disinda TEK BIR kural bile ust seviyede degildir.
+   Her sey asagidaki sabit media query listesinin icindedir; masaustu goruntusu
+   (genis + yuksek + fare) hicbir kuraldan etkilenmez.
+
+     (max-width: 600px)                       telefon dikey
+     (max-width: 768px)                       telefon katmani
+     (max-width: 1024px)                      tablet ve alti
+     (max-height: 500px)                      KISA ekran (telefon yatay, split view)
+     (max-width: 768px), (max-height: 500px)  "dar govde" = telefon VEYA kisa
+     (hover: none)                            dokunmatik: hover yok
+     (pointer: coarse)                        dokunmatik: parmak boyu hedefler
+     not all and (...)                        yukaridakilerin degili (rw-only-*)
+
+   ICINDEKILER
+     00  Tokenlar
+     01  .rw-* yardimci sinif sozlugu
+     02  .rw-cards - tabloyu kart yiginina cevirme
+     03  Dokunma tabani (pointer: coarse)
+     04  Hover'siz cihazlar (hover: none)
+     05  Navbar daralmasi + hamburger
+     06  Modal -> alt sayfa (bottom sheet)
+     07  .rw-sheet iskeleti (baslik / govde / alt bar)
+     08  Yerlesim: govde kaydirma, dvh, tasma disiplini
+     09  Tablolar (kart olmayanlar icin yatay kaydirma)
+     10  Toast + baglam menusu
+     11  Guvenli alan (notch / home indicator)
+     12  Login ekrani
+     13  Kisa ekran "dar govde" modu - en sonda, cunku o kazanmali
+     14  Hareket azaltma tercihi
+   ========================================================================== */
+
+
+/* ============================================================================
+   00 - TOKENLAR
+   Sadece degisken tanimi; masaustunde hicbir kurala baglanmadigi icin etkisiz.
+   ========================================================================== */
+:root {
+  --tap: 44px;             /* minimum dokunma hedefi */
+  --nav-h: 48px;           /* App.css'teki .nav-header yuksekligi */
+  /* Kisa ekranda daraltilmis navbar. 44px DEGIL: (pointer:coarse) blogu .btn-sm ve
+     .nav-btn'e min-height:44px veriyor; 44px'lik bir kabin icinde 44px'lik cocuk
+     tasar/kirpilir. 48px hem dokunma hedefini korur hem sigar. Yatayda asil kazanc
+     zaten sekme seridinden (48->36) ve list-container dolgusundan (20->8) geliyor. */
+  --nav-h-compact: 48px;
+  --sheet-radius: 18px;    /* alt sayfa ust kose yaricapi */
+  --rw-gutter: 12px;       /* mobil yatay kenar bosluk tabani */
+}
+
+
+/* ============================================================================
+   01 - .rw-* YARDIMCI SINIF SOZLUGU
+   Bu siniflar SADECE burada tanimlanir; diger ajanlar yalnizca JSX'te uygular.
+   ========================================================================== */
+
+/* --- Gorunurluk anahtarlari --- */
+@media (max-width: 600px) {
+  .rw-hide-sm { display: none !important; }
+}
+@media (max-width: 768px) {
+  .rw-hide-md { display: none !important; }
+}
+@media (max-width: 1024px) {
+  .rw-hide-lg { display: none !important; }
+}
+@media (max-height: 500px) {
+  .rw-hide-short { display: none !important; }
+}
+/* Sadece mobilde var olan ogeler: 600px USTUNDE gizlenir. */
+@media not all and (max-width: 600px) {
+  .rw-only-sm { display: none !important; }
+}
+/* Sadece dokunmatikte var olan ogeler: hover olan cihazlarda gizlenir. */
+@media not all and (hover: none) {
+  .rw-only-touch { display: none !important; }
+}
+
+/* --- Duzen yardimcilari (tablet ve alti VEYA hover'siz genis tablet) ---
+   Ikinci sorgu sart: 1180x820 iPad Air gibi 1024px'ten GENIS dokunmatik tabletlerde
+   bu siniflar aksi halde tanimsiz kalip sessizce hicbir sey yapmiyordu. Fare olan
+   masaustu (hover:hover) hicbir sekilde etkilenmez. */
+@media (max-width: 1024px), (hover: none) {
+  /* Yatay kaydirma kabi: ivmeli, kaydirma cubugu yer kaplamaz. */
+  .rw-scroll-x {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    max-width: 100%;
+  }
+  .rw-scroll-x::-webkit-scrollbar { width: 0; height: 0; display: none; }
+
+  /* Tek satir + ucnokta; flex icinde guvenli olmasi icin min-width:0. */
+  .rw-truncate {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Buton satiri: tasarsa alt satira gecsin. */
+  .rw-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+  }
+}
+
+@media (max-width: 768px) {
+  /* Grid/flex kabi -> tek kolon. display degistirilmez, sadece akis. */
+  .rw-stack {
+    grid-template-columns: 1fr !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+}
+
+@media (max-width: 600px) {
+  /* Telefonda aksiyon butonlari tam genislik. */
+  .rw-actions > * { width: 100% !important; }
+  .rw-actions { gap: 8px; }
+}
+
+@media (pointer: coarse) {
+  /* Tek bir kontrolu zorla 44x44 yapmak icin. */
+  .rw-tap {
+    min-width: var(--tap) !important;
+    min-height: var(--tap) !important;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+
+/* ============================================================================
+   02 - .rw-cards
+   <=600px'te .modern-table'in basligi gizlenir, her satir yigilmis bir karta
+   doner. GEREKSINIM: her <td> data-label="Kolon adi" tasimali.
+   Bos data-label (aksiyon hucreleri) icin etiket basilmaz.
+   ========================================================================== */
+@media (max-width: 600px) {
+  table.rw-cards {
+    display: block;
+    width: 100%;
+    /* App.css <=768'de min-width:560px veriyor; kartta yatay kaydirma olmamali. */
+    min-width: 0 !important;
+    /* Inline tableLayout:'fixed' ve <col> genislikleri kart modunda ise yaramaz. */
+    table-layout: auto !important;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+  table.rw-cards colgroup,
+  table.rw-cards col { display: none !important; }
+  table.rw-cards thead { display: none !important; }
+  table.rw-cards tbody { display: block; width: 100%; }
+
+  table.rw-cards tr {
+    display: block;
+    width: auto !important;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    margin: 0 0 10px;
+    padding: 4px 0;
+    overflow: hidden;
+  }
+  table.rw-cards tr:last-child { margin-bottom: 0; }
+
+  table.rw-cards td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    border: 0 !important;
+    border-radius: 0 !important;
+    padding: 8px 14px;
+    width: auto !important;
+    max-width: none !important;
+    min-width: 0;
+    text-align: left !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+    font-size: 0.875rem;
+  }
+
+  table.rw-cards td::before {
+    content: attr(data-label);
+    color: var(--text-muted);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    font-weight: 600;
+    flex: 0 0 auto;
+  }
+  /* data-label bos ya da hic yoksa etiket basma (aksiyon/checkbox hucreleri). */
+  table.rw-cards td[data-label=""]::before { content: none; }
+  table.rw-cards td:not([data-label])::before { content: none; }
+  table.rw-cards td[data-label=""] { justify-content: flex-end; }
+  table.rw-cards td:not([data-label]) { justify-content: flex-end; }
+
+  /* Kartin sag tarafi: degerin kendisi buyuyup ucnokta alabilsin. */
+  table.rw-cards td > * { min-width: 0; }
+
+  /* Bos hucreler kartta bir satir israf etmesin. */
+  table.rw-cards td:empty { display: none; }
+}
+
+
+/* ============================================================================
+   03 - DOKUNMA TABANI  (pointer: coarse)
+   Uygulama genelinde 44x44 minimum hedef + iOS odak zoom'unun onlenmesi.
+   Bu blok tum dosyalarin ortak tabani; ajanlar dosya bazinda tekrar etmemeli.
+   ========================================================================== */
+@media (pointer: coarse) {
+  /* 300ms tik gecikmesini oldur + tutarli dokunma vurgusu. */
+  a, button, [role="button"], label, summary, select,
+  .btn, .btn-sm, .nav-btn, .topology-tab, .topology-tab-add,
+  .context-menu-item, .dropdown-item, .settings-tile,
+  .cfg-backup-row, .cfg-dl-btn, .toast-close, .playstop-btn {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: rgba(59, 130, 246, 0.18);
+  }
+
+  /* --- Butonlar / menu satirlari --- */
+  .btn,
+  .btn-sm,
+  .nav-btn,
+  .context-menu-item,
+  .dropdown-item,
+  .topology-tab,
+  .toast-close {
+    min-height: var(--tap);
+  }
+
+  .btn { padding: 12px 18px; }
+  /* .btn-sm bazi yerlerde inline padding aliyor (or. SettingsModal Back) */
+  .btn-sm { padding: 10px 14px !important; font-size: 0.85rem; }
+  /* App.css @media(max-width:900px) .nav-btn'i 6px/0.8rem'e kucultuyor - geri al. */
+  .nav-btn { min-width: var(--tap); padding: 10px 12px; font-size: 0.875rem; }
+  .dropdown-item { display: flex; align-items: center; padding: 11px 14px; }
+  .context-menu-item { padding: 12px 14px; font-size: 0.9rem; white-space: normal; }
+  .context-menu { min-width: 200px; }
+  .cfg-dl-btn { min-width: var(--tap); min-height: var(--tap); justify-content: center; }
+
+  /* --- Form ogeleri: 16px altinda iOS sayfayi zoomlar ve geri donmez --- */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea,
+  .modern-input {
+    font-size: 16px !important;
+    min-height: var(--tap);
+  }
+  input[type="checkbox"],
+  input[type="radio"] {
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+  }
+  /* Tablo secim kutulari: hucreye dolgu vererek 44x44 dokunma alani. */
+  .modern-table td:has(> input[type="checkbox"]),
+  .modern-table th:has(> input[type="checkbox"]) { padding: 11px 12px; }
+  /* :has() desteklemeyen tarayicilar icin JSX tarafindan verilebilen sinif. */
+  .modern-table td.rw-tap-cell,
+  .modern-table th.rw-tap-cell { padding: 11px 12px; }
+
+  /* --- Ac/kapa anahtari: 44x24 gorsel KORUNUR, hedef 44px yuksekligine cikar --- */
+  .toggle-switch {
+    display: inline-flex;
+    align-items: center;
+    width: 44px;
+    min-height: var(--tap);
+  }
+  /* App.css slider'a inset:0 veriyor; 44px'lik kutuda 24px kalip dikey ortalansin. */
+  .toggle-switch .toggle-slider {
+    top: 50%;
+    bottom: auto;
+    height: 24px;
+    transform: translateY(-50%);
+  }
+  /* Gizli input'un yukarideki 22x22 checkbox kuralindan etkilenmemesi sart,
+     yoksa inline-flex kutusunda yer kaplayip slider'i kaydirir. */
+  .toggle-switch input[type="checkbox"],
+  .toggle-switch input { width: 0; height: 0; min-height: 0; }
+  .toggle-switch input:disabled + .toggle-slider {
+    opacity: .45;
+    cursor: not-allowed;
+    background: var(--border-color);
+  }
+
+  /* --- Toast kapatma: 18x18 -> 44x44, ama toast'u sismesin diye negatif margin --- */
+  .toast-close {
+    min-width: var(--tap);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 1;
+    margin: -11px -8px -11px auto;
+  }
+
+  /* --- Topoloji sekme seridi --- */
+  .topology-tabs {
+    height: 48px;
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+  }
+  .topology-tab { padding: 0 16px; font-size: 0.9rem; scroll-snap-align: start; }
+  .topology-tab-add { width: var(--tap); height: 40px; font-size: 1.2rem; }
+  .topology-tab-rename { font-size: 16px !important; width: min(160px, 45vw); min-height: 36px; }
+}
+
+
+/* ============================================================================
+   04 - HOVER'SIZ CIHAZLAR  (hover: none)
+   Iki is yapar:
+     a) Hover ile ICERIK ACAN her seye dokunmatik karsilik verir.
+     b) Sadece renk degistiren hover'lari notrler - yoksa son dokunulan oge
+        kalici olarak "secili" gorunur (iOS yapisik hover).
+   Her notrlemeye bir :active geri bildirimi eslik eder.
+   ========================================================================== */
+@media (hover: none) {
+
+  /* --- Native kontrollerin koyu temasi ---
+     index.html'de <meta name="color-scheme"> olarak duruyordu; meta bir media
+     query tasiyamadigi icin masaustunde de native checkbox / <select> acilir
+     listesi / kaydirma cubugu gorunumunu degistiriyordu (masaustu degismemeli).
+     Burada dokunmatige daraltildi: telefonda/tablette kutucuklar ve secim
+     listeleri koyu temaya uyar, fareli masaustu bugunku haliyle kalir. */
+  :root { color-scheme: dark; }
+
+  /* --- a) HOVER ILE ACILAN ICERIK: Maps acilir menusu --- */
+  /* Gorunmez 10px hover koprusu dokunmatikte olu bolge; kaldir. */
+  .dropdown::after { display: none; }
+  .dropdown:hover .dropdown-content { display: none; }
+  /* JSX tarafindan acilabilir: .open veya .rw-open sinifi, ya da odak. */
+  .dropdown.open > .dropdown-content,
+  .dropdown.rw-open > .dropdown-content,
+  .dropdown:focus-within > .dropdown-content {
+    display: block;
+    animation: fadeIn 0.15s ease;
+  }
+  /* Sag kenardan tasmasin. */
+  .dropdown-content { max-width: calc(100vw - 24px); }
+
+  /* --- a) HOVER ILE ACILAN ICERIK: harita isareti etiketi --- */
+  .geo-point:hover { transform: none; }
+  .geo-point:hover .geo-tooltip { opacity: 0; }
+  .geo-point.open .geo-tooltip,
+  .geo-point.rw-open .geo-tooltip,
+  .geo-point:focus .geo-tooltip,
+  .geo-point:active .geo-tooltip { opacity: 1; }
+  /* 12x12 nokta buyumeden dokunma alani buyur. */
+  .geo-point { width: 16px; height: 16px; }
+  .geo-point::after { content: ''; position: absolute; inset: -14px; border-radius: 50%; }
+
+  /* --- b) YAPISIK HOVER NOTRLEME + :active geri bildirim --- */
+  .nav-btn:hover { color: var(--text-muted); background: transparent; }
+  .nav-btn.active:hover { color: var(--primary); background: var(--primary-light); }
+  .nav-btn:active { background: rgba(255, 255, 255, 0.08); }
+
+  .btn-primary:hover { background: var(--primary); }
+  .btn-primary:active { background: var(--primary-hover); }
+  .btn-ghost:hover { color: var(--text-muted); background: transparent; }
+  .btn-ghost:active { color: var(--text-main); background: rgba(255, 255, 255, 0.08); }
+  .btn-danger:hover { background: rgba(239, 68, 68, 0.1); }
+  .btn-danger:active { background: rgba(239, 68, 68, 0.22); }
+
+  .dropdown-item:hover { background: transparent; color: var(--text-main); }
+  .dropdown-item:active { background: var(--primary-light); color: var(--primary); }
+
+  /* transform'lu hover, parmak altindaki ogeyi kaydirdigi icin iOS'ta ilk
+     dokunusu yutar -> her sey iki dokunus ister. Geometrik hareketi kaldir. */
+  .context-menu-item:hover { background: transparent; color: var(--text-muted); transform: none; }
+  .context-menu-item:active { background: var(--primary-light); color: var(--primary); transform: none; }
+  .settings-tile:hover {
+    background: rgba(255, 255, 255, 0.03) !important;
+    border-color: var(--border-color) !important;
+    transform: none !important;
+  }
+  .settings-tile:active {
+    background: rgba(255, 255, 255, 0.10) !important;
+    border-color: var(--primary) !important;
+  }
+
+  .topology-tab:hover { color: var(--text-muted); background: transparent; }
+  .topology-tab.active:hover { color: var(--primary); }
+  .topology-tab:active { background: rgba(255, 255, 255, 0.06); }
+  .topology-tab-add:hover { border-color: var(--border-light); color: var(--text-dim); background: none; }
+  .topology-tab-add:active { border-color: var(--primary); color: var(--primary); background: var(--primary-light); }
+
+  .chart-container:hover { border-color: var(--border-color); }
+  .topology-node:hover .node-shape { filter: none; }
+
+  .modern-table tr:hover td { background: transparent; }
+  .modern-table tr:active td { background: rgba(59, 130, 246, 0.08); }
+
+  .cfg-backup-row:hover { background: transparent; }
+  .cfg-backup-row:active { background: rgba(255, 255, 255, 0.06); }
+  .cfg-dl-btn:hover { color: var(--text-muted); background: none; }
+  .cfg-dl-btn:active { color: var(--primary); background: var(--primary-light); }
+
+  .playstop-btn:hover:not(:disabled) { filter: none; }
+
+  /* App.css tabani 0.5 opaklik; hover olmayan cihazda hep tam gorunur olsun. */
+  .toast-close,
+  .toast-close:hover { opacity: 1; }
+
+  /* Tiklanabilir bildirim satiri hover'siz cihazda hicbir isaret tasimiyordu.
+     Yerlesimi bozmayan ic golge ile kalici "dokunulabilir" ipucu ver. */
+  .notif-clickable { box-shadow: inset 2px 0 0 var(--primary); }
+  .notif-clickable:hover { background: transparent; }
+  .notif-clickable:active { background: rgba(255, 255, 255, 0.06); }
+}
+
+
+/* ============================================================================
+   05 - NAVBAR: hamburger esigi 768 -> (<=1024px VEYA <=500px yukseklik)
+   Bugun 812x375 telefon YATAY tam masaustu navbar aliyor, 768x1024 iPad ise
+   telefon menusu aliyor. Ikisi de yanlis. App.css 920-944 arasindaki grup
+   burada daha genis kosul altinda yeniden yazilir.
+   ========================================================================== */
+@media (max-width: 1024px), (max-height: 500px) {
+  .nav-menu,
+  .nav-desktop-right { display: none !important; }
+
+  .nav-hamburger {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: var(--text-main);
+    font-size: 1.4rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+    min-width: var(--tap);
+    min-height: var(--tap);
+    border-radius: var(--radius-sm);
+    -webkit-tap-highlight-color: rgba(59, 130, 246, 0.18);
+    touch-action: manipulation;
+  }
+  .nav-hamburger:active { background: rgba(255, 255, 255, 0.08); }
+
+  .nav-mobile-panel.open {
+    display: flex;
+    flex-direction: column;
+    position: absolute;
+    top: var(--nav-h);
+    left: 0;
+    right: 0;
+    background: var(--bg-panel);
+    border-bottom: 1px solid var(--border-color);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+    padding: 8px;
+    padding-bottom: calc(8px + env(safe-area-inset-bottom));
+    padding-left: max(8px, env(safe-area-inset-left));
+    padding-right: max(8px, env(safe-area-inset-right));
+    gap: 2px;
+    z-index: 10000;
+    /* Admin'de 9 satir + kullanici satiri var; panel kendi icinde kaymali. */
+    max-height: calc(100vh - var(--nav-h));
+    max-height: calc(100dvh - var(--nav-h));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    box-sizing: border-box;
+  }
+  .nav-mobile-panel .nav-btn,
+  .nav-mobile-panel .btn {
+    width: 100%;
+    text-align: left;
+    justify-content: flex-start;
+    min-height: 48px;
+    font-size: 0.9rem;
+  }
+  .nav-mobile-panel .nav-mobile-user {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 12px;
+    border-top: 1px solid var(--border-color);
+    margin-top: 4px;
+  }
+}
+
+
+/* ============================================================================
+   06 - MODAL -> ALT SAYFA (bottom sheet)
+   Modallarin cogu width/minWidth/maxHeight'i INLINE veriyor; bu yuzden
+   .modal-content uzerinde !important sart.
+   .rw-sheet verilmemis modallar da calisir: hepsi kaydirilabilir olur.
+   ========================================================================== */
+
+/* --- 6a) Telefon katmani: ekranin altina yapisan sayfa --- */
+@media (max-width: 768px) {
+  .modal-overlay {
+    align-items: flex-end;
+    justify-content: center;
+    padding: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    /* .nav-header z-index:10000 - modal onun USTUNDE olmali. */
+    z-index: 10001;
+    /* iOS'ta tam ekran backdrop-filter her kaydirma karesinde repaint eder. */
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: rgba(0, 0, 0, 0.72);
+  }
+
+  .modal-content,
+  .confirm-modal-content {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    margin-top: auto;
+    max-height: 92vh !important;
+    max-height: 92dvh !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    border-radius: var(--sheet-radius) var(--sheet-radius) 0 0;
+    box-sizing: border-box;
+    padding: 18px 16px calc(18px + env(safe-area-inset-bottom));
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+  }
+
+  /* Onay modali: butonlar sigmazsa alt satira gecsin. */
+  .confirm-actions { flex-wrap: wrap; gap: 10px; }
+  .confirm-actions .btn { flex: 1 1 140px; min-height: 48px; }
+}
+
+/* --- 6b) KISA ekran: dikey ortalama olumcul, ustten hizala + ic kaydirma --- */
+@media (max-height: 500px) {
+  .modal-overlay {
+    align-items: flex-start;
+    justify-content: center;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    z-index: 10001;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: rgba(0, 0, 0, 0.72);
+    padding: 8px;
+    padding-top: max(8px, env(safe-area-inset-top));
+    padding-left: max(8px, env(safe-area-inset-left));
+    padding-right: max(8px, env(safe-area-inset-right));
+    box-sizing: border-box;
+  }
+
+  .modal-content,
+  .confirm-modal-content {
+    margin: 0 auto;
+    /* Yatay telefon GENIS; 560px'e hapsetmek yerine genisligi kullan. */
+    width: min(720px, calc(100vw - 16px)) !important;
+    min-width: 0 !important;
+    max-width: calc(100vw - 16px) !important;
+    max-height: calc(100vh - 16px) !important;
+    max-height: calc(100dvh - 16px) !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    border-radius: var(--radius-lg);
+    padding: 14px 16px calc(14px + env(safe-area-inset-bottom));
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+    box-sizing: border-box;
+  }
+}
+
+
+/* ============================================================================
+   07 - .rw-sheet ISKELETI
+   JSX .modal-content'e .rw-sheet ekleyince modal, kendi icinde tek kaydirma
+   bolgesi olan yapisik baslik/alt bar duzenine gecer.
+   ========================================================================== */
+@media (max-width: 768px), (max-height: 500px) {
+  .modal-content.rw-sheet,
+  .confirm-modal-content.rw-sheet {
+    display: flex !important;
+    flex-direction: column !important;
+    /* Kaydirma artik .rw-sheet-body'nin isi. */
+    overflow: hidden !important;
+    padding: 0 !important;
+  }
+
+  .rw-sheet-head {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex: 0 0 auto;
+    padding: 10px 14px;
+    padding-left: max(14px, env(safe-area-inset-left));
+    padding-right: max(14px, env(safe-area-inset-right));
+    background: var(--bg-panel);
+    border-bottom: 1px solid var(--border-color);
+  }
+  .rw-sheet-head > :first-child {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0;
+  }
+  .rw-sheet-close {
+    flex: 0 0 auto;
+    min-width: var(--tap);
+    min-height: var(--tap);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.3rem;
+    line-height: 1;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    touch-action: manipulation;
+  }
+  .rw-sheet-close:active { background: rgba(255, 255, 255, 0.08); color: var(--text-main); }
+
+  .rw-sheet-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    padding: 14px;
+    padding-left: max(14px, env(safe-area-inset-left));
+    padding-right: max(14px, env(safe-area-inset-right));
+  }
+
+  .rw-sheet-foot {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    flex: 0 0 auto;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    background: var(--bg-panel);
+    border-top: 1px solid var(--border-color);
+    padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+    padding-left: max(14px, env(safe-area-inset-left));
+    padding-right: max(14px, env(safe-area-inset-right));
+  }
+  .rw-sheet-foot > .btn { flex: 1 1 140px; min-height: var(--tap); }
+}
+
+@media (max-width: 600px) {
+  /* Telefon dikeyde birincil aksiyon tam genislik. */
+  .rw-sheet-foot { flex-direction: column-reverse; align-items: stretch; }
+  .rw-sheet-foot > .btn { width: 100%; flex: 0 0 auto; }
+}
+
+
+/* ============================================================================
+   08 - YERLESIM: govde kaydirma, dvh, tasma disiplini
+   App.css:65 body{overflow:hidden} sayfanin kendisini kaydirilamaz yapiyor.
+   DIKKAT: masaustunde topoloji tuvali kaydirilmayan bir govdeye guveniyor -
+   bu yuzden asagidaki her sey SADECE dar govde sorgularinin icinde.
+   ========================================================================== */
+@media (max-width: 768px), (max-height: 500px) {
+  html {
+    overflow-x: hidden;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  body {
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior-y: none;
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+
+  #root {
+    height: auto;
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+
+  .app-container {
+    /* 100vw kaydirma cubugu genisligini saymaz -> yatay tasma. */
+    width: 100%;
+    /* Kati 100vh yerine: en az bir ekran, gerekirse buyusun. */
+    height: auto;
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+
+  /* main inline'da flex:1 + overflow:hidden. Kolon flex yaparak sayfa kokunun
+     (or. TopologyPage'in height:100% div'i) yuksekligi almasini GARANTILE -
+     .app-container height:auto'ya gectigi icin bu sart. TerminalPanel'in koku
+     position:absolute oldugu icin flex akisinin disinda kalir, etkilenmez. */
+  .app-container > main {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .app-container > main > * {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+}
+
+@media (max-width: 1024px) {
+  /* Belge HICBIR zaman yatay kaymasin. */
+  html { overflow-x: hidden; }
+
+  /* IP, hostname, komut ciktisi tasiyan kaplar tasmasin, kirilsin. */
+  .list-container,
+  .chart-container {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+  .list-container > *,
+  .chart-container > * { min-width: 0; }
+  .modern-table th,
+  .modern-table td { overflow-wrap: anywhere; }
+
+  .list-container {
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+
+/* ============================================================================
+   09 - TABLOLAR
+   .rw-cards'a gecmeyen tablolar eski 560px davranisini korur ama yatay
+   kaydirma kabin icinde kalir ve baslik satiri yapisir.
+   ========================================================================== */
+@media (max-width: 768px) {
+  .modern-table:not(.rw-cards) { min-width: 560px; }
+  .modern-table:not(.rw-cards) thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--bg-card);
+  }
+  /* App.css tablo hucrelerini 0.8rem'e dusuruyor - okunabilirlik tabani 14px. */
+  .modern-table td { font-size: 0.875rem; padding: 10px 10px; }
+  .modern-table th { padding: 10px 10px; }
+
+  /* Tabloyu saran kart yatay kaydirsin, sayfa degil. */
+  .list-container .chart-container {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
+}
+
+@media (max-width: 600px) {
+  /* Kart moduna gecen tabloyu saran kap artik yatay kaydirmamali. */
+  .list-container .chart-container:has(> table.rw-cards),
+  .list-container .chart-container:has(> .rw-scroll-x > table.rw-cards) {
+    overflow-x: visible !important;
+  }
+}
+
+
+/* ============================================================================
+   10 - TOAST + BAGLAM MENUSU
+   ========================================================================== */
+@media (max-width: 600px) {
+  .toast {
+    min-width: 0;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  /* Toast kabinin sinifi yok, konumu inline (top:80,right:24). Telefonda
+     bas parmagin ulasabildigi alta, tam genislige tasi. */
+  div:has(> .toast) {
+    left: var(--rw-gutter) !important;
+    right: var(--rw-gutter) !important;
+    top: auto !important;
+    bottom: calc(var(--rw-gutter) + env(safe-area-inset-bottom)) !important;
+  }
+}
+
+@media (max-width: 768px), (max-height: 500px) {
+  /* Baglam menusu ekran disina tasmasin ve navbar/modalin ustunde kalsin.
+     (.ssh-tab-menu inline zIndex:3000 tasiyor -> !important gerekli.) */
+  .context-menu {
+    max-width: calc(100vw - 16px);
+    max-height: calc(100vh - 16px);
+    max-height: calc(100dvh - 16px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    z-index: 10005 !important;
+  }
+}
+
+
+/* ============================================================================
+   11 - GUVENLI ALAN (notch / home indicator)
+   index.html'e viewport-fit=cover eklendi, env() artik gercek deger dondurur.
+   ========================================================================== */
+@media (max-width: 768px), (max-height: 500px) {
+  .nav-header {
+    padding-left: max(var(--rw-gutter), env(safe-area-inset-left));
+    padding-right: max(var(--rw-gutter), env(safe-area-inset-right));
+  }
+
+  .list-container {
+    padding-left: max(var(--rw-gutter), env(safe-area-inset-left));
+    padding-right: max(var(--rw-gutter), env(safe-area-inset-right));
+    padding-bottom: calc(24px + env(safe-area-inset-bottom));
+  }
+
+  /* Alta sabitlenen seyler home indicator'in ustunde kalsin.
+     (.terminal-panel sinifi terminal ajani tarafindan eklenecek; yoksa etkisiz.) */
+  .terminal-panel { padding-bottom: env(safe-area-inset-bottom); }
+}
+
+
+/* ============================================================================
+   12 - LOGIN EKRANI
+   .login-wrapper height:100vh + align-items:center + overflow yok:
+   375px yuksekliginde kart ust ve alttan kirpiliyor, kaydirma yolu yok.
+   ========================================================================== */
+@media (max-width: 768px), (max-height: 500px) {
+  .login-wrapper {
+    width: 100%;
+    height: auto;
+    min-height: 100vh;
+    min-height: 100dvh;
+    align-items: flex-start;
+    overflow-x: hidden;
+    overflow-y: auto;
+    box-sizing: border-box;
+    padding: 16px;
+    padding-top: max(16px, env(safe-area-inset-top));
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+  }
+  /* Sigdiginda hala dikey ortali, sigmadiginda kaydirilabilir. */
+  .login-card {
+    margin: auto 0;
+    padding: 24px 20px;
+    border-radius: var(--radius-lg);
+  }
+  .login-orb { width: 260px; height: 260px; filter: blur(50px); }
+}
+
+
+/* ============================================================================
+   13 - KISA EKRAN "DAR GOVDE" MODU  (max-height: 500px)
+   Olculen gercek: 375px yuksekliginde bir goruntude navbar + sekme seridi +
+   dolgular 86px yiyor. Burasi o 86px'i geri aliyor.
+   BU BLOK EN SONDA: pointer:coarse'un buyuttugu chrome'u kisa ekranda
+   yeniden daraltmak icin cascade'de sonuncu olmasi gerekiyor.
+   ========================================================================== */
+@media (max-height: 500px) {
+  .nav-header {
+    height: var(--nav-h-compact);
+    padding-left: max(10px, env(safe-area-inset-left));
+    padding-right: max(10px, env(safe-area-inset-right));
+  }
+  .nav-mobile-panel.open {
+    top: var(--nav-h-compact);
+    max-height: calc(100vh - var(--nav-h-compact));
+    max-height: calc(100dvh - var(--nav-h-compact));
+  }
+  .nav-mobile-panel .nav-btn,
+  .nav-mobile-panel .btn { min-height: 44px; }
+
+  /* Sekme seridi: 48 -> 36. Yatayda her piksel degerli. */
+  .topology-tabs { height: 36px; }
+  .topology-tab { min-height: 36px; padding: 0 14px; }
+  .topology-tab-add { height: 28px; }
+
+  .list-container {
+    padding-top: 8px;
+    padding-bottom: calc(8px + env(safe-area-inset-bottom));
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+  .chart-container { padding: 12px; }
+
+  h1 { font-size: 1.4rem; margin-top: 0; }
+  h2 { font-size: 1.25rem; margin-top: 0; }
+
+  /* Yatayda ekran GENIS: dikey yigmayi zorlamak yerine kolonlari koru.
+     (App.css @media(max-width:900px) 812/844px yatay telefonlarda tetikleniyor
+     ve tek kolona indirip sayfayi 1500px uzunlugunda bir seride ceviriyor.) */
+  .grid-dash-main { grid-template-columns: 1fr 1fr 2fr; }
+  .grid-detail-main { grid-template-columns: 2fr 1fr 1fr; }
+  .grid-detail-main.with-backup { grid-template-columns: 2fr 1fr 1fr 1fr; }
+  .grid-stats { grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .grid-2col { grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  /* Toast kisa ekranda ustte kalsin, alt bar/terminal ile cakismasin. */
+  .toast { min-width: 0; }
+}
+
+/* Kisa VE dar (or. yazilim klavyesi acikken 390x400): kolonlari yine yig. */
+@media (max-height: 500px) and (max-width: 600px) {
+  .grid-dash-main,
+  .grid-detail-main,
+  .grid-detail-main.with-backup { grid-template-columns: 1fr; }
+  .grid-stats { grid-template-columns: repeat(2, 1fr); }
+  .grid-2col { grid-template-columns: 1fr; }
+}
+
+
+/* ============================================================================
+   14 - HAREKET AZALTMA TERCIHI
+   Uygulama surekli calisan comet / wireless / shake animasyonlari tasiyor;
+   telefon GPU'sunda pil ve akicilik maliyeti. Masaustunu etkilememesi icin
+   tablet-ve-alti sorgusunun icinde tutuldu.
+   ========================================================================== */
+@media (max-width: 1024px) and (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

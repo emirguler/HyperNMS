@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
+import { useViewport } from '../hooks/useViewport';
 import UserFormModal from '../UserFormModal';
 import { showToast } from '../Toast';
 import { t, roleLabel } from '../i18n';
@@ -17,6 +18,8 @@ const roleStyle = (role) => ROLE_STYLE[role === 'User' ? 'Operator' : role] || R
 export default function UsersPage() {
   const { users, fetchUsers } = useApp();
   const { isAdmin, authFetch } = useAuth();
+  // Erken return'un USTUNDE cagrilmali, yoksa hook sirasi bozulur
+  const { isPhone, isTouch } = useViewport();
 
   if (!isAdmin) return <Navigate to="/dashboard" replace />;
   const [editingUser, setEditingUser] = useState(null);
@@ -33,28 +36,36 @@ export default function UsersPage() {
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     const res = await authFetch(`/users/${deleteTarget.id}`, { method: 'DELETE' });
-    if (res.ok) showToast(`"${deleteTarget.username}" ${t('deleted')}`, 'success');
-    else { const d = await res.json().catch(() => ({})); showToast(d.error || t('deleteFailed'), 'error'); }
+    // authFetch 401'de null doner (iOS'ta arka plana atilan sekmede sik olur)
+    if (res && res.ok) showToast(`"${deleteTarget.username}" ${t('deleted')}`, 'success');
+    else { const d = res ? await res.json().catch(() => ({})) : {}; showToast(d.error || t('deleteFailed'), 'error'); }
     setDeleteTarget(null);
     fetchUsers();
   };
 
   return (
     <div className="list-container">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+      {/* Satir kaydirma + bosluk .rw-actions'tan gelir (<=1024px); inline yazilsa
+          masaustunde de gecerli olurdu. */}
+      <div className="rw-actions" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <h2 style={{ margin: 0 }}>{t('userManagement')}</h2>
         <button className="btn btn-primary" onClick={() => { setEditingUser(null); setIsModalOpen(true); }}>{t('newUser')}</button>
       </div>
       <div className="chart-container no-float" style={{ padding: 0, overflow: 'hidden' }}>
-        <table className="modern-table">
-          <thead><tr><th style={{ paddingLeft: 24 }}>{t('usernameCol')}</th><th>{t('role')}</th><th style={{ textAlign: 'right', paddingRight: 24 }}>{t('actions')}</th></tr></thead>
+        {/* Yatay kaydirma kabin icinde: overflow:hidden yuzunden Actions kolonu kirpiliyordu */}
+        <div className="rw-scroll-x">
+        <table className="modern-table rw-cards">
+          <thead><tr><th style={{ paddingLeft: isPhone ? undefined : 24 }}>{t('usernameCol')}</th><th>{t('role')}</th><th style={{ textAlign: 'right', paddingRight: isPhone ? undefined : 24 }}>{t('actions')}</th></tr></thead>
           <tbody>
             {users.map(u => (
               <tr key={u.id}>
-                <td style={{ paddingLeft: 24 }}>
+                <td data-label="User" style={{ paddingLeft: isPhone ? undefined : 24 }}>
                   <span style={{ fontWeight: 600 }}>{u.username}</span>
                   {u.authType === 'ad' && (
-                    <span title="Active Directory" style={{ marginLeft: 8, background: 'rgba(99,102,241,0.15)', color: 'var(--primary)', padding: '3px 9px', borderRadius: 20, fontSize: '0.7rem', fontWeight: 600, border: '1px solid rgba(99,102,241,0.3)', verticalAlign: 'middle' }}>AD</span>
+                    // title= dokunmatikte hic tetiklenmez -> kisaltmayi acikca yaz.
+                    // nowrap da isTouch'a bagli: masaustunde rozet "AD" oldugu icin etkisiz
+                    // olurdu ama kural geregi kapsamsiz hicbir stil masaustune sizmamali.
+                    <span title="Active Directory" style={{ marginLeft: 8, background: 'rgba(99,102,241,0.15)', color: 'var(--primary)', padding: '3px 9px', borderRadius: 20, fontSize: '0.7rem', fontWeight: 600, border: '1px solid rgba(99,102,241,0.3)', verticalAlign: 'middle', whiteSpace: isTouch ? 'nowrap' : undefined }}>{isTouch ? 'AD Directory' : 'AD'}</span>
                   )}
                   {u.active && (
                     <span style={{ marginLeft: 8, display: 'inline-flex', alignItems: 'center', gap: 5, background: 'rgba(34,197,94,0.12)', color: 'var(--success)', padding: '3px 9px', borderRadius: 20, fontSize: '0.7rem', fontWeight: 600, border: '1px solid rgba(34,197,94,0.3)', verticalAlign: 'middle' }}>
@@ -63,17 +74,19 @@ export default function UsersPage() {
                     </span>
                   )}
                 </td>
-                <td>
+                <td data-label="Role">
                   <span style={{ background: roleStyle(u.role).bg, color: roleStyle(u.role).fg, padding: '4px 10px', borderRadius: 20, fontSize: '0.75rem', fontWeight: 600, border: `1px solid ${roleStyle(u.role).bd}`, whiteSpace: 'nowrap' }}>{roleLabel(u.role)}</span>
                 </td>
-                <td style={{ textAlign: 'right', paddingRight: 24 }}>
-                  <button className="btn btn-ghost btn-sm" style={{ marginRight: 6 }} onClick={() => { setEditingUser(u); setIsModalOpen(true); }}>{t('edit')}</button>
+                {/* Actions gizlenmiyor: satir tiklanabilir degil, tek etkilesim yolu bu */}
+                <td data-label="" style={{ textAlign: 'right', paddingRight: isPhone ? undefined : 24 }}>
+                  <button className="btn btn-ghost btn-sm" style={{ marginRight: isTouch ? 10 : 6 }} onClick={() => { setEditingUser(u); setIsModalOpen(true); }}>{t('edit')}</button>
                   <button className="btn btn-danger btn-sm" onClick={() => setDeleteTarget(u)}>{t('delete')}</button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+        </div>
       </div>
 
       {deleteTarget && (
@@ -91,8 +104,8 @@ export default function UsersPage() {
 
       {isModalOpen && <UserFormModal mode={editingUser ? 'edit' : 'add'} initialValues={editingUser} onCancel={() => setIsModalOpen(false)} onSave={async (f) => {
         const res = await authFetch(`/users${editingUser ? '/' + editingUser.id : ''}`, { method: editingUser ? 'PUT' : 'POST', body: JSON.stringify(f) });
-        if (res.ok) showToast(editingUser ? t('userUpdated') : t('userCreated'), 'success');
-        else { const d = await res.json().catch(() => ({})); showToast(d.error || t('operationFailed'), 'error'); }
+        if (res && res.ok) showToast(editingUser ? t('userUpdated') : t('userCreated'), 'success');
+        else { const d = res ? await res.json().catch(() => ({})) : {}; showToast(d.error || t('operationFailed'), 'error'); }
         setIsModalOpen(false);
         fetchUsers();
       }} />}

@@ -1,11 +1,16 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useViewport } from '../hooks/useViewport';
 import { showToast } from '../Toast';
 
 // Active Directory / LDAP oturum acma ayarlari (Settings modali icinde).
 // bindPassword asla geri gonderilmez; "kayitli" ise placeholder gosterilir.
 export default function AdSettingsCard({ cardStyle, embedded }) {
   const { authFetch } = useAuth();
+  // "dar govde" = telefon VEYA kisa ekran; responsive.css'teki
+  // (max-width:768px),(max-height:500px) sorgusuyla birebir ayni.
+  const { isPhone, isShort } = useViewport();
+  const compact = isPhone || isShort;
   const [form, setForm] = useState({
     enabled: false, url: '', domain: '', baseDN: '', bindDN: '', bindPassword: '', tlsRejectUnauthorized: true,
   });
@@ -57,11 +62,17 @@ export default function AdSettingsCard({ cardStyle, embedded }) {
     } catch (e) { setTestResult({ ok: false, message: 'Connection error' }); } finally { setTesting(false); }
   };
 
-  const lbl = { display: 'block', fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.4 };
+  // Dar govdede 11.5px buyuk-harf + harf araligi hem okunmaz hem genislik yiyor:
+  // 13px tabani, normal yazim.
+  const lbl = compact
+    ? { display: 'block', fontSize: '13px', color: 'var(--text-muted)', marginBottom: 4 }
+    : { display: 'block', fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.4 };
+  // Tum AD alanlari teknik metin: otomatik buyuk harf / duzeltme / yazim denetimi kapali.
   const field = (label, key, opts = {}) => (
     <div>
       <label style={lbl}>{label}</label>
-      <input className="modern-input" style={{ width: '100%' }} value={form[key]} onChange={e => set(key, e.target.value)} autoComplete="off" {...opts} />
+      <input className="modern-input" style={{ width: '100%' }} value={form[key]} onChange={e => set(key, e.target.value)} autoComplete="off"
+        autoCapitalize="none" autoCorrect="off" spellCheck={false} {...opts} />
     </div>
   );
 
@@ -83,30 +94,32 @@ export default function AdSettingsCard({ cardStyle, embedded }) {
         <div style={{ padding: 16, textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>…</div>
       ) : (
         <>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, fontSize: '0.88rem', color: 'var(--text-main)', cursor: 'pointer' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, minHeight: compact ? 44 : undefined, fontSize: '0.88rem', color: 'var(--text-main)', cursor: 'pointer' }}>
             <input type="checkbox" checked={form.enabled} onChange={e => set('enabled', e.target.checked)} />
             Enable AD login
           </label>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
-            {field('LDAP URL', 'url', { placeholder: 'ldaps://dc.isu.gov.tr:636' })}
+          {/* grid-2col: App.css <=768px'te tek kolona iner (inline grid yapamazdi). */}
+          <div className="grid-2col" style={{ gap: 10, marginBottom: 10 }}>
+            {field('LDAP URL', 'url', { placeholder: 'ldaps://dc.isu.gov.tr:636', inputMode: 'url' })}
             {field('Domain (UPN suffix)', 'domain', { placeholder: 'isu.gov.tr' })}
           </div>
           {field('Base DN (for search)', 'baseDN', { placeholder: 'DC=isu,DC=gov,DC=tr' })}
           <div style={{ height: 10 }} />
-          <p style={{ fontSize: '0.72rem', color: 'var(--text-dim)', margin: '2px 0 8px' }}>
+          <p style={{ fontSize: compact ? '13px' : '0.72rem', color: 'var(--text-dim)', margin: '2px 0 8px' }}>
             Optional service account — set it to search by sAMAccountName; otherwise users bind directly as username@domain.
           </p>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+          <div className="grid-2col" style={{ gap: 10, marginBottom: 10 }}>
             {field('Bind DN (service account)', 'bindDN', { placeholder: 'CN=svc-nms,OU=...,DC=...' })}
             <div>
               <label style={lbl}>Bind password</label>
               <input className="modern-input" style={{ width: '100%' }} type="password" value={form.bindPassword}
                 onChange={e => set('bindPassword', e.target.value)} autoComplete="new-password"
+                autoCapitalize="none" autoCorrect="off" spellCheck={false}
                 placeholder={bindPasswordSet ? '•••••••• (unchanged)' : ''} />
             </div>
           </div>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, fontSize: '0.82rem', color: 'var(--text-muted)', cursor: 'pointer' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, minHeight: compact ? 44 : undefined, fontSize: compact ? '0.85rem' : '0.82rem', color: 'var(--text-muted)', cursor: 'pointer' }}>
             <input type="checkbox" checked={form.tlsRejectUnauthorized} onChange={e => set('tlsRejectUnauthorized', e.target.checked)} />
             Verify TLS certificate (uncheck for self-signed ldaps)
           </label>
@@ -114,10 +127,13 @@ export default function AdSettingsCard({ cardStyle, embedded }) {
           {/* Test */}
           <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: 12, marginTop: 4 }}>
             <label style={lbl}>Test with an AD user (optional)</label>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8, alignItems: 'center' }}>
-              <input className="modern-input" placeholder="username" value={testUser} onChange={e => setTestUser(e.target.value)} autoComplete="off" />
-              <input className="modern-input" type="password" placeholder="password" value={testPass} onChange={e => setTestPass(e.target.value)} autoComplete="new-password" />
-              <button className="btn btn-ghost" onClick={test} disabled={testing || !form.url} style={{ whiteSpace: 'nowrap' }}>
+            {/* 311px'lik telefon govdesinde "1fr 1fr auto" her alani ~110px'e dusuruyordu. */}
+            <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr' : '1fr 1fr auto', gap: 8, alignItems: 'center' }}>
+              <input className="modern-input" placeholder="username" value={testUser} onChange={e => setTestUser(e.target.value)} autoComplete="off"
+                autoCapitalize="none" autoCorrect="off" spellCheck={false} />
+              <input className="modern-input" type="password" placeholder="password" value={testPass} onChange={e => setTestPass(e.target.value)} autoComplete="new-password"
+                autoCapitalize="none" autoCorrect="off" spellCheck={false} enterKeyHint="done" />
+              <button className="btn btn-ghost" onClick={test} disabled={testing || !form.url} style={{ whiteSpace: 'nowrap', width: isPhone ? '100%' : undefined }}>
                 {testing ? 'Testing…' : 'Test'}
               </button>
             </div>

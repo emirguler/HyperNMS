@@ -1,5 +1,6 @@
 import { memo, useState } from 'react';
 import { Handle, Position } from 'reactflow';
+import { useViewport } from '../hooks/useViewport';
 
 // Cihaz tipine göre şekil rengi (r, g, b)
 const TYPE_COLOR = {
@@ -98,14 +99,26 @@ const ICON_MAP = {
   antenna: AntennaIcon,
 };
 
-const handleStyle = (rgb) => ({ background: `rgb(${rgb})`, width: 6, height: 6, border: '1px solid var(--bg-dark)' });
+// Dokunmatikte 6px'lik tutamaci parmakla yakalamak imkansiz; 12px'e cikiyor.
+// (Tutamaklar reactflow'un kendi CSS'inde pointer-events:none; yalnizca nodesConnectable
+//  acikken .connectionindicator sinifiyla tiklanabilir hale gelirler - kilitliyken
+//  buyumeleri dokunuslari calmaz.)
+const handleStyle = (rgb, touch) => ({
+  background: `rgb(${rgb})`,
+  width: touch ? 12 : 6,
+  height: touch ? 12 : 6,
+  border: '1px solid var(--bg-dark)'
+});
 
 function SwitchNode({ data }) {
   const [hovered, setHovered] = useState(false);
+  // hover:none -> hover ile ACILAN icerik hicbir zaman gorunmez; IP kalici olmali
+  const { isTouch } = useViewport();
   const IconComponent = ICON_MAP[data.type] || ICON_MAP.switch;
   const rgb = TYPE_COLOR[data.type] || TYPE_COLOR.switch;
   const shape = TYPE_SHAPE[data.type] || 'rect';
   const isDown = data.status !== 'UP';
+  const isAntenna = data.type === 'antenna';
 
   return (
     <div
@@ -123,24 +136,28 @@ function SwitchNode({ data }) {
           boxShadow: isDown
             ? '0 0 10px rgba(239,68,68,0.35), 0 4px 12px rgba(0,0,0,0.3)'
             : `0 0 10px rgba(${rgb}, 0.22), 0 4px 12px rgba(0,0,0,0.3)`,
-          opacity: isDown ? 0.75 : 1
+          opacity: isDown ? 0.75 : 1,
+          // Anten 26x26: parmakla hedeflenemeyecek kadar küçük → dokunmatikte 40px
+          ...(isTouch && isAntenna ? { width: 40, height: 40 } : null)
         }}
       >
-        <Handle type="source" position={Position.Top} id="top" style={handleStyle(rgb)} />
-        <Handle type="source" position={Position.Left} id="left" style={handleStyle(rgb)} />
-        <Handle type="source" position={Position.Right} id="right" style={handleStyle(rgb)} />
-        <Handle type="source" position={Position.Bottom} id="bottom" style={handleStyle(rgb)} />
+        <Handle type="source" position={Position.Top} id="top" style={handleStyle(rgb, isTouch)} />
+        <Handle type="source" position={Position.Left} id="left" style={handleStyle(rgb, isTouch)} />
+        <Handle type="source" position={Position.Right} id="right" style={handleStyle(rgb, isTouch)} />
+        <Handle type="source" position={Position.Bottom} id="bottom" style={handleStyle(rgb, isTouch)} />
 
         <span className="node-icon">
-          <IconComponent status={data.status} size={data.type === 'antenna' ? 12 : ICON_SIZE} />
+          <IconComponent status={data.status} size={isAntenna ? (isTouch ? 18 : 12) : ICON_SIZE} />
         </span>
       </div>
 
-      {/* Hostname — şeklin dışında, altında (antende gizli) */}
-      {data.type !== 'antenna' && <div className="node-label">{data.label}</div>}
+      {/* Hostname — şeklin dışında, altında.
+          Masaüstünde antende gizli; dokunmatikte anten etiketsiz turuncu bir noktaya
+          dönüşüyordu ve onu tanımlayacak menü de sağ-tık ardındaydı → etiket açılır. */}
+      {(!isAntenna || isTouch) && <div className="node-label">{data.label}</div>}
 
-      {/* Hover: IP — kutusuz, ismin altında zarifçe belirir */}
-      {hovered && (
+      {/* IP — farede hover'da, dokunmatikte kalıcı (düşük zoom'da .zoom-compact gizler) */}
+      {(hovered || isTouch) && data.ip && (
         <div className="node-ip-hover" style={{ color: `rgb(${rgb})` }}>{data.ip}</div>
       )}
     </div>
