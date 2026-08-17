@@ -75,7 +75,12 @@ app.use((req, res, next) => {
 // --- H1: CSRF Protection (Double Submit Cookie) ---
 app.use((req, res, next) => {
     if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
+    // Giris uclari CSRF'den muaf: kullanici henuz oturum acmadigi (ve CSRF token'i
+    // login'den SONRA alindigi) icin burada gecerli bir token olamaz.
+    // /login/2fa'nin sahtelenmeye karsi korumasi CSRF degil, istekle gelen imzali
+    // pending token'dir — taraycinin otomatik ekledigi bir seye dayanmaz.
     if (req.path === '/login' || req.path === '/api/login') return next();
+    if (req.path === '/login/2fa' || req.path === '/api/login/2fa') return next();
 
     // Web proxy: cihaz arayüzü formları CSRF token'ımızı bilemez — muaf tut
     if (req.path.includes('/webproxy/')) return next();
