@@ -69,7 +69,8 @@ router.post('/login', async (req, res) => {
         role: user.role,
         username: user.username,
         mustChangePassword: user.mustChangePassword || false,
-        allowedCommands: user.allowedCommands || []
+        allowedCommands: user.allowedCommands || [],
+        fullSsh: user.fullSsh === true
     });
 });
 
@@ -88,7 +89,8 @@ router.get('/me', authenticate, (req, res) => {
         username: user.username,
         role: user.role,
         mustChangePassword: user.mustChangePassword || false,
-        allowedCommands: user.allowedCommands || []
+        allowedCommands: user.allowedCommands || [],
+        fullSsh: user.fullSsh === true
     });
 });
 

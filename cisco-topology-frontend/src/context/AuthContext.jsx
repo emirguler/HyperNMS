@@ -11,6 +11,8 @@ export function AuthProvider({ children }) {
   const [mustChangePassword, setMustChangePassword] = useState(false);
   const [csrfToken, setCsrfToken] = useState('');
   const [allowedCommands, setAllowedCommands] = useState([]);
+  // Operator'e verilen ham (tam) SSH klavye erisimi
+  const [fullSsh, setFullSsh] = useState(false);
 
   // Fetch CSRF token on mount
   const fetchCsrfToken = useCallback(async () => {
@@ -38,6 +40,7 @@ export function AuthProvider({ children }) {
           setUsername(data.username);
           setMustChangePassword(data.mustChangePassword || false);
           setAllowedCommands(data.allowedCommands || []);
+          setFullSsh(data.fullSsh === true);
           fetchCsrfToken();
         })
         .catch(() => {
@@ -65,6 +68,7 @@ export function AuthProvider({ children }) {
       setUsername(data.username);
       setMustChangePassword(data.mustChangePassword || false);
       setAllowedCommands(data.allowedCommands || []);
+      setFullSsh(data.fullSsh === true);
       localStorage.setItem('userRole', data.role);
       localStorage.setItem('username', data.username);
       showToast('Login successful', 'success');
@@ -89,6 +93,7 @@ export function AuthProvider({ children }) {
     setMustChangePassword(false);
     setCsrfToken('');
     setAllowedCommands([]);
+    setFullSsh(false);
     localStorage.removeItem('userRole');
     localStorage.removeItem('username');
   }, [csrfToken]);
@@ -143,7 +148,7 @@ export function AuthProvider({ children }) {
       // 'User' eski kayitlarin Operator karsiligi; 'Viewer' = User (View Only) → yetkisiz.
       isOperator: userRole === 'Administrator' || userRole === 'Operator' || userRole === 'User',
       mustChangePassword, clearMustChangePassword, csrfToken,
-      allowedCommands
+      allowedCommands, fullSsh,
     }}>
       {children}
     </AuthContext.Provider>

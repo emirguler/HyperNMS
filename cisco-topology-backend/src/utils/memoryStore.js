@@ -195,8 +195,11 @@ class MemoryStore {
     updateUser(id, updates) {
         const idx = this.data.users.findIndex(u => String(u.id) === String(id));
         if (idx === -1) return null;
-        // Whitelist allowed user fields to prevent prototype pollution
-        const allowed = ['password', 'role', 'mustChangePassword', 'allowedCommands'];
+        // Whitelist allowed user fields to prevent prototype pollution.
+        // DIKKAT: bu listede olmayan bir alan SESSIZCE dusurulur. 'username' ve
+        // 'authType' eksikti - PUT /users/:id ikisini de hesaplayip gonderiyordu,
+        // yani kullanici adi degistirme ve yerel<->AD gecisi kaydedilmiyordu.
+        const allowed = ['username', 'password', 'role', 'authType', 'mustChangePassword', 'allowedCommands', 'fullSsh'];
         for (const key of allowed) {
             if (updates[key] !== undefined) this.data.users[idx][key] = updates[key];
         }

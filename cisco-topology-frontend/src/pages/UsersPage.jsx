@@ -76,6 +76,11 @@ export default function UsersPage() {
                 </td>
                 <td data-label="Role">
                   <span style={{ background: roleStyle(u.role).bg, color: roleStyle(u.role).fg, padding: '4px 10px', borderRadius: 20, fontSize: '0.75rem', fontWeight: 600, border: `1px solid ${roleStyle(u.role).bd}`, whiteSpace: 'nowrap' }}>{roleLabel(u.role)}</span>
+                  {/* Ham SSH ciddi bir yetki artisi: listede gorunur olsun ki
+                      kimde acik oldugu formu acmadan anlasilsin. */}
+                  {u.fullSsh && (
+                    <span title="Full SSH access" style={{ marginLeft: 6, background: 'rgba(245,158,11,0.15)', color: 'var(--warning)', border: '1px solid rgba(245,158,11,0.35)', padding: '3px 9px', borderRadius: 20, fontSize: '0.7rem', fontWeight: 700, whiteSpace: 'nowrap' }}>FULL SSH</span>
+                  )}
                 </td>
                 {/* Actions gizlenmiyor: satir tiklanabilir degil, tek etkilesim yolu bu */}
                 <td data-label="" style={{ textAlign: 'right', paddingRight: isPhone ? undefined : 24 }}>

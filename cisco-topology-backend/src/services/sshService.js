@@ -135,10 +135,16 @@ function setupWebSocket(server) {
             ws.close();
             return;
         }
-        const allowedCommands = isAdmin ? null : (Array.isArray(account.allowedCommands) ? account.allowedCommands : []);
+        // Tam (ham klavye) erisim ROLDEN degil, gercek yetkiden turetilir:
+        // Administrator her zaman, Operator ise yalnizca hesabinda fullSsh acikken.
+        // Bayrak KAYITLI hesaptan okunur (token'dan degil) ki admin kapattigi anda
+        // etkili olsun - aksi halde kullanici 8 saat daha ham erisimi surdururdu.
+        const fullAccess = isAdmin || account.fullSsh === true;
+        const allowedCommands = fullAccess ? null : (Array.isArray(account.allowedCommands) ? account.allowedCommands : []);
 
-        // Komut atanmamış Operator rolüne SSH tamamen kapalı
-        if (!isAdmin && allowedCommands.length === 0) {
+        // Kisitli Operator'e komut atanmamissa SSH tamamen kapali.
+        // fullSsh acik olan Operator'un komut listesine ihtiyaci yoktur.
+        if (!fullAccess && allowedCommands.length === 0) {
             ws.send(JSON.stringify({ type: 'error', message: 'No SSH commands assigned to your account. Access denied.' }));
             ws.close();
             return;
@@ -174,10 +180,10 @@ function setupWebSocket(server) {
         deviceSock.setNoDelay(true);
         deviceSock.on('error', () => { /* asıl hata conn 'error' ile ele alınır; burada yalnızca çökmeyi önle */ });
         conn.on('ready', () => {
-            console.log(`[SSH] Connected to ${device.name} (${device.ip}) as ${user.username} [${isAdmin ? 'full' : 'restricted'}]`);
+            console.log(`[SSH] Connected to ${device.name} (${device.ip}) as ${user.username} [${fullAccess ? 'full' : 'restricted'}${!isAdmin && fullAccess ? ' via fullSsh' : ''}]`);
             safeSend(JSON.stringify({ type: 'info', message: 'SSH Connection Established.\r\n' }));
             // İstemciye modunu bildir: admin = tam kontrol, user = sadece komut butonları
-            safeSend(JSON.stringify({ type: 'mode', readOnly: !isAdmin, commands: allowedCommands || [] }));
+            safeSend(JSON.stringify({ type: 'mode', readOnly: !fullAccess, commands: allowedCommands || [] }));
 
             // --- Oturum kaydi baslar ---
             // Cihaz adi/IP/topoloji adi ANLIK KOPYA: cihaz sonradan yeniden adlandirilir,
@@ -188,7 +194,9 @@ function setupWebSocket(server) {
                 topologyPage: device.topologyPage || 'main',
                 topologyName: (tab && tab.name) || device.topologyPage || 'Main Topology',
                 userId: user.id, username: user.username, role: normalizeRole(effectiveRole),
-                mode: isAdmin ? 'full' : 'restricted',
+                // Oturum kaydinda mod GERCEK erisimi yansitir: fullSsh verilmis bir
+                // Operator'un oturumu da 'full' olarak isaretlenir.
+                mode: fullAccess ? 'full' : 'restricted',
                 clientIp: req.socket?.remoteAddress || null,
             }, () => {
                 // Admin bu oturumu sonlandirdi
@@ -212,12 +220,13 @@ function setupWebSocket(server) {
                 stream.on('close', () => { conn.end(); try { ws.close(); } catch (e) {} });
 
                 // Kısıtlı (User) oturum: sayfalamayı kapat — buton çıktıları --More-- ile durmasın
-                if (!isAdmin) stream.write('terminal length 0\n');
+                if (!fullAccess) stream.write('terminal length 0\n');
                 ws.on('message', (msg) => {
                     try {
                         const parsed = JSON.parse(msg);
-                        if (isAdmin) {
-                            // Tam kontrol: raw klavye girişi
+                        if (fullAccess) {
+                            // Tam kontrol: raw klavye girişi (Administrator, veya
+                            // hesabinda fullSsh acik olan Operator)
                             if (parsed.type === 'data') stream.write(parsed.data);
                         } else {
                             // Kısıtlı kullanıcı: klavye girişi (data) yok sayılır.

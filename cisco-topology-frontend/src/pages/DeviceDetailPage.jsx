@@ -19,7 +19,7 @@ export default function DeviceDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const { authFetch, isAdmin, isOperator, allowedCommands } = useAuth();
+  const { authFetch, isAdmin, isOperator, allowedCommands, fullSsh } = useAuth();
   const { openSshSession, topoTabs, rawDevices } = useApp();
   const { isPhone, isTablet, isShort, isTouch, width } = useViewport();
   // compact         -> dar govde: aksiyon satiri "..." sayfasina toplanir, kartlar kisilir
@@ -158,7 +158,7 @@ export default function DeviceDetailPage() {
   // asagidaki masaustu aksiyon satiri bugunku haliyle BIREBIR korunur.
   const sheetActions = [];
   if (compact) {
-    if (isOperator && (isAdmin || allowedCommands.length > 0)) {
+    if (isOperator && (isAdmin || fullSsh || allowedCommands.length > 0)) {
       sheetActions.push({ key: 'ssh', icon: <span aria-hidden="true">💻</span>, label: 'SSH Terminal', onClick: () => openSshSession(id, displayHostname || details.name || id) });
     }
     if (details.ip) {
@@ -187,7 +187,7 @@ export default function DeviceDetailPage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
           <button onClick={() => navigate(backTo)} className="btn btn-ghost">{t('goBack')}</button>
           <h2 style={{ margin: 0, fontSize: '1.8rem' }}>{displayHostname}</h2>
-          {isOperator && (isAdmin || allowedCommands.length > 0) && (
+          {isOperator && (isAdmin || fullSsh || allowedCommands.length > 0) && (
             <button className="btn btn-primary btn-sm" onClick={() => openSshSession(id, displayHostname || details.name || id)}>
               💻 SSH Terminal
             </button>

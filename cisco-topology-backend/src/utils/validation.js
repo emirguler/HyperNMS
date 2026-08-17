@@ -148,14 +148,18 @@ function sanitizeSwitch(data) {
 }
 
 function sanitizeUser(data) {
-    const allowed = ['username', 'password', 'role', 'authType'];
+    const allowed = ['username', 'password', 'role', 'authType', 'fullSsh'];
     const clean = {};
     for (const key of allowed) {
         if (data[key] !== undefined) {
             clean[key] = typeof data[key] === 'string' ? data[key].trim() : data[key];
         }
     }
-    // allowedCommands: User rolündeki kısıtlı SSH oturumları için komut whitelist'i
+    // fullSsh bir YETKI bayragi: tipini serbest birakma. "false" metni ya da bir
+    // nesne gelirse truthy olup Operator'e ham klavye erisimi acardi.
+    if (data.fullSsh !== undefined) clean.fullSsh = data.fullSsh === true;
+
+    // allowedCommands: Operator rolündeki kısıtlı SSH oturumları için komut whitelist'i
     if (data.allowedCommands !== undefined) {
         clean.allowedCommands = Array.isArray(data.allowedCommands)
             ? data.allowedCommands

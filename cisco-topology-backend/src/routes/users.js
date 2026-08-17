@@ -34,7 +34,9 @@ router.post('/users', authenticate, requireAdmin, async (req, res) => {
         authType: isAd ? 'ad' : 'local',
         password: isAd ? '' : await bcrypt.hash(data.password, BCRYPT_ROUNDS), // AD: yerel sifre yok, AD'de dogrulanir
         role: data.role || 'Viewer',   // varsayilan en dusuk yetki (User / View Only)
-        allowedCommands: data.allowedCommands || []
+        allowedCommands: data.allowedCommands || [],
+        // Operator'e ham (tam) SSH klavye erisimi. Varsayilan KAPALI.
+        fullSsh: data.fullSsh === true
     };
     store.addUser(newUser);
 
@@ -55,6 +57,11 @@ router.put('/users/:id', authenticate, requireAdmin, async (req, res) => {
     if (data.role) updates.role = data.role;
     if (data.username) updates.username = data.username;
     if (data.allowedCommands !== undefined) updates.allowedCommands = data.allowedCommands;
+    if (data.fullSsh !== undefined) updates.fullSsh = data.fullSsh === true;
+    // Rol Operator DISINA cikarsa bayrak anlamsizlasir ve unutulup asili kalmasin:
+    // Viewer'a geri donen bir hesap sonradan tekrar Operator yapilinca sessizce
+    // tam SSH ile geri gelirdi.
+    if (data.role && data.role !== 'Operator') updates.fullSsh = false;
 
     // authType degisimi: AD'ye gecince yerel sifre kaldirilir; local ise sifre (verildiyse) guncellenir
     const targetAuthType = (data.authType && ['local', 'ad'].includes(data.authType)) ? data.authType : (user.authType || 'local');

@@ -17,6 +17,7 @@ function UserFormModal({ mode, initialValues, onCancel, onSave }) {
     username: '',
     password: '',
     role: 'Viewer',   // varsayilan en dusuk yetki
+    fullSsh: false,   // Operator'e ham SSH klavye erisimi - varsayilan KAPALI
     authType: 'local', // 'local' | 'ad'
     allowedCommands: '', // textarea: her satıra bir komut
   });
@@ -30,6 +31,10 @@ function UserFormModal({ mode, initialValues, onCancel, onSave }) {
         role: initialValues.role === 'User' ? 'Operator' : (initialValues.role || 'Viewer'),
         authType: initialValues.authType || 'local',
         allowedCommands: (initialValues.allowedCommands || []).join('\n'),
+        // Okunmazsa setValues tum nesneyi degistirdigi icin undefined kalir ve
+        // admin baska bir alani duzeltmek icin formu acip kaydettiginde fullSsh
+        // sessizce KAPANIRDI.
+        fullSsh: initialValues.fullSsh === true,
       });
     }
   }, [initialValues, isEdit]);
@@ -43,10 +48,12 @@ function UserFormModal({ mode, initialValues, onCancel, onSave }) {
     e.preventDefault();
     // Komut metnini diziye çevir; yalnızca Operator için anlamlı
     // (Administrator = tam kontrol, Viewer = SSH kapalı)
-    const allowedCommands = values.role === 'Operator'
+    const allowedCommands = (values.role === 'Operator' && !values.fullSsh)
       ? values.allowedCommands.split('\n').map(s => s.trim()).filter(Boolean)
       : [];
-    const payload = { username: values.username, role: values.role, authType: values.authType, allowedCommands };
+    // fullSsh yalnizca Operator icin anlamli; diger rollerde her zaman false gonder
+    const fullSsh = values.role === 'Operator' && values.fullSsh === true;
+    const payload = { username: values.username, role: values.role, authType: values.authType, allowedCommands, fullSsh };
     // AD kullanicisinda yerel sifre yok — yalnizca local'de gonder
     if (values.authType === 'local') payload.password = values.password;
     onSave(payload);
@@ -154,6 +161,26 @@ function UserFormModal({ mode, initialValues, onCancel, onSave }) {
             </div>
 
             {values.role === 'Operator' && (
+              // Tum satir tiklanabilir (44px): dokunmatikte 44x24'luk slider'i
+              // hedeflemek zor. Masaustunde gorunum degismiyor.
+              <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: isTouch ? 44 : undefined, cursor: 'pointer' }}>
+                <span style={{ minWidth: 0 }}>
+                  <span style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#f1f5f9' }}>{t('fullSshLabel')}</span>
+                  <span style={{ display: 'block', fontSize: '0.72rem', color: values.fullSsh ? 'var(--warning)' : 'var(--text-muted)', marginTop: 2 }}>
+                    {values.fullSsh ? t('fullSshOnHint') : t('fullSshOffHint')}
+                  </span>
+                </span>
+                <span className="toggle-switch" style={{ flexShrink: 0 }}>
+                  <input type="checkbox" name="fullSsh" checked={values.fullSsh}
+                    onChange={e => setValues(p => ({ ...p, fullSsh: e.target.checked }))} />
+                  <span className="toggle-slider" />
+                </span>
+              </label>
+            )}
+
+            {/* fullSsh acikken komut whitelist'i anlamsiz: kullanici zaten her
+                komutu yazabiliyor. Kutuyu gostermek yanlis bir guvenlik hissi verirdi. */}
+            {values.role === 'Operator' && !values.fullSsh && (
               <div>
                 <label className="input-label" style={{display:'block', marginBottom:8, color:'#94a3b8'}}>{t('allowedCommandsLabel')}</label>
                 {/* Kisa ekranda 5 satirlik komut kutusu tum govdeyi yiyor -> 3 satir.

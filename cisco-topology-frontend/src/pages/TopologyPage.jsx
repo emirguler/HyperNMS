@@ -186,7 +186,7 @@ const CANVAS_TOUCH = { WebkitTouchCallout: 'none', WebkitUserSelect: 'none', use
 
 function TopologyInner({ onEdit, onClone }) {
   const { rawDevices, edges, setEdges, fetchData, openSshSession } = useApp();
-  const { isAdmin, isOperator, authFetch, csrfToken, allowedCommands } = useAuth();
+  const { isAdmin, isOperator, authFetch, csrfToken, allowedCommands, fullSsh } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { tabId } = useParams();
@@ -625,7 +625,7 @@ function TopologyInner({ onEdit, onClone }) {
     },
     isAdmin && { key: 'edit', label: '✏️ Edit', onClick: () => { onEdit(rawDevices.find(d => d.id === menu.id)); setMenu(null); } },
     isAdmin && { key: 'clone', label: '⧉ Clone', onClick: () => { onClone(rawDevices.find(d => d.id === menu.id)); setMenu(null); } },
-    isOperator && (isAdmin || allowedCommands.length > 0) && {
+    isOperator && (isAdmin || fullSsh || allowedCommands.length > 0) && {
       key: 'ssh', label: '💻 SSH Terminal',
       onClick: () => { openSshSession(menu.id, menu.label); setMenu(null); }
     },

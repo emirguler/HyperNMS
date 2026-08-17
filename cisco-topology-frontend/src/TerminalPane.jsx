@@ -132,13 +132,19 @@ function TerminalPane({ switchId, switchName, active = true, minimized = false, 
   // En güncel onStatus'a eriş (mount effect'i eski closure'a takılmasın)
   const onStatusRef = useRef(onStatus);
   onStatusRef.current = onStatus;
-  const { userRole, allowedCommands } = useAuth();
+  const { userRole, allowedCommands, fullSsh } = useAuth();
   const { isTouch, isShort } = useViewport();
 
-  // Administrator = tam kontrol; diğer roller = salt-izle (klavye kapalı, sadece butonlar)
-  const restricted = userRole !== 'Administrator';
+  // Tam kontrol = Administrator, VEYA hesabinda fullSsh acik olan Operator.
+  // Bu yalnizca baslangic degeri: otorite sunucudan gelen 'mode' mesajidir
+  // (asagida readOnly'ye gore yeniden ayarlanir), cunku bayrak sunucuda tutulur.
+  const restricted = userRole !== 'Administrator' && !fullSsh;
   // Buton listesi: sunucudan gelen 'mode' mesajı otoritedir; başlangıçta context'ten
   const [commands, setCommands] = useState(restricted ? (allowedCommands || []) : []);
+  // Sunucunun bildirdigi gercek mod (null = henuz bilinmiyor). Terminali YENIDEN
+  // OLUSTURMAZ - yalnizca alt paneli (komut pedi / ipucu satiri) dogru gosterir.
+  const [srvReadOnly, setSrvReadOnly] = useState(null);
+  const uiRestricted = srvReadOnly === null ? restricted : srvReadOnly;
   // Kısıtlı kullanıcının komut pedi kısa ekranda alanın %40'ını yiyordu; katlanabilir.
   const [padOpen, setPadOpen] = useState(true);
   // Dokunmatik tuş satırına basılmadan ÖNCE terminalin odakta olup olmadığı.
@@ -198,6 +204,15 @@ function TerminalPane({ switchId, switchName, active = true, minimized = false, 
         } else if (msg.type === 'mode') {
           // Sunucu, oturumun izinli komutlarını bildirir (otorite)
           setCommands(msg.commands || []);
+          // readOnly de OTORITEDIR. fullSsh bayragi sunucuda tutuluyor; admin onu
+          // acinca istemcideki deger /me tazelenene kadar eski kalir ve klavye
+          // bosuna kapali kalirdi. xterm secenekleri calisma aninda degistirilebilir.
+          if (typeof msg.readOnly === 'boolean') {
+            term.options.disableStdin = msg.readOnly;
+            term.options.cursorBlink = !msg.readOnly;
+            setSrvReadOnly(msg.readOnly);
+            if (!msg.readOnly && !isCoarse()) term.focus();
+          }
         } else if (msg.type === 'error') {
           term.write(`\r\n*** ERROR: ${msg.message} ***\r\n`);
         }
@@ -395,7 +410,7 @@ function TerminalPane({ switchId, switchName, active = true, minimized = false, 
           }}
         >
           <button type="button" onPointerDown={noteFocus} onClick={copySelection} style={keyBtnStyle}>Copy</button>
-          {!restricted && (
+          {!uiRestricted && (
             <>
               <button type="button" onPointerDown={noteFocus} onClick={pasteClipboard} style={keyBtnStyle}>Paste</button>
               <button type="button" onClick={focusTerm} style={{ ...keyBtnStyle, borderColor: 'var(--primary)', color: 'var(--primary)' }}>⌨</button>
@@ -419,7 +434,7 @@ function TerminalPane({ switchId, switchName, active = true, minimized = false, 
       <div ref={containerRef} style={{ width: '100%', flex: 1, minHeight: 0 }} />
 
       {/* Kısıtlı kullanıcı: alt tarafta izinli komut butonları */}
-      {restricted && (
+      {uiRestricted && (
         <div style={{
           flexShrink: 0, background: '#0f172a', borderTop: '1px solid var(--border-color)',
           display: 'flex', flexDirection: 'column', minHeight: 0
