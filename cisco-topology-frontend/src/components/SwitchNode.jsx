@@ -156,15 +156,15 @@ function SwitchNode({ data }) {
         </span>
       </div>
 
-      {/* Hostname — şeklin dışında, altında.
-          Masaüstünde antende gizli; dokunmatikte anten etiketsiz turuncu bir noktaya
-          dönüşüyordu ve onu tanımlayacak menü de sağ-tık ardındaydı → etiket açılır. */}
-      {(!isAntenna || isTouch) && (
-        <div className={isAntenna ? 'node-label node-label-antenna' : 'node-label'}>{data.label}</div>
-      )}
+      {/* Hostname — şeklin dışında, altında. Antende HİÇ gösterilmez (masaüstü de böyle):
+          dokunmatikte açılmıştı ama .topology-node bir flex column olduğu için uzun AP
+          adları düğüm kutusunu genişletip komşularının üstüne biniyordu. */}
+      {!isAntenna && <div className="node-label">{data.label}</div>}
 
-      {/* IP — farede hover'da, dokunmatikte kalıcı (düşük zoom'da .zoom-compact gizler) */}
-      {(hovered || isTouch) && data.ip && (
+      {/* IP — masaüstünde hover'da (antenler dahil, değişmedi).
+          Dokunmatikte hover yok, o yüzden kalıcı; ama YALNIZCA switch'lerde. Antende
+          şekil dışında hiçbir şey çizilmez, yakınlaşınca kalabalık yapan buydu. */}
+      {(isTouch ? !isAntenna : hovered) && data.ip && (
         <div className="node-ip-hover" style={{ color: `rgb(${rgb})` }}>{data.ip}</div>
       )}
     </div>

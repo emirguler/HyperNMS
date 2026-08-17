@@ -418,11 +418,18 @@
   .zoom-minimal .node-shape::after,
   .zoom-compact .node-shape::after { inset: 0; }
 
-  /* Anten etiketi yalnizca dokunmatikte basiliyor (masaustunde anten etiketsiz).
-     Uzak zoom'da bu etiket dugum kutusunu yatayda genisletip komsulariyla
-     cakisiyor -> sadece yakinlasinca goster. */
-  .zoom-minimal .node-label-antenna,
-  .zoom-compact .node-label-antenna { display: none; }
+  /* Baglanti tutamaklari dokunmatikte 6 -> 12px buyutuluyor, ama reactflow bunlari
+     yalnizca nodesConnectable acikken .connectionindicator ile tiklanabilir yapiyor.
+     Kilitli haritada 12px'lik dort nokta 26px'lik bir anteni 38px'lik bir lekeye
+     cevirip yakin zoom'da komsulariyla cakisiyordu -> hedefi yalnizca gercekten
+     baglanti kurulabilirken buyut.
+     !important sart: genislik SwitchNode'da inline veriliyor (handleStyle), normal
+     bir kural onu ezemez. App.css'teki .zoom-minimal .react-flow__handle kurali da
+     ayni nedenle !important kullaniyor. */
+  .react-flow__handle:not(.connectionindicator) {
+    width: 6px !important;
+    height: 6px !important;
+  }
 
   .modern-table tr:hover td { background: transparent; }
   .modern-table tr:active td { background: rgba(59, 130, 246, 0.08); }
