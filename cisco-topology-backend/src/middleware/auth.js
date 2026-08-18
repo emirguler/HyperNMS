@@ -86,6 +86,18 @@ const requireAdmin = (req, res, next) => {
     next();
 };
 
+// Yerlesik "admin" superkullanicisi kontrolu — kullanici adi kayittan okunur.
+// 'admin' kullanici adi form'da kilitli oldugu icin kararli bir tanimlayici.
+// 2FA yonetimi ve oturum kaydi silme gibi en ayricalikli islemler icin.
+const requireSuperAdmin = (req, res, next) => {
+    const account = store.getUser(req.user.id);
+    const username = (account && account.username) || req.user.username;
+    if (username !== 'admin') {
+        return res.status(403).json({ error: 'Only the built-in "admin" account can do this' });
+    }
+    next();
+};
+
 // Operator (veya Administrator) role check — Viewer (View Only) engellenir
 const requireOperator = (req, res, next) => {
     const role = effectiveRole(req);
@@ -123,7 +135,7 @@ function authenticateWs(req) {
 }
 
 module.exports = {
-    authenticate, requireAdmin, requireOperator, authenticateWs,
+    authenticate, requireAdmin, requireOperator, requireSuperAdmin, authenticateWs,
     setTokenCookie, clearTokenCookie, COOKIE_OPTIONS,
     ROLES, normalizeRole, canOperate
 };

@@ -263,6 +263,34 @@ function killSession(id) {
 }
 
 /**
+ * Tek bir oturum kaydini kalici siler (index + transcript dosyasi).
+ * CANLI oturum silinmez — once sonlandirilmalidir (dosyaya hala yaziyor olabilir).
+ * @returns {{ok:boolean, live?:boolean}}
+ */
+async function deleteSession(id) {
+    if (live.has(id)) return { ok: false, live: true };
+    const list = readIndex();
+    const idx = list.findIndex(r => r.id === id);
+    if (idx >= 0) { list.splice(idx, 1); await safeWriteJSON(INDEX_FILE, list); }
+    try { fs.unlinkSync(transcriptPath(id)); } catch (e) { /* zaten yok */ }
+    return { ok: true };
+}
+
+/** Canli OLMAYAN tum oturum kayitlarini siler; canli olanlar korunur. */
+async function deleteAllSessions() {
+    const list = readIndex();
+    const keep = [];
+    let removed = 0;
+    for (const r of list) {
+        if (live.has(r.id)) { keep.push(r); continue; }
+        try { fs.unlinkSync(transcriptPath(r.id)); } catch (e) { /* zaten yok */ }
+        removed++;
+    }
+    await safeWriteJSON(INDEX_FILE, keep);
+    return { removed };
+}
+
+/**
  * Surec cokup yeniden basladiysa index'te endedAt:null kalan kayitlar vardir;
  * bunlar sonsuza dek "canli" gorunmesin.
  */
@@ -314,6 +342,7 @@ async function cleanup() {
 
 module.exports = {
     startSession, listSessions, readTranscript, getSession, killSession,
+    deleteSession, deleteAllSessions,
     cleanup, reconcileOnBoot,
     RETENTION_DAYS, MAX_SESSION_BYTES,
 };

@@ -1,5 +1,5 @@
 const express = require('express');
-const { authenticate, requireAdmin } = require('../middleware/auth');
+const { authenticate, requireAdmin, requireSuperAdmin } = require('../middleware/auth');
 const { logAction } = require('../services/auditLog');
 const sessionLog = require('../services/sessionLog');
 const { renderEntries } = require('../utils/terminalRender');
@@ -68,6 +68,29 @@ router.post('/sessions/:id/kill', authenticate, requireAdmin, async (req, res) =
     if (!ok) return res.status(404).json({ error: 'Session is not live' });
     const meta = sessionLog.getSession(req.params.id);
     await logAction(req.user, 'SESSION_KILL', (meta && meta.deviceName) || req.params.id, {
+        ip: req.ip, sessionId: req.params.id, targetUser: meta && meta.username,
+    });
+    res.json({ success: true });
+});
+
+// --- Kayit silme: YALNIZCA yerlesik "admin" ---
+// Transcript'ler running-config, SNMP community gibi hassas veri icerir; silme
+// yikici ve geri alinamaz oldugu icin en ayricalikli hesaba kilitlenmistir.
+
+// Tumunu sil (canli olanlar korunur). :id rotasindan ONCE tanimli olmali ki
+// "all" bir id sanilmasin — yine de ayri path oldugu icin cakismaz.
+router.delete('/sessions', authenticate, requireSuperAdmin, async (req, res) => {
+    const { removed } = await sessionLog.deleteAllSessions();
+    await logAction(req.user, 'SESSION_DELETE_ALL', String(removed), { ip: req.ip, count: removed });
+    res.json({ success: true, removed });
+});
+
+// Tek kaydi sil
+router.delete('/sessions/:id', authenticate, requireSuperAdmin, async (req, res) => {
+    const meta = sessionLog.getSession(req.params.id);
+    const r = await sessionLog.deleteSession(req.params.id);
+    if (r.live) return res.status(400).json({ error: 'Terminate the live session before deleting it' });
+    await logAction(req.user, 'SESSION_DELETE', (meta && meta.deviceName) || req.params.id, {
         ip: req.ip, sessionId: req.params.id, targetUser: meta && meta.username,
     });
     res.json({ success: true });

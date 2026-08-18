@@ -107,12 +107,14 @@ function TranscriptModal({ session, rendered, entries, loading, onClose, onDownl
 }
 
 export default function SessionLogPage() {
-  const { authFetch, isAdmin } = useAuth();
+  const { authFetch, isAdmin, username } = useAuth();
   const { rawDevices, topoTabs } = useApp();
   // Erken return'un USTUNDE cagrilmali, yoksa hook sirasi bozulur
   const { isPhone, isShort, isTouch, height: vpH } = useViewport();
   const compact = isPhone || isShort;
   const stacked = isPhone;                 // tablette yan yana kalir
+  // Kayit silme yalnizca yerlesik "admin" superkullanicisina acik
+  const isSuperAdmin = username === 'admin';
 
   if (!isAdmin) return <Navigate to="/dashboard" replace />;
 
@@ -133,6 +135,7 @@ export default function SessionLogPage() {
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [viewing, setViewing] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(null); // null | session | 'all'
   const [entries, setEntries] = useState([]);
   const [rendered, setRendered] = useState(null);
   const [entriesLoading, setEntriesLoading] = useState(false);
@@ -193,6 +196,20 @@ export default function SessionLogPage() {
     const res = await authFetch(`/sessions/${s.id}/kill`, { method: 'POST' });
     if (res && res.ok) { showToast('Session terminated', 'success'); load(); }
     else showToast('Could not terminate session', 'error');
+  };
+
+  // Silme (yalnizca "admin"). confirm: null | session-objesi | 'all'
+  const doDeleteOne = async (s) => {
+    const res = await authFetch(`/sessions/${s.id}`, { method: 'DELETE' });
+    if (res && res.ok) { showToast('Session log deleted', 'success'); if (viewing && viewing.id === s.id) setViewing(null); load(); }
+    else { const d = res ? await res.json().catch(() => ({})) : {}; showToast(d.error || 'Could not delete', 'error'); }
+    setConfirmDelete(null);
+  };
+  const doDeleteAll = async () => {
+    const res = await authFetch('/sessions', { method: 'DELETE' });
+    if (res && res.ok) { const d = await res.json().catch(() => ({})); showToast(`${d.removed || 0} session log(s) deleted`, 'success'); setViewing(null); load(); }
+    else { const d = res ? await res.json().catch(() => ({})) : {}; showToast(d.error || 'Could not delete', 'error'); }
+    setConfirmDelete(null);
   };
 
   // Sol kart: sayfaya + aramaya gore cihazlar
@@ -308,7 +325,13 @@ export default function SessionLogPage() {
               <h3 style={{ margin: 0, fontSize: '1rem', color: 'var(--primary)' }}>
                 Sessions <span style={{ color: 'var(--text-muted)', fontWeight: 500, fontSize: '0.8rem' }}>({sessions.length})</span>
               </h3>
-              {anyFilter && <button className="btn btn-ghost btn-sm" onClick={clearFilters}>Clear filters</button>}
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                {anyFilter && <button className="btn btn-ghost btn-sm" onClick={clearFilters}>Clear filters</button>}
+                {/* Tumunu sil: yalnizca "admin", ve silinecek (canli olmayan) kayit varsa */}
+                {isSuperAdmin && sessions.some(s => !s.isLive) && (
+                  <button className="btn btn-danger btn-sm" onClick={() => setConfirmDelete('all')}>Delete all</button>
+                )}
+              </div>
             </div>
 
             {/* Filtre izgarasi: telefonda tek kolon, tablette iki, masaustunde dort */}
@@ -398,7 +421,12 @@ export default function SessionLogPage() {
                     </td>
                     <td data-label="" style={{ textAlign: 'right', paddingRight: compact ? undefined : 20, whiteSpace: 'nowrap' }}>
                       <button className="btn btn-primary btn-sm" style={{ marginRight: 6 }} onClick={() => openTranscript(s)}>View</button>
-                      {s.isLive && <button className="btn btn-danger btn-sm" onClick={() => kill(s)}>Kill</button>}
+                      {s.isLive && <button className="btn btn-danger btn-sm" style={{ marginRight: isSuperAdmin ? 6 : 0 }} onClick={() => kill(s)}>Kill</button>}
+                      {/* Silme yalnizca "admin"e ve canli OLMAYAN kayda acik */}
+                      {isSuperAdmin && !s.isLive && (
+                        <button className="btn btn-ghost btn-sm" title="Delete this session log"
+                          style={{ color: 'var(--danger)' }} onClick={() => setConfirmDelete(s)}>Delete</button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -418,6 +446,29 @@ export default function SessionLogPage() {
           onClose={() => setViewing(null)}
           onDownload={() => download(viewing)}
         />
+      )}
+
+      {/* Silme onayi — yikici ve geri alinamaz */}
+      {confirmDelete && (
+        <div className="modal-overlay" style={{ zIndex: 2200 }} onClick={() => setConfirmDelete(null)}
+          onKeyDown={e => { if (e.key === 'Escape') setConfirmDelete(null); }}>
+          <div className="confirm-modal-content" onClick={e => e.stopPropagation()}>
+            <h3 className="confirm-title">
+              {confirmDelete === 'all' ? 'Delete all session logs' : 'Delete session log'}
+            </h3>
+            <p className="confirm-desc">
+              {confirmDelete === 'all'
+                ? 'Permanently delete every recorded session (live ones are kept). Transcripts cannot be recovered.'
+                : <>Permanently delete the recorded session for <strong>{confirmDelete.deviceName}</strong> ({confirmDelete.username})? This cannot be undone.</>}
+            </p>
+            <div className="confirm-actions">
+              <button className="btn btn-ghost" onClick={() => setConfirmDelete(null)}>Cancel</button>
+              <button className="btn btn-danger" onClick={() => (confirmDelete === 'all' ? doDeleteAll() : doDeleteOne(confirmDelete))}>
+                {confirmDelete === 'all' ? 'Delete all' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

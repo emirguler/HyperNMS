@@ -4,13 +4,16 @@ import TwoFactorCard from './TwoFactorCard';
 import BackupRestorePanel from './BackupRestorePanel';
 import GeneralSettingsCard from './GeneralSettingsCard';
 import { useViewport } from '../hooks/useViewport';
+import { useAuth } from '../context/AuthContext';
 
 // Ayarlar hub'i: ikonlu kartlar. Bir karta tiklayinca ilgili ayar popup'i acilir.
+// 'security' (2FA) yalnizca yerlesik "admin" superkullanicisina gorunur —
+// 2FA'yi yalnizca admin yonetir; diger adminler icin gizlenir (adminOnly).
 const TILES = [
   { id: 'general', icon: '🎛️', title: 'General', desc: 'Device-wide display & behavior' },
   { id: 'backup', icon: '📦', title: 'Backup & Restore', desc: 'Export or import the full configuration' },
   { id: 'ad', icon: '🪪', title: 'Active Directory', desc: 'LDAP sign-in for AD users' },
-  { id: 'security', icon: '🔐', title: 'Two-Factor Auth', desc: 'TOTP codes for sign-in' },
+  { id: 'security', icon: '🔐', title: 'Two-Factor Auth', desc: 'TOTP codes for sign-in', adminOnly: true },
 ];
 
 // Kart (masaustu) ve satir (dar govde) gorunumleri. Modul seviyesinde:
@@ -46,8 +49,12 @@ function SettingsTile({ tile, compact, onOpen }) {
 }
 
 export default function SettingsModal({ onClose }) {
-  const [panel, setPanel] = useState(null); // null | 'general' | 'backup' | 'ad'
-  const meta = TILES.find(t => t.id === panel);
+  const [panel, setPanel] = useState(null); // null | 'general' | 'backup' | 'ad' | 'security'
+  const { username } = useAuth();
+  const isSuperAdmin = username === 'admin';
+  // adminOnly kartlar yalnizca "admin"e gorunur
+  const tiles = TILES.filter(tl => !tl.adminOnly || isSuperAdmin);
+  const meta = tiles.find(t => t.id === panel);
   // "dar govde" = telefon VEYA kisa ekran; responsive.css'teki
   // (max-width:768px),(max-height:500px) sorgusuyla birebir ayni.
   const { isPhone, isShort } = useViewport();
@@ -78,7 +85,7 @@ export default function SettingsModal({ onClose }) {
 
             <div className={compact ? 'rw-sheet-body' : undefined}>
               <div style={{ display: 'grid', gridTemplateColumns: tileGridCols, gap: compact ? 10 : 14 }}>
-                {TILES.map(tile => (
+                {tiles.map(tile => (
                   <SettingsTile key={tile.id} tile={tile} compact={compact} onOpen={() => setPanel(tile.id)} />
                 ))}
               </div>
@@ -114,7 +121,7 @@ export default function SettingsModal({ onClose }) {
               {panel === 'general' && <GeneralSettingsCard embedded />}
               {panel === 'backup' && <BackupRestorePanel />}
               {panel === 'ad' && <AdSettingsCard embedded />}
-              {panel === 'security' && <TwoFactorCard />}
+              {panel === 'security' && isSuperAdmin && <TwoFactorCard />}
             </div>
           </div>
         </div>
