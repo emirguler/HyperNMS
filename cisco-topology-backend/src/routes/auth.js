@@ -79,6 +79,10 @@ router.post('/login', async (req, res) => {
     setTokenCookie(res, token);
 
     await logAction(user, 'LOGIN', username, { ip: req.ip });
+    // Son basarili girisi damgala (User Management "Last login" kolonu). Bu dala
+    // yalnizca oturum GERCEKTEN acildiginda gelinir; 2FA bekleyen kullanici
+    // yukarida erken donmustu, yani buraya 2FA'sini gecmis kullanici duser.
+    store.updateUser(user.id, { lastLogin: new Date().toISOString() });
     res.json({
         role: user.role,
         username: user.username,
@@ -133,6 +137,8 @@ router.post('/login/2fa', twoFaLimiter, async (req, res) => {
     );
     setTokenCookie(res, token);
     await logAction(user, 'LOGIN', user.username, { ip: req.ip, twoFactor: v.viaRecovery ? 'recovery-code' : 'totp' });
+    // Ikinci asama tamamlandi = oturum acildi; son giris zamanini simdi damgala.
+    store.updateUser(user.id, { lastLogin: new Date().toISOString() });
 
     const fresh = store.getUser(user.id);
     res.json({

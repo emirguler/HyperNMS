@@ -15,6 +15,15 @@ const ROLE_STYLE = {
 };
 const roleStyle = (role) => ROLE_STYLE[role === 'User' ? 'Operator' : role] || ROLE_STYLE.Viewer;
 
+// Son basarili giris: yerel saat diliminde tarih + saat (SessionLogPage'deki
+// fmtDate ile ayni yaklasim). Eksik/gecersiz deger '-' doner; "hic giris
+// yapmamis" durumu cagiran tarafta ayrica t('neverLoggedIn') ile gosterilir.
+const fmtLastLogin = (iso) => {
+  if (!iso) return '-';
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? '-' : d.toLocaleString();
+};
+
 export default function UsersPage() {
   const { users, fetchUsers } = useApp();
   const { isAdmin, authFetch, username } = useAuth();
@@ -67,7 +76,7 @@ export default function UsersPage() {
         {/* Yatay kaydirma kabin icinde: overflow:hidden yuzunden Actions kolonu kirpiliyordu */}
         <div className="rw-scroll-x">
         <table className="modern-table rw-cards">
-          <thead><tr><th style={{ paddingLeft: isPhone ? undefined : 24 }}>{t('usernameCol')}</th><th>{t('role')}</th><th style={{ textAlign: 'right', paddingRight: isPhone ? undefined : 24 }}>{t('actions')}</th></tr></thead>
+          <thead><tr><th style={{ paddingLeft: isPhone ? undefined : 24 }}>{t('usernameCol')}</th><th>{t('role')}</th><th>{t('lastLogin')}</th><th style={{ textAlign: 'right', paddingRight: isPhone ? undefined : 24 }}>{t('actions')}</th></tr></thead>
           <tbody>
             {users.map(u => (
               <tr key={u.id}>
@@ -101,6 +110,13 @@ export default function UsersPage() {
                   {u.fullSsh && (
                     <span title="Full SSH access" style={{ marginLeft: 6, background: 'rgba(245,158,11,0.15)', color: 'var(--warning)', border: '1px solid rgba(245,158,11,0.35)', padding: '3px 9px', borderRadius: 20, fontSize: '0.7rem', fontWeight: 700, whiteSpace: 'nowrap' }}>FULL SSH</span>
                   )}
+                </td>
+                {/* Son giris zamani. data-label ile <=600px'te karta "Last login: ..."
+                    satiri olarak yigilir (rw-cards). Hic giris yapmamis kullanici -> "Never". */}
+                <td data-label="Last login" style={{ whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
+                  {u.lastLogin
+                    ? fmtLastLogin(u.lastLogin)
+                    : <span style={{ color: 'var(--text-dim)' }}>{t('neverLoggedIn')}</span>}
                 </td>
                 {/* Actions gizlenmiyor: satir tiklanabilir degil, tek etkilesim yolu bu */}
                 <td data-label="" style={{ textAlign: 'right', paddingRight: isPhone ? undefined : 24 }}>

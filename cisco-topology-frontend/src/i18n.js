@@ -120,6 +120,8 @@ const translations = {
     usernameCol: 'Username',
     role: 'Role',
     actions: 'Actions',
+    lastLogin: 'Last login',
+    neverLoggedIn: 'Never',
 
     // Device form (SwitchFormModal)
     editDevice: 'Edit Device',
@@ -396,6 +398,8 @@ const translations = {
     usernameCol: 'Kullan\u0131c\u0131 Ad\u0131',
     role: 'Rol',
     actions: '\u0130\u015flemler',
+    lastLogin: 'Son Giri\u015f',
+    neverLoggedIn: 'Hi\u00e7',
 
     // Device form (SwitchFormModal)
     editDevice: 'Cihaz\u0131 D\u00fczenle',
