@@ -162,7 +162,6 @@ export default function NpsPage() {
         </div>
         <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
           {configured && !error && <button className="btn btn-primary btn-sm" onClick={() => setFormEntry({ mode: 'add', entry: null })}>+ New entry</button>}
-          {configured && !error && <button className="btn btn-ghost btn-sm" onClick={downloadList} disabled={displayed.length === 0} title="Download the list as CSV (all columns)">Download list</button>}
           <button className="btn btn-ghost btn-sm" onClick={load} disabled={loading}>Refresh</button>
           <button className="btn btn-danger btn-sm" onClick={() => setConfirmRestart(true)} disabled={restarting || !configured}>
             {restarting ? 'Restarting…' : 'Service restart'}
@@ -185,6 +184,8 @@ export default function NpsPage() {
             <option value="location-asc">Location A→Z</option>
             <option value="location-desc">Location Z→A</option>
           </select>
+          <button className="btn btn-ghost" onClick={downloadList} disabled={displayed.length === 0}
+            style={{ width: compact ? '100%' : 'auto' }} title="Download the list as CSV (all columns)">Download list</button>
         </div>
       )}
 
