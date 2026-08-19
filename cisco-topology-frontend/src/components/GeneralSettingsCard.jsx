@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useViewport } from '../hooks/useViewport';
@@ -24,6 +25,11 @@ export default function GeneralSettingsCard({ embedded }) {
   const cometOn = general.cometAnimation !== false;
   const wirelessOn = general.wirelessAnimation !== false;
 
+  // System Name: metin alani — her tusta degil, odaktan cikinca/Enter'da kaydedilir.
+  // general async yuklendigi icin degeri gelince yerel state senkronlanir.
+  const [nameInput, setNameInput] = useState(general.systemName || '');
+  useEffect(() => { setNameInput(general.systemName || ''); }, [general.systemName]);
+
   // Tek bir ayar alanini aninda uygula + kaydet; basarisiz olursa geri al.
   const save = async (patch) => {
     const prev = general;
@@ -48,6 +54,13 @@ export default function GeneralSettingsCard({ embedded }) {
     }
   };
 
+  // System Name'i kaydet (degismediyse dokunma).
+  const commitName = () => {
+    const v = nameInput.trim().slice(0, 60);
+    if (v === (general.systemName || '')) return;
+    save({ systemName: v });
+  };
+
   const cardStyle = { background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', borderRadius: 12, padding: 20 };
 
   return (
@@ -55,6 +68,20 @@ export default function GeneralSettingsCard({ embedded }) {
       <p style={{ margin: '0 0 8px', fontSize: '0.82rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
         Device-wide display &amp; behavior for the whole system. Applies to every user.
       </p>
+
+      {/* Sistem adi — browser sekme basliginda gorunur. Metin alani oldugu icin
+          toggle'lar gibi aninda degil, odak kaybinda / Enter'da kaydedilir. */}
+      <div style={{ padding: '14px 0', borderTop: '1px solid var(--border-color)' }}>
+        <label htmlFor="sys-name" style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)', marginBottom: 6 }}>System Name</label>
+        <input id="sys-name" className="modern-input" style={{ width: '100%' }} value={nameInput} disabled={!isAdmin}
+          onChange={e => setNameInput(e.target.value)} onBlur={commitName}
+          onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+          maxLength={60} placeholder="e.g. İSU SCADA" autoComplete="off" spellCheck={false} />
+        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.45 }}>
+          Shown in the browser tab — “NetPulse - {nameInput.trim() || 'System Name'}”. Leave empty for just “NetPulse”.
+        </div>
+        {isTouch && !isAdmin && <div style={{ fontSize: '0.75rem', color: 'var(--danger)', marginTop: 4 }}>Locked — administrators only</div>}
+      </div>
 
       {/* Kablolu comet animasyonu.
           Dokunmatikte satirin tamami <label> (bkz. rowAsLabel), masaustunde <div>. */}

@@ -163,6 +163,9 @@ export function AppProvider({ children }) {
   useEffect(() => {
     document.body.classList.toggle('comet-off', general.cometAnimation === false);
     document.body.classList.toggle('wireless-off', general.wirelessAnimation === false);
+    // Browser sekme başlığı: sistem adı girilmişse "NetPulse - <ad>", yoksa "NetPulse".
+    const name = (general.systemName || '').trim();
+    document.title = name ? `NetPulse - ${name}` : 'NetPulse';
   }, [general]);
 
   const toggleTheme = useCallback(() => {

@@ -355,6 +355,7 @@ function readGeneral() {
     return {
         cometAnimation: g.cometAnimation !== false,     // kablolu comet — varsayılan açık
         wirelessAnimation: g.wirelessAnimation !== false, // kablosuz (anten) akış — varsayılan açık
+        systemName: g.systemName || '',                 // browser sekme basliginda "NetPulse - <ad>"
     };
 }
 
@@ -369,6 +370,7 @@ router.put('/settings/general', authenticate, requireAdmin, (req, res) => {
     const patch = {};
     if (typeof b.cometAnimation === 'boolean') patch.cometAnimation = b.cometAnimation;
     if (typeof b.wirelessAnimation === 'boolean') patch.wirelessAnimation = b.wirelessAnimation;
+    if (typeof b.systemName === 'string') patch.systemName = b.systemName.trim().slice(0, 60);
     const current = store.getSettings().general || {};
     store.updateSettings({ general: { ...current, ...patch } });
     res.json(readGeneral());
