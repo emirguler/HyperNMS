@@ -134,6 +134,17 @@ router.delete('/nps/users/:id', authenticate, requireAdmin, async (req, res) => 
     }
 });
 
+// Lokasyon kaydet (UI-only metadata — SSH YOK, users dosyasina yazilmaz).
+// Yalnizca lokasyon degistiginde cagrilir; NPS erisilemez olsa bile calisir.
+router.put('/nps/locations', authenticate, requireAdmin, async (req, res) => {
+    const b = req.body || {};
+    const gsm = String(b.gsm || '').trim();
+    if (!/^\d{1,20}$/.test(gsm)) return res.status(400).json({ error: 'Invalid GSM number' });
+    const locations = nps.setLocation(gsm, b.location, b.previousGsm);
+    await logAction(req.user, 'NPS_LOCATION_SET', gsm, { ip: req.ip });
+    res.json({ locations });
+});
+
 // service freeradius restart
 router.post('/nps/restart', authenticate, requireAdmin, async (req, res) => {
     try {

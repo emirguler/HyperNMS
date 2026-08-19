@@ -237,7 +237,7 @@ async function readUsers() {
     const conn = await connect();
     try {
         const text = await sftpReadFile(conn, USERS_FILE);
-        return parseUsers(text).entries.map(e => ({ id: e.id, gsm: e.gsm, ip: e.ip, route: e.route }));
+        return entriesOut(text);
     } catch (e) {
         if (e && e.status) throw e;
         if (/no such file/i.test(e.message || '')) throw httpErr(502, `File not found on NPS: ${USERS_FILE}`);
@@ -248,9 +248,31 @@ async function readUsers() {
     }
 }
 
-// Parse ciktisini istemciye uygun sade listeye cevir
+/* --- Lokasyon: UI-only metadata; SSH / users dosyasiyla ILGISI YOK ---
+   GSM numarasina gore ayarlarda tutulur (settings.npsLocations). users dosyasina
+   asla yazilmaz; yalnizca listede gostermek/duzenlemek icindir. SSH ayar objesinden
+   AYRI bir anahtarda tutulur ki SSH ayari kaydedilince silinmesin. */
+function getLocations() {
+    return store.getSettings().npsLocations || {};
+}
+function setLocation(gsm, location, previousGsm) {
+    const locs = { ...getLocations() };
+    const clean = String(location == null ? '' : location).trim().slice(0, 200);
+    if (clean) locs[String(gsm)] = clean; else delete locs[String(gsm)];
+    // GSM degistiyse lokasyon yeni GSM'e gecer; eski anahtar silinir.
+    if (previousGsm && String(previousGsm) !== String(gsm)) delete locs[String(previousGsm)];
+    store.updateSettings({ npsLocations: locs });
+    return locs;
+}
+function removeLocation(gsm) {
+    const locs = { ...getLocations() };
+    if (locs[String(gsm)] !== undefined) { delete locs[String(gsm)]; store.updateSettings({ npsLocations: locs }); }
+}
+
+// Parse ciktisini istemciye uygun sade listeye cevir (lokasyon GSM'e gore eklenir)
 function entriesOut(text) {
-    return parseUsers(text).entries.map(e => ({ id: e.id, gsm: e.gsm, ip: e.ip, route: e.route }));
+    const locs = getLocations();
+    return parseUsers(text).entries.map(e => ({ id: e.id, gsm: e.gsm, ip: e.ip, route: e.route, location: locs[e.gsm] || '' }));
 }
 
 // Yeni metni ATOMIK ve izin-koruyarak yaz. Once gecici dosyaya (SFTP) yazar,
@@ -301,6 +323,8 @@ async function saveEntry(id, values) {
         }
         const newText = applyEdit(lines, entry, clean);
         await finalizeWrite(conn, newText);
+        // Lokasyon (UI-only) bu duzenlemeyle birlikte saklanir; GSM degistiyse tasinir.
+        setLocation(clean.gsm, values.location, values.originalGsm);
         return entriesOut(newText);
     } catch (e) {
         if (e && e.status) throw e;
@@ -335,6 +359,8 @@ async function addEntry(values) {
             newText = (base ? base + '\n' : '') + block + '\n';
         }
         await finalizeWrite(conn, newText);
+        // Yeni kaydin lokasyonu (varsa) saklanir.
+        setLocation(clean.gsm, values.location);
         return entriesOut(newText);
     } catch (e) {
         if (e && e.status) throw e;
@@ -356,8 +382,10 @@ async function deleteEntry(id, originalGsm) {
             throw httpErr(409, 'The users file changed since you opened it — refresh and try again');
         }
         // Blogun tum satirlarini (icine sindirilmis takip eden bos satirlar dahil) cikar.
+        const deletedGsm = entry.gsm;
         const newText = lines.slice(0, entry.start).concat(lines.slice(entry.end + 1)).join('\n');
         await finalizeWrite(conn, newText);
+        removeLocation(deletedGsm); // kaydin lokasyon metadatasini da temizle
         return entriesOut(newText);
     } catch (e) {
         if (e && e.status) throw e;
@@ -394,6 +422,7 @@ async function testConnection(cfg) {
 module.exports = {
     USERS_FILE, RESTART_CMD,
     readUsers, saveEntry, addEntry, deleteEntry, restart, testConnection,
+    getLocations, setLocation, removeLocation,
     // test edilebilirlik icin saf yardimcilar:
-    parseUsers, applyEdit, buildBlock, cleanEntry, isIPv4,
+    parseUsers, applyEdit, buildBlock, cleanEntry, isIPv4, entriesOut,
 };

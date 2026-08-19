@@ -7,6 +7,7 @@ import { showToast } from '../Toast';
 // NPS (Linux FreeRADIUS) yonetim sayfasi — YALNIZCA ADMIN.
 // /etc/freeradius/3.0/users kayitlarini listeler, ek/duzenle/sil yaptirir ve
 // "service freeradius restart" calistirir. SSH ayarlari Settings → NPS'te.
+// "Location" alani UI-only metadatadir (GSM'e gore ayarlarda tutulur, dosyaya yazilmaz).
 
 // Istemci tarafi hafif dogrulama (backend zaten otoriter). Anlik geri bildirim.
 const isIPv4 = (ip) => /^\d{1,3}(\.\d{1,3}){3}$/.test(ip) && ip.split('.').every(o => { const n = +o; return n >= 0 && n <= 255 && String(n) === o; });
@@ -16,8 +17,16 @@ const validGsm = (g) => /^\d{1,20}$/.test(g);
 const routeNet = (route) => String(route || '').trim().split(/\s+/)[0] || '';
 const routeRest = (route) => String(route || '').trim().split(/\s+/).slice(1).join(' ');
 const validNet = (net) => { const m = String(net).trim().match(/^(\d{1,3}(?:\.\d{1,3}){3})\/(\d{1,2})$/); return !!(m && isIPv4(m[1]) && +m[2] <= 32); };
-// Yeni kayitlar ve rest'i eksik/bozuk kayitlar icin varsayilan gateway+metric.
 const DEFAULT_REST = '0.0.0.0 1';
+
+// IP'yi sayiya cevir (dogru sayisal siralama icin: .9 < .10)
+const ipNum = (ip) => { const p = String(ip || '').split('.'); return p.length === 4 ? p.reduce((a, o) => a * 256 + (parseInt(o, 10) || 0), 0) : -1; };
+const cmpBy = (a, b, key) => {
+  if (key === 'ip') return ipNum(a.ip) - ipNum(b.ip);
+  if (key === 'gsm') return String(a.gsm || '').localeCompare(String(b.gsm || ''), undefined, { numeric: true });
+  if (key === 'location') return String(a.location || '').localeCompare(String(b.location || ''), undefined, { sensitivity: 'base' });
+  return 0;
+};
 
 export default function NpsPage() {
   const { isAdmin, authFetch } = useAuth();
@@ -31,8 +40,9 @@ export default function NpsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);       // { message, notConfigured }
   const [query, setQuery] = useState('');
+  const [sort, setSort] = useState({ key: null, dir: 'asc' }); // key: null|'ip'|'gsm'|'location'
   const [formEntry, setFormEntry] = useState(null); // { mode:'add'|'edit', entry }
-  const [deleting, setDeleting] = useState(null);   // silinecek kayit
+  const [deleting, setDeleting] = useState(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [confirmRestart, setConfirmRestart] = useState(false);
   const [restarting, setRestarting] = useState(false);
@@ -64,8 +74,24 @@ export default function NpsPage() {
     return entries.filter(e =>
       (e.gsm || '').toLowerCase().includes(q) ||
       (e.ip || '').toLowerCase().includes(q) ||
-      (e.route || '').toLowerCase().includes(q));
+      (e.route || '').toLowerCase().includes(q) ||
+      (e.location || '').toLowerCase().includes(q));
   }, [entries, query]);
+
+  const displayed = useMemo(() => {
+    if (!sort.key) return filtered;
+    const arr = [...filtered];
+    arr.sort((a, b) => { const r = cmpBy(a, b, sort.key); return sort.dir === 'asc' ? r : -r; });
+    return arr;
+  }, [filtered, sort]);
+
+  const toggleSort = (key) => setSort(s => {
+    if (s.key !== key) return { key, dir: 'asc' };
+    if (s.dir === 'asc') return { key, dir: 'desc' };
+    return { key: null, dir: 'asc' }; // ucuncu tik: dosya sirasina don
+  });
+  const sortValue = sort.key ? `${sort.key}-${sort.dir}` : '';
+  const onSortSelect = (v) => { if (!v) setSort({ key: null, dir: 'asc' }); else { const [k, d] = v.split('-'); setSort({ key: k, dir: d }); } };
 
   const doRestart = async () => {
     setRestarting(true);
@@ -92,6 +118,15 @@ export default function NpsPage() {
 
   const configured = !error?.notConfigured;
 
+  // Tiklanabilir baslik (masaustu/tablet); mobilde thead gizli oldugu icin
+  // ayrica bir siralama menusu de var.
+  const SortTh = ({ k, children, style }) => (
+    <th onClick={() => toggleSort(k)} style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap', ...style }} title="Sort">
+      {children}
+      <span style={{ opacity: sort.key === k ? 0.9 : 0.3, marginLeft: 4 }}>{sort.key === k ? (sort.dir === 'asc' ? '▲' : '▼') : '⇅'}</span>
+    </th>
+  );
+
   return (
     <div className="list-container">
       {/* Baslik + eylemler; <=1024px'te satir kayar (rw-actions) */}
@@ -111,12 +146,21 @@ export default function NpsPage() {
         </div>
       </div>
 
-      {/* Arama */}
+      {/* Arama + siralama */}
       {!error && (
-        <div style={{ marginBottom: 16 }}>
-          <input className="modern-input" style={{ width: compact ? '100%' : 320, maxWidth: '100%' }}
-            placeholder="Search GSM, IP or route…" value={query} onChange={e => setQuery(e.target.value)}
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 16 }}>
+          <input className="modern-input" style={{ width: compact ? '100%' : 320, maxWidth: '100%', flex: compact ? '1 1 100%' : '0 0 auto' }}
+            placeholder="Search GSM, IP, route or location…" value={query} onChange={e => setQuery(e.target.value)}
             autoCapitalize="none" autoCorrect="off" spellCheck={false} />
+          <select className="modern-input" style={{ width: compact ? '100%' : 'auto', cursor: 'pointer' }} value={sortValue} onChange={e => onSortSelect(e.target.value)}>
+            <option value="">Sort: file order</option>
+            <option value="ip-asc">Framed-IP ↑</option>
+            <option value="ip-desc">Framed-IP ↓</option>
+            <option value="gsm-asc">GSM ↑</option>
+            <option value="gsm-desc">GSM ↓</option>
+            <option value="location-asc">Location A→Z</option>
+            <option value="location-desc">Location Z→A</option>
+          </select>
         </div>
       )}
 
@@ -138,26 +182,28 @@ export default function NpsPage() {
       ) : (
         <div className="chart-container no-float" style={{ padding: 0, overflow: 'hidden' }}>
           <div style={{ padding: compact ? '10px 12px' : '12px 24px', borderBottom: '1px solid var(--border-color)', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-            {filtered.length} {filtered.length === 1 ? 'entry' : 'entries'}{query ? ` of ${entries.length}` : ''}
+            {displayed.length} {displayed.length === 1 ? 'entry' : 'entries'}{query ? ` of ${entries.length}` : ''}
           </div>
           <div className="rw-scroll-x">
             <table className="modern-table rw-cards">
               <thead><tr>
-                <th style={{ paddingLeft: isPhone ? undefined : 24 }}>GSM number</th>
-                <th>Framed-IP</th>
+                <SortTh k="gsm" style={{ paddingLeft: isPhone ? undefined : 24 }}>GSM number</SortTh>
+                <SortTh k="ip">Framed-IP</SortTh>
                 <th>Framed-Route</th>
+                <SortTh k="location">Location</SortTh>
                 <th style={{ textAlign: 'right', paddingRight: isPhone ? undefined : 24 }}>Actions</th>
               </tr></thead>
               <tbody>
-                {filtered.length === 0 ? (
-                  <tr><td colSpan={4} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 28 }}>
+                {displayed.length === 0 ? (
+                  <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 28 }}>
                     {query ? 'No entries match your search.' : 'No RADIUS entries yet — use “+ New entry” to add one.'}
                   </td></tr>
-                ) : filtered.map(e => (
+                ) : displayed.map(e => (
                   <tr key={e.id}>
                     <td data-label="GSM" style={{ paddingLeft: isPhone ? undefined : 24, fontWeight: 600, whiteSpace: 'nowrap' }}>{e.gsm}</td>
                     <td data-label="Framed-IP" style={{ whiteSpace: 'nowrap' }}>{e.ip || <span style={{ color: 'var(--text-dim)' }}>—</span>}</td>
                     <td data-label="Framed-Route" style={{ fontFamily: 'var(--mono, monospace)', fontSize: '0.85rem', whiteSpace: 'nowrap' }}>{routeNet(e.route) || <span style={{ color: 'var(--text-dim)' }}>—</span>}</td>
+                    <td data-label="Location">{e.location ? e.location : <span style={{ color: 'var(--text-dim)' }}>—</span>}</td>
                     <td data-label="" style={{ textAlign: 'right', paddingRight: isPhone ? undefined : 24, whiteSpace: 'nowrap' }}>
                       <button className="btn btn-ghost btn-sm" style={{ marginRight: 6 }} onClick={() => setFormEntry({ mode: 'edit', entry: e })}>Edit</button>
                       <button className="btn btn-danger btn-sm" onClick={() => setDeleting(e)}>Delete</button>
@@ -177,6 +223,7 @@ export default function NpsPage() {
           compact={compact}
           onClose={() => setFormEntry(null)}
           onSaved={(updated) => { setEntries(updated); setFormEntry(null); }}
+          onLocationSaved={(id, loc) => { setEntries(es => es.map(e => e.id === id ? { ...e, location: loc } : e)); setFormEntry(null); }}
           authFetch={authFetch}
         />
       )}
@@ -216,33 +263,50 @@ export default function NpsPage() {
   );
 }
 
-// --- Ekle / Duzenle popup'i (ayni alanlar) ---
-function EntryFormModal({ mode, entry, compact, onClose, onSaved, authFetch }) {
+// --- Ekle / Duzenle popup'i ---
+function EntryFormModal({ mode, entry, compact, onClose, onSaved, onLocationSaved, authFetch }) {
   const isEdit = mode === 'edit';
   const [gsm, setGsm] = useState(entry?.gsm || '');
   const [ip, setIp] = useState(entry?.ip || '');
   // UI yalnizca ag kismini gosterir; gateway+metric ("rest") gizli tutulup korunur.
   const [net, setNet] = useState(routeNet(entry?.route) || '');
+  const [location, setLocation] = useState(entry?.location || '');
   const rest = (isEdit && routeRest(entry?.route)) || DEFAULT_REST;
   const [saving, setSaving] = useState(false);
 
   const gsmOk = validGsm(gsm.trim());
   const ipOk = isIPv4(ip.trim());
   const netOk = validNet(net);
-  const allOk = gsmOk && ipOk && netOk;
+  const allOk = gsmOk && ipOk && netOk; // location opsiyonel
 
   const save = async () => {
     if (!allOk) return;
     setSaving(true);
     try {
-      const route = `${net.trim()} ${rest}`; // ag + gizli gateway/metric
-      const payload = { gsm: gsm.trim(), ip: ip.trim(), route };
-      const res = isEdit
-        ? await authFetch(`/nps/users/${entry.id}`, { method: 'PUT', body: JSON.stringify({ ...payload, originalGsm: entry.gsm }) })
-        : await authFetch('/nps/users', { method: 'POST', body: JSON.stringify(payload) });
-      const d = res ? await res.json().catch(() => ({})) : {};
-      if (res && res.ok) { showToast(isEdit ? 'Entry updated' : 'Entry added', 'success'); onSaved(d.entries || []); }
-      else showToast(d.error || 'Save failed', 'error', 6000);
+      const route = `${net.trim()} ${rest}`;
+      const loc = location.trim();
+      if (!isEdit) {
+        // EKLE: SSH kaydi olustur + lokasyonu birlikte sakla
+        const res = await authFetch('/nps/users', { method: 'POST', body: JSON.stringify({ gsm: gsm.trim(), ip: ip.trim(), route, location: loc }) });
+        const d = res ? await res.json().catch(() => ({})) : {};
+        if (res && res.ok) { showToast('Entry added', 'success'); onSaved(d.entries || []); }
+        else showToast(d.error || 'Save failed', 'error', 6000);
+      } else {
+        const sshChanged = gsm.trim() !== entry.gsm || ip.trim() !== entry.ip || route !== entry.route;
+        if (sshChanged) {
+          // SSH duzenleme (lokasyonu da sunucu tarafinda saklar/tasir)
+          const res = await authFetch(`/nps/users/${entry.id}`, { method: 'PUT', body: JSON.stringify({ gsm: gsm.trim(), ip: ip.trim(), route, originalGsm: entry.gsm, location: loc }) });
+          const d = res ? await res.json().catch(() => ({})) : {};
+          if (res && res.ok) { showToast('Entry updated', 'success'); onSaved(d.entries || []); }
+          else showToast(d.error || 'Save failed', 'error', 6000);
+        } else {
+          // Yalnizca lokasyon degisti → SSH YOK (NPS erisilemez olsa bile calisir)
+          const res = await authFetch('/nps/locations', { method: 'PUT', body: JSON.stringify({ gsm: gsm.trim(), location: loc, previousGsm: entry.gsm }) });
+          const d = res ? await res.json().catch(() => ({})) : {};
+          if (res && res.ok) { showToast('Location saved', 'success'); onLocationSaved(entry.id, loc); }
+          else showToast(d.error || 'Save failed', 'error', 6000);
+        }
+      }
     } catch (e) { showToast('Connection error', 'error'); } finally { setSaving(false); }
   };
 
@@ -269,11 +333,16 @@ function EntryFormModal({ mode, entry, compact, onClose, onSaved, authFetch }) {
             inputMode="decimal" autoComplete="off" autoCapitalize="none" autoCorrect="off" spellCheck={false} placeholder="192.168.54.200" />
           {hint(ip && !ipOk, 'Must be a valid IPv4 address.')}
         </div>
-        <div style={{ marginBottom: 4 }}>
+        <div style={{ marginBottom: 12 }}>
           <label style={lbl}>Framed-Route (network)</label>
           <input className="modern-input" style={{ width: '100%', fontFamily: 'var(--mono, monospace)' }} value={net} onChange={e => setNet(e.target.value)}
             autoComplete="off" autoCapitalize="none" autoCorrect="off" spellCheck={false} placeholder="10.37.98.0/24" />
           {hint(net && !netOk, 'Format: network/prefix — e.g. 10.37.98.0/24')}
+        </div>
+        <div style={{ marginBottom: 4 }}>
+          <label style={lbl}>Location <span style={{ textTransform: 'none', letterSpacing: 0, color: 'var(--text-dim)', fontWeight: 400 }}>· label only, not sent to NPS</span></label>
+          <input className="modern-input" style={{ width: '100%' }} value={location} onChange={e => setLocation(e.target.value)} maxLength={200}
+            autoComplete="off" spellCheck={false} placeholder="e.g. Pump station 3 — İSU" />
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 22 }}>
