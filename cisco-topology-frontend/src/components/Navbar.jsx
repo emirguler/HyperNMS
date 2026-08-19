@@ -153,6 +153,7 @@ export default function Navbar({ onAddDevice }) {
                 </div>
               </div>
             )}
+            {isAdmin && <button className={cls('/nps')} onClick={() => go('/nps')}>NPS</button>}
 
             {isAdmin && (path === '/devices' || path.startsWith('/topology')) && onAddDevice && (
               <button className="btn btn-primary btn-sm" style={{ marginLeft: 8 }} onClick={onAddDevice}>+ Add Device</button>
@@ -213,6 +214,7 @@ export default function Navbar({ onAddDevice }) {
               demek ve panel zaten dikey bir liste - iki giris duz olarak yaziliyor. */}
           {isAdmin && <button className={cls('/sessions')} onClick={() => go('/sessions')}>Session Log</button>}
           {isAdmin && <button className={cls('/audit')} onClick={() => go('/audit')}>Audit Log</button>}
+          {isAdmin && <button className={cls('/nps')} onClick={() => go('/nps')}>NPS</button>}
           {isAdmin && <button className={cls('/users')} onClick={() => go('/users')}>Users</button>}
           {isAdmin && (path === '/devices' || path.startsWith('/topology')) && onAddDevice && (
             <button className="btn btn-primary btn-sm" onClick={() => { onAddDevice(); setMobileOpen(false); }}>+ Add Device</button>

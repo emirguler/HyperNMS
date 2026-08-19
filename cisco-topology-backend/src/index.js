@@ -29,6 +29,7 @@ const twoFactorRoutes = require('./routes/twofactor');
 const sessionLog = require('./services/sessionLog');
 const settingsRoutes = require('./routes/settings');
 const webproxyRoutes = require('./routes/webproxy');
+const npsRoutes = require('./routes/nps');
 
 const app = express();
 
@@ -122,6 +123,7 @@ app.use(apiPrefix, sessionRoutes);
 app.use(apiPrefix, twoFactorRoutes);
 app.use(apiPrefix, settingsRoutes);
 app.use(apiPrefix, webproxyRoutes);
+app.use(apiPrefix, npsRoutes);
 
 app.get(`${apiPrefix}/notifications`, authenticate, (req, res) => {
     res.json(getNotifications(parseInt(req.query.limit) || 50));

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import AdSettingsCard from './AdSettingsCard';
+import NpsSettingsCard from './NpsSettingsCard';
 import TwoFactorCard from './TwoFactorCard';
 import BackupRestorePanel from './BackupRestorePanel';
 import GeneralSettingsCard from './GeneralSettingsCard';
@@ -13,6 +14,7 @@ const TILES = [
   { id: 'general', icon: '🎛️', title: 'General', desc: 'Device-wide display & behavior' },
   { id: 'backup', icon: '📦', title: 'Backup & Restore', desc: 'Export or import the full configuration' },
   { id: 'ad', icon: '🪪', title: 'Active Directory', desc: 'LDAP sign-in for AD users' },
+  { id: 'nps', icon: '📡', title: 'NPS (FreeRADIUS)', desc: 'SSH access for the NPS page' },
   { id: 'security', icon: '🔐', title: 'Two-Factor Auth', desc: 'TOTP codes for sign-in', adminOnly: true },
 ];
 
@@ -121,6 +123,7 @@ export default function SettingsModal({ onClose }) {
               {panel === 'general' && <GeneralSettingsCard embedded />}
               {panel === 'backup' && <BackupRestorePanel />}
               {panel === 'ad' && <AdSettingsCard embedded />}
+              {panel === 'nps' && <NpsSettingsCard />}
               {panel === 'security' && isSuperAdmin && <TwoFactorCard />}
             </div>
           </div>
