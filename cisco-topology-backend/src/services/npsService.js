@@ -248,6 +248,40 @@ async function readUsers() {
     }
 }
 
+// Parse ciktisini istemciye uygun sade listeye cevir
+function entriesOut(text) {
+    return parseUsers(text).entries.map(e => ({ id: e.id, gsm: e.gsm, ip: e.ip, route: e.route }));
+}
+
+// Yeni metni ATOMIK ve izin-koruyarak yaz. Once gecici dosyaya (SFTP) yazar,
+// sonra: (1) mevcut dosyayi yedekle, (2) izin/sahipligi eski dosyadan gecici
+// dosyaya kopyala (freeradius grubu okuyabilsin), (3) atomik mv. Yollar SABIT —
+// kabuga kullanici girdisi girmez. Hata durumunda httpErr firlatir.
+async function finalizeWrite(conn, newText) {
+    await sftpWriteFile(conn, TMP_FILE, newText);
+    const q = (p) => "'" + p + "'";
+    const fin = await exec(conn,
+        `cp -a -- ${q(USERS_FILE)} ${q(BAK_FILE)} && ` +
+        `chmod --reference=${q(USERS_FILE)} ${q(TMP_FILE)} && ` +
+        `chown --reference=${q(USERS_FILE)} ${q(TMP_FILE)} && ` +
+        `mv -f -- ${q(TMP_FILE)} ${q(USERS_FILE)}`
+    );
+    if (fin.code !== 0) {
+        try { await exec(conn, `rm -f -- ${q(TMP_FILE)}`); } catch (e) { /* ignore */ }
+        const detail = (fin.stderr || fin.stdout || ('exit ' + fin.code)).trim().slice(0, 300);
+        throw httpErr(502, 'Could not write the users file: ' + detail);
+    }
+}
+
+// Ekran goruntusundeki bicimle yeni bir kayit blogu uret (TAB girinti dahil).
+function buildBlock(clean) {
+    return [
+        `DEFAULT Calling-Station-ID == "${clean.gsm}", Auth-Type = Accept`,
+        `\tFramed-IP-Address = ${clean.ip},`,
+        `\tFramed-Route = "${clean.route}"`,
+    ].join('\n');
+}
+
 // Tek kaydi duzenle. values: { gsm, ip, route, originalGsm }
 // Donen: guncel kayit listesi.
 async function saveEntry(id, values) {
@@ -256,8 +290,7 @@ async function saveEntry(id, values) {
 
     const conn = await connect();
     try {
-        // TASE ONERISI: yazmadan hemen once TAZE oku — istemcinin listesi bayatsa
-        // yanlis satiri ezmeyelim.
+        // Yazmadan hemen once TAZE oku — istemcinin listesi bayatsa yanlis satiri ezmeyelim.
         const text = await sftpReadFile(conn, USERS_FILE);
         const { lines, entries } = parseUsers(text);
         const entry = entries[id];
@@ -266,29 +299,69 @@ async function saveEntry(id, values) {
         if (values.originalGsm && entry.gsm !== String(values.originalGsm)) {
             throw httpErr(409, 'The users file changed since you opened it — refresh and try again');
         }
-
         const newText = applyEdit(lines, entry, clean);
-        await sftpWriteFile(conn, TMP_FILE, newText);
-
-        // Sonlandirma: (1) mevcut dosyayi yedekle, (2) izin/sahipligi eski dosyadan
-        // gecici dosyaya kopyala (freeradius grubu okuyabilsin), (3) atomik mv.
-        // Yollar SABIT — kabuga kullanici girdisi girmez.
-        const q = (p) => "'" + p + "'";
-        const fin = await exec(conn,
-            `cp -a -- ${q(USERS_FILE)} ${q(BAK_FILE)} && ` +
-            `chmod --reference=${q(USERS_FILE)} ${q(TMP_FILE)} && ` +
-            `chown --reference=${q(USERS_FILE)} ${q(TMP_FILE)} && ` +
-            `mv -f -- ${q(TMP_FILE)} ${q(USERS_FILE)}`
-        );
-        if (fin.code !== 0) {
-            try { await exec(conn, `rm -f -- ${q(TMP_FILE)}`); } catch (e) { /* ignore */ }
-            const detail = (fin.stderr || fin.stdout || ('exit ' + fin.code)).trim().slice(0, 300);
-            throw httpErr(502, 'Could not write the users file: ' + detail);
-        }
-        return parseUsers(newText).entries.map(e => ({ id: e.id, gsm: e.gsm, ip: e.ip, route: e.route }));
+        await finalizeWrite(conn, newText);
+        return entriesOut(newText);
     } catch (e) {
         if (e && e.status) throw e;
         throw httpErr(502, 'Could not save the entry: ' + (e.message || 'error'));
+    } finally {
+        try { conn.end(); } catch (e) { /* ignore */ }
+    }
+}
+
+// Yeni kayit ekle. values: { gsm, ip, route }
+async function addEntry(values) {
+    const clean = cleanEntry(values || {});
+    if (typeof clean === 'string') throw httpErr(400, clean);
+
+    const conn = await connect();
+    try {
+        const text = await sftpReadFile(conn, USERS_FILE);
+        const { lines, entries } = parseUsers(text);
+        // Ayni GSM zaten varsa reddet (yanlislikla ikili kayit olusmasin).
+        if (entries.some(e => e.gsm === clean.gsm)) {
+            throw httpErr(409, `An entry for GSM ${clean.gsm} already exists`);
+        }
+        const block = buildBlock(clean);
+        let newText;
+        if (entries.length > 0) {
+            // Son kaydin hemen ardina ekle (varsa sondaki Reject/yorumlardan once).
+            const insertAt = entries[entries.length - 1].end + 1;
+            newText = lines.slice(0, insertAt).concat(block.split('\n'), lines.slice(insertAt)).join('\n');
+        } else {
+            // Hic kayit yoksa dosya sonuna ekle.
+            const base = text.replace(/\s*$/, '');
+            newText = (base ? base + '\n' : '') + block + '\n';
+        }
+        await finalizeWrite(conn, newText);
+        return entriesOut(newText);
+    } catch (e) {
+        if (e && e.status) throw e;
+        throw httpErr(502, 'Could not add the entry: ' + (e.message || 'error'));
+    } finally {
+        try { conn.end(); } catch (e) { /* ignore */ }
+    }
+}
+
+// Kaydi sil. originalGsm verilirse es-zamanlilik kontrolu yapilir.
+async function deleteEntry(id, originalGsm) {
+    const conn = await connect();
+    try {
+        const text = await sftpReadFile(conn, USERS_FILE);
+        const { lines, entries } = parseUsers(text);
+        const entry = entries[id];
+        if (!entry) throw httpErr(409, 'That entry no longer exists — refresh the list');
+        if (originalGsm && entry.gsm !== String(originalGsm)) {
+            throw httpErr(409, 'The users file changed since you opened it — refresh and try again');
+        }
+        // Blogun tum satirlarini (icine sindirilmis takip eden bos satirlar dahil) cikar.
+        const newText = lines.slice(0, entry.start).concat(lines.slice(entry.end + 1)).join('\n');
+        await finalizeWrite(conn, newText);
+        return entriesOut(newText);
+    } catch (e) {
+        if (e && e.status) throw e;
+        throw httpErr(502, 'Could not delete the entry: ' + (e.message || 'error'));
     } finally {
         try { conn.end(); } catch (e) { /* ignore */ }
     }
@@ -320,7 +393,7 @@ async function testConnection(cfg) {
 
 module.exports = {
     USERS_FILE, RESTART_CMD,
-    readUsers, saveEntry, restart, testConnection,
+    readUsers, saveEntry, addEntry, deleteEntry, restart, testConnection,
     // test edilebilirlik icin saf yardimcilar:
-    parseUsers, applyEdit, cleanEntry, isIPv4,
+    parseUsers, applyEdit, buildBlock, cleanEntry, isIPv4,
 };

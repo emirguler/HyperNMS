@@ -92,6 +92,19 @@ router.get('/nps/users', authenticate, requireAdmin, async (req, res) => {
     }
 });
 
+// Yeni kayit ekle
+router.post('/nps/users', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const entries = await nps.addEntry(req.body || {});
+        await logAction(req.user, 'NPS_USER_ADD', String((req.body && req.body.gsm) || ''), {
+            ip: req.ip, gsm: req.body && req.body.gsm, framedIp: req.body && req.body.ip,
+        });
+        res.json({ entries });
+    } catch (e) {
+        res.status(e.status || 502).json({ error: e.message || 'Could not add the entry' });
+    }
+});
+
 // Tek kaydi duzenle
 router.put('/nps/users/:id', authenticate, requireAdmin, async (req, res) => {
     const id = parseInt(req.params.id, 10);
@@ -104,6 +117,20 @@ router.put('/nps/users/:id', authenticate, requireAdmin, async (req, res) => {
         res.json({ entries });
     } catch (e) {
         res.status(e.status || 502).json({ error: e.message || 'Could not save the entry' });
+    }
+});
+
+// Kaydi sil (originalGsm govdede — telefon numarasi URL/loglara yazilmasin diye)
+router.delete('/nps/users/:id', authenticate, requireAdmin, async (req, res) => {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id) || id < 0) return res.status(400).json({ error: 'Invalid entry id' });
+    try {
+        const originalGsm = req.body && req.body.originalGsm;
+        const entries = await nps.deleteEntry(id, originalGsm);
+        await logAction(req.user, 'NPS_USER_DELETE', String(originalGsm || id), { ip: req.ip, gsm: originalGsm });
+        res.json({ entries });
+    } catch (e) {
+        res.status(e.status || 502).json({ error: e.message || 'Could not delete the entry' });
     }
 });
 

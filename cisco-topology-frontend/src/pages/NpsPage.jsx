@@ -5,16 +5,19 @@ import { useViewport } from '../hooks/useViewport';
 import { showToast } from '../Toast';
 
 // NPS (Linux FreeRADIUS) yonetim sayfasi — YALNIZCA ADMIN.
-// /etc/freeradius/3.0/users kayitlarini listeler, tek tek duzenletir ve
+// /etc/freeradius/3.0/users kayitlarini listeler, ek/duzenle/sil yaptirir ve
 // "service freeradius restart" calistirir. SSH ayarlari Settings → NPS'te.
 
-// Istemci tarafi hafif dogrulama (backend zaten otoriter). Anlik geri bildirim icin.
+// Istemci tarafi hafif dogrulama (backend zaten otoriter). Anlik geri bildirim.
 const isIPv4 = (ip) => /^\d{1,3}(\.\d{1,3}){3}$/.test(ip) && ip.split('.').every(o => { const n = +o; return n >= 0 && n <= 255 && String(n) === o; });
 const validGsm = (g) => /^\d{1,20}$/.test(g);
-const validRoute = (r) => {
-  const m = String(r).trim().match(/^(\d{1,3}(?:\.\d{1,3}){3})\/(\d{1,2})\s+(\d{1,3}(?:\.\d{1,3}){3})\s+(\d{1,3})$/);
-  return !!(m && isIPv4(m[1]) && isIPv4(m[3]) && +m[2] <= 32);
-};
+// Framed-Route UI'da yalnizca AG kismini (network/prefix) gosterir; sabit
+// "gateway metric" ( or. "0.0.0.0 1") kismi gizlenir ve arka planda korunur.
+const routeNet = (route) => String(route || '').trim().split(/\s+/)[0] || '';
+const routeRest = (route) => String(route || '').trim().split(/\s+/).slice(1).join(' ');
+const validNet = (net) => { const m = String(net).trim().match(/^(\d{1,3}(?:\.\d{1,3}){3})\/(\d{1,2})$/); return !!(m && isIPv4(m[1]) && +m[2] <= 32); };
+// Yeni kayitlar ve rest'i eksik/bozuk kayitlar icin varsayilan gateway+metric.
+const DEFAULT_REST = '0.0.0.0 1';
 
 export default function NpsPage() {
   const { isAdmin, authFetch } = useAuth();
@@ -28,7 +31,9 @@ export default function NpsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);       // { message, notConfigured }
   const [query, setQuery] = useState('');
-  const [editing, setEditing] = useState(null);   // duzenlenen kayit
+  const [formEntry, setFormEntry] = useState(null); // { mode:'add'|'edit', entry }
+  const [deleting, setDeleting] = useState(null);   // silinecek kayit
+  const [deleteBusy, setDeleteBusy] = useState(false);
   const [confirmRestart, setConfirmRestart] = useState(false);
   const [restarting, setRestarting] = useState(false);
   const [usersFile, setUsersFile] = useState('/etc/freeradius/3.0/users');
@@ -73,6 +78,20 @@ export default function NpsPage() {
     finally { setRestarting(false); setConfirmRestart(false); }
   };
 
+  const doDelete = async () => {
+    if (!deleting) return;
+    setDeleteBusy(true);
+    try {
+      const res = await authFetch(`/nps/users/${deleting.id}`, { method: 'DELETE', body: JSON.stringify({ originalGsm: deleting.gsm }) });
+      const d = res ? await res.json().catch(() => ({})) : {};
+      if (res && res.ok) { showToast('Entry deleted', 'success'); setEntries(d.entries || []); setDeleting(null); }
+      else showToast(d.error || 'Delete failed', 'error', 6000);
+    } catch (e) { showToast('Connection error', 'error'); }
+    finally { setDeleteBusy(false); }
+  };
+
+  const configured = !error?.notConfigured;
+
   return (
     <div className="list-container">
       {/* Baslik + eylemler; <=1024px'te satir kayar (rw-actions) */}
@@ -83,9 +102,10 @@ export default function NpsPage() {
             FreeRADIUS · <code style={{ fontSize: '0.75rem' }}>{usersFile}</code>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+        <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
+          {configured && !error && <button className="btn btn-primary btn-sm" onClick={() => setFormEntry({ mode: 'add', entry: null })}>+ New entry</button>}
           <button className="btn btn-ghost btn-sm" onClick={load} disabled={loading}>Refresh</button>
-          <button className="btn btn-danger btn-sm" onClick={() => setConfirmRestart(true)} disabled={restarting || !!error?.notConfigured}>
+          <button className="btn btn-danger btn-sm" onClick={() => setConfirmRestart(true)} disabled={restarting || !configured}>
             {restarting ? 'Restarting…' : 'Service restart'}
           </button>
         </div>
@@ -131,15 +151,16 @@ export default function NpsPage() {
               <tbody>
                 {filtered.length === 0 ? (
                   <tr><td colSpan={4} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 28 }}>
-                    {query ? 'No entries match your search.' : 'No RADIUS entries found in the users file.'}
+                    {query ? 'No entries match your search.' : 'No RADIUS entries yet — use “+ New entry” to add one.'}
                   </td></tr>
                 ) : filtered.map(e => (
                   <tr key={e.id}>
                     <td data-label="GSM" style={{ paddingLeft: isPhone ? undefined : 24, fontWeight: 600, whiteSpace: 'nowrap' }}>{e.gsm}</td>
                     <td data-label="Framed-IP" style={{ whiteSpace: 'nowrap' }}>{e.ip || <span style={{ color: 'var(--text-dim)' }}>—</span>}</td>
-                    <td data-label="Framed-Route" style={{ fontFamily: 'var(--mono, monospace)', fontSize: '0.85rem' }}>{e.route || <span style={{ color: 'var(--text-dim)' }}>—</span>}</td>
-                    <td data-label="" style={{ textAlign: 'right', paddingRight: isPhone ? undefined : 24 }}>
-                      <button className="btn btn-ghost btn-sm" onClick={() => setEditing(e)}>Edit</button>
+                    <td data-label="Framed-Route" style={{ fontFamily: 'var(--mono, monospace)', fontSize: '0.85rem', whiteSpace: 'nowrap' }}>{routeNet(e.route) || <span style={{ color: 'var(--text-dim)' }}>—</span>}</td>
+                    <td data-label="" style={{ textAlign: 'right', paddingRight: isPhone ? undefined : 24, whiteSpace: 'nowrap' }}>
+                      <button className="btn btn-ghost btn-sm" style={{ marginRight: 6 }} onClick={() => setFormEntry({ mode: 'edit', entry: e })}>Edit</button>
+                      <button className="btn btn-danger btn-sm" onClick={() => setDeleting(e)}>Delete</button>
                     </td>
                   </tr>
                 ))}
@@ -149,14 +170,30 @@ export default function NpsPage() {
         </div>
       )}
 
-      {editing && (
-        <EditEntryModal
-          entry={editing}
+      {formEntry && (
+        <EntryFormModal
+          mode={formEntry.mode}
+          entry={formEntry.entry}
           compact={compact}
-          onClose={() => setEditing(null)}
-          onSaved={(updated) => { setEntries(updated); setEditing(null); }}
+          onClose={() => setFormEntry(null)}
+          onSaved={(updated) => { setEntries(updated); setFormEntry(null); }}
           authFetch={authFetch}
         />
+      )}
+
+      {deleting && (
+        <div className="modal-overlay" onKeyDown={e => { if (e.key === 'Escape') setDeleting(null); }}>
+          <div className="confirm-modal-content">
+            <h3 className="confirm-title">Delete entry?</h3>
+            <p className="confirm-desc">
+              Remove the RADIUS entry for GSM <strong>{deleting.gsm}</strong>{deleting.ip ? <> (<code>{deleting.ip}</code>)</> : null}? This rewrites the users file and cannot be undone.
+            </p>
+            <div className="confirm-actions">
+              <button className="btn btn-ghost" onClick={() => setDeleting(null)} disabled={deleteBusy}>Cancel</button>
+              <button className="btn btn-danger" onClick={doDelete} disabled={deleteBusy} autoFocus>{deleteBusy ? 'Deleting…' : 'Delete'}</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {confirmRestart && (
@@ -179,28 +216,32 @@ export default function NpsPage() {
   );
 }
 
-// --- Duzenleme popup'i ---
-function EditEntryModal({ entry, compact, onClose, onSaved, authFetch }) {
-  const [gsm, setGsm] = useState(entry.gsm || '');
-  const [ip, setIp] = useState(entry.ip || '');
-  const [route, setRoute] = useState(entry.route || '');
+// --- Ekle / Duzenle popup'i (ayni alanlar) ---
+function EntryFormModal({ mode, entry, compact, onClose, onSaved, authFetch }) {
+  const isEdit = mode === 'edit';
+  const [gsm, setGsm] = useState(entry?.gsm || '');
+  const [ip, setIp] = useState(entry?.ip || '');
+  // UI yalnizca ag kismini gosterir; gateway+metric ("rest") gizli tutulup korunur.
+  const [net, setNet] = useState(routeNet(entry?.route) || '');
+  const rest = (isEdit && routeRest(entry?.route)) || DEFAULT_REST;
   const [saving, setSaving] = useState(false);
 
   const gsmOk = validGsm(gsm.trim());
   const ipOk = isIPv4(ip.trim());
-  const routeOk = validRoute(route);
-  const allOk = gsmOk && ipOk && routeOk;
+  const netOk = validNet(net);
+  const allOk = gsmOk && ipOk && netOk;
 
   const save = async () => {
     if (!allOk) return;
     setSaving(true);
     try {
-      const res = await authFetch(`/nps/users/${entry.id}`, {
-        method: 'PUT',
-        body: JSON.stringify({ gsm: gsm.trim(), ip: ip.trim(), route: route.trim(), originalGsm: entry.gsm }),
-      });
+      const route = `${net.trim()} ${rest}`; // ag + gizli gateway/metric
+      const payload = { gsm: gsm.trim(), ip: ip.trim(), route };
+      const res = isEdit
+        ? await authFetch(`/nps/users/${entry.id}`, { method: 'PUT', body: JSON.stringify({ ...payload, originalGsm: entry.gsm }) })
+        : await authFetch('/nps/users', { method: 'POST', body: JSON.stringify(payload) });
       const d = res ? await res.json().catch(() => ({})) : {};
-      if (res && res.ok) { showToast('Entry updated', 'success'); onSaved(d.entries || []); }
+      if (res && res.ok) { showToast(isEdit ? 'Entry updated' : 'Entry added', 'success'); onSaved(d.entries || []); }
       else showToast(d.error || 'Save failed', 'error', 6000);
     } catch (e) { showToast('Connection error', 'error'); } finally { setSaving(false); }
   };
@@ -212,13 +253,13 @@ function EditEntryModal({ entry, compact, onClose, onSaved, authFetch }) {
     <div className="modal-overlay" style={{ zIndex: 2200 }} onClick={onClose} onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
       <div className="modal-content" style={{ width: 'min(460px, 94vw)', maxHeight: '88dvh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
-          <h2 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 600, color: 'var(--text-main)' }}>Edit RADIUS entry</h2>
+          <h2 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 600, color: 'var(--text-main)' }}>{isEdit ? 'Edit RADIUS entry' : 'New RADIUS entry'}</h2>
           <button onClick={onClose} className="rw-tap" aria-label="Close" style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '1.5rem', cursor: 'pointer', lineHeight: 1 }}>&times;</button>
         </div>
 
         <div style={{ marginBottom: 12 }}>
           <label style={lbl}>GSM number (Calling-Station-ID)</label>
-          <input className="modern-input" style={{ width: '100%' }} value={gsm} onChange={e => setGsm(e.target.value)}
+          <input className="modern-input" style={{ width: '100%' }} value={gsm} onChange={e => setGsm(e.target.value)} autoFocus={!isEdit}
             inputMode="numeric" autoComplete="off" autoCapitalize="none" autoCorrect="off" spellCheck={false} placeholder="905346214614" />
           {hint(gsm && !gsmOk, 'Digits only (1–20).')}
         </div>
@@ -229,15 +270,15 @@ function EditEntryModal({ entry, compact, onClose, onSaved, authFetch }) {
           {hint(ip && !ipOk, 'Must be a valid IPv4 address.')}
         </div>
         <div style={{ marginBottom: 4 }}>
-          <label style={lbl}>Framed-Route</label>
-          <input className="modern-input" style={{ width: '100%', fontFamily: 'var(--mono, monospace)' }} value={route} onChange={e => setRoute(e.target.value)}
-            autoComplete="off" autoCapitalize="none" autoCorrect="off" spellCheck={false} placeholder="10.37.98.0/24 0.0.0.0 1" />
-          {hint(route && !routeOk, 'Format: network/prefix gateway metric — e.g. 10.37.98.0/24 0.0.0.0 1')}
+          <label style={lbl}>Framed-Route (network)</label>
+          <input className="modern-input" style={{ width: '100%', fontFamily: 'var(--mono, monospace)' }} value={net} onChange={e => setNet(e.target.value)}
+            autoComplete="off" autoCapitalize="none" autoCorrect="off" spellCheck={false} placeholder="10.37.98.0/24" />
+          {hint(net && !netOk, 'Format: network/prefix — e.g. 10.37.98.0/24')}
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 22 }}>
           <button className="btn btn-ghost" onClick={onClose} disabled={saving}>Cancel</button>
-          <button className="btn btn-primary" onClick={save} disabled={saving || !allOk}>{saving ? 'Saving…' : 'Save'}</button>
+          <button className="btn btn-primary" onClick={save} disabled={saving || !allOk}>{saving ? 'Saving…' : (isEdit ? 'Save' : 'Add entry')}</button>
         </div>
       </div>
     </div>
