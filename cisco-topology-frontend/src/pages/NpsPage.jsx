@@ -27,6 +27,8 @@ const cmpBy = (a, b, key) => {
   if (key === 'location') return String(a.location || '').localeCompare(String(b.location || ''), undefined, { sensitivity: 'base' });
   return 0;
 };
+// CSV hucre kacisi: virgul/tirnak/yeni satir iceren alani tirnakla + ic tirnaklari ikile.
+const csvCell = (v) => { const s = String(v == null ? '' : v); return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
 
 export default function NpsPage() {
   const { isAdmin, authFetch } = useAuth();
@@ -93,6 +95,23 @@ export default function NpsPage() {
   const sortValue = sort.key ? `${sort.key}-${sort.dir}` : '';
   const onSortSelect = (v) => { if (!v) setSort({ key: null, dir: 'asc' }); else { const [k, d] = v.split('-'); setSort({ key: k, dir: d }); } };
 
+  // Listeyi CSV indir — TUM kolonlar (GSM, Framed-IP, Framed-Route, Location).
+  // Gorunen satirlar (arama + siralama uygulanmis); arama bosken tum liste.
+  // Framed-Route listedeki gibi yalnizca ag kismini tasir. BOM ile Excel UTF-8'i
+  // (Turkce karakterler) dogru acar.
+  const downloadList = () => {
+    const header = ['GSM number', 'Framed-IP', 'Framed-Route', 'Location'];
+    const rows = displayed.map(e => [e.gsm, e.ip, routeNet(e.route), e.location || '']);
+    const csv = [header, ...rows].map(r => r.map(csvCell).join(',')).join('\r\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `netpulse-nps-users-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
   const doRestart = async () => {
     setRestarting(true);
     try {
@@ -143,6 +162,7 @@ export default function NpsPage() {
         </div>
         <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
           {configured && !error && <button className="btn btn-primary btn-sm" onClick={() => setFormEntry({ mode: 'add', entry: null })}>+ New entry</button>}
+          {configured && !error && <button className="btn btn-ghost btn-sm" onClick={downloadList} disabled={displayed.length === 0} title="Download the list as CSV (all columns)">Download list</button>}
           <button className="btn btn-ghost btn-sm" onClick={load} disabled={loading}>Refresh</button>
           <button className="btn btn-danger btn-sm" onClick={() => setConfirmRestart(true)} disabled={restarting || !configured}>
             {restarting ? 'Restarting…' : 'Service restart'}
