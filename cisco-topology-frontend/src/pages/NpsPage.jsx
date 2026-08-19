@@ -27,8 +27,16 @@ const cmpBy = (a, b, key) => {
   if (key === 'location') return String(a.location || '').localeCompare(String(b.location || ''), undefined, { sensitivity: 'base' });
   return 0;
 };
-// CSV hucre kacisi: virgul/tirnak/yeni satir iceren alani tirnakla + ic tirnaklari ikile.
-const csvCell = (v) => { const s = String(v == null ? '' : v); return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+// CSV hucre kacisi + formul enjeksiyonu korumasi: tehlikeli on-karakter (= + - @ tab CR)
+// varsa basa ' konur, sonra virgul/tirnak/yenisatir iceriyorsa tirnaklanir + ic tirnak ikilenir.
+const csvCell = (v) => {
+  let s = String(v == null ? '' : v);
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+  return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+};
+// GSM'i Excel bilimsel gosterime (9.05E+11) cevirmesin / bastaki sifiri atmasin diye
+// ="..." ile METNE zorla. GSM dogrulanmis (yalnizca rakam) oldugundan enjeksiyon riski yok.
+const csvGsm = (g) => '="' + String(g == null ? '' : g).replace(/\D/g, '') + '"';
 
 export default function NpsPage() {
   const { isAdmin, authFetch } = useAuth();
@@ -100,9 +108,9 @@ export default function NpsPage() {
   // Framed-Route listedeki gibi yalnizca ag kismini tasir. BOM ile Excel UTF-8'i
   // (Turkce karakterler) dogru acar.
   const downloadList = () => {
-    const header = ['GSM number', 'Framed-IP', 'Framed-Route', 'Location'];
-    const rows = displayed.map(e => [e.gsm, e.ip, routeNet(e.route), e.location || '']);
-    const csv = [header, ...rows].map(r => r.map(csvCell).join(',')).join('\r\n');
+    const headerLine = ['GSM number', 'Framed-IP', 'Framed-Route', 'Location'].map(csvCell).join(',');
+    const dataLines = displayed.map(e => [csvGsm(e.gsm), csvCell(e.ip), csvCell(routeNet(e.route)), csvCell(e.location || '')].join(','));
+    const csv = [headerLine, ...dataLines].join('\r\n');
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -331,6 +339,7 @@ function EntryFormModal({ mode, entry, compact, onClose, onSaved, onLocationSave
 
   const lbl = { display: 'block', fontSize: compact ? '13px' : '0.72rem', color: 'var(--text-muted)', marginBottom: 4, textTransform: compact ? 'none' : 'uppercase', letterSpacing: compact ? 0 : 0.4 };
   const hint = (bad, text) => bad ? <div style={{ fontSize: '0.72rem', color: 'var(--danger)', marginTop: 4 }}>{text}</div> : null;
+  const errStyle = (bad) => (bad ? { borderColor: 'var(--danger)' } : null); // gecersizken kirmizi cerceve
 
   return (
     <div className="modal-overlay" style={{ zIndex: 2200 }} onClick={onClose} onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
@@ -342,21 +351,24 @@ function EntryFormModal({ mode, entry, compact, onClose, onSaved, onLocationSave
 
         <div style={{ marginBottom: 12 }}>
           <label style={lbl}>GSM number (Calling-Station-ID)</label>
-          <input className="modern-input" style={{ width: '100%' }} value={gsm} onChange={e => setGsm(e.target.value)} autoFocus={!isEdit}
+          {/* Yalnizca rakam kabul et: harf/sembol/bosluk yazilamaz (yapistirinca da temizlenir). */}
+          <input className="modern-input" style={{ width: '100%', ...errStyle(gsm && !gsmOk) }} value={gsm} onChange={e => setGsm(e.target.value.replace(/\D/g, '').slice(0, 20))} autoFocus={!isEdit}
             inputMode="numeric" autoComplete="off" autoCapitalize="none" autoCorrect="off" spellCheck={false} placeholder="905346214614" />
-          {hint(gsm && !gsmOk, 'Digits only (1–20).')}
+          {hint(gsm && !gsmOk, 'GSM must be 1–20 digits.')}
         </div>
         <div style={{ marginBottom: 12 }}>
           <label style={lbl}>Framed-IP-Address</label>
-          <input className="modern-input" style={{ width: '100%' }} value={ip} onChange={e => setIp(e.target.value)}
+          {/* Yalnizca rakam ve nokta kabul et. Bicim/oktet gecerliligi ayrica dogrulanir. */}
+          <input className="modern-input" style={{ width: '100%', ...errStyle(ip && !ipOk) }} value={ip} onChange={e => setIp(e.target.value.replace(/[^\d.]/g, ''))}
             inputMode="decimal" autoComplete="off" autoCapitalize="none" autoCorrect="off" spellCheck={false} placeholder="192.168.54.200" />
-          {hint(ip && !ipOk, 'Must be a valid IPv4 address.')}
+          {hint(ip && !ipOk, 'Must be a valid IPv4 address (0–255 per octet).')}
         </div>
         <div style={{ marginBottom: 12 }}>
           <label style={lbl}>Framed-Route (network)</label>
-          <input className="modern-input" style={{ width: '100%', fontFamily: 'var(--mono, monospace)' }} value={net} onChange={e => setNet(e.target.value)}
+          {/* Yalnizca rakam, nokta ve tek bolu kabul et (network/prefix). */}
+          <input className="modern-input" style={{ width: '100%', fontFamily: 'var(--mono, monospace)', ...errStyle(net && !netOk) }} value={net} onChange={e => setNet(e.target.value.replace(/[^\d./]/g, ''))}
             autoComplete="off" autoCapitalize="none" autoCorrect="off" spellCheck={false} placeholder="10.37.98.0/24" />
-          {hint(net && !netOk, 'Format: network/prefix — e.g. 10.37.98.0/24')}
+          {hint(net && !netOk, 'Format: network/prefix — e.g. 10.37.98.0/24 (prefix 0–32)')}
         </div>
         <div style={{ marginBottom: 4 }}>
           <label style={lbl}>Location <span style={{ textTransform: 'none', letterSpacing: 0, color: 'var(--text-dim)', fontWeight: 400 }}>· label only, not sent to NPS</span></label>
