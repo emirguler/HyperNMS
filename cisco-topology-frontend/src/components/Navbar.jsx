@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useViewport } from '../hooks/useViewport';
@@ -39,11 +39,13 @@ const backdropStyle = {
 };
 
 export default function Navbar({ onAddDevice }) {
-  const { logout, isAdmin, username } = useAuth();
+  const { logout, isAdmin, username, authFetch } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const path = location.pathname;
   const [showSettings, setShowSettings] = useState(false);
+  // NPS menusu yalnizca ayarlar TAM girilmisse (host+kullanici+sifre) gorunur.
+  const [npsConfigured, setNpsConfigured] = useState(false);
   const [showPing, setShowPing] = useState(false);
   const [showTrace, setShowTrace] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -106,6 +108,18 @@ export default function Navbar({ onAddDevice }) {
   useEffect(() => { if (mapsOpen) setLogsOpen(false); }, [mapsOpen]);
   useEffect(() => { if (logsOpen) setMapsOpen(false); }, [logsOpen]);
 
+  // NPS ayarinin tam olup olmadigini oku (yalnizca admin). Ayarlar SSH gerektirmez,
+  // sadece kayitli host/kullanici/sifre var mi diye bakar. Settings kapaninca da
+  // yeniden bakilir ki kullanici NPS'i kurup kapattigi an menu belirsin.
+  const checkNps = useCallback(async () => {
+    if (!isAdmin) { setNpsConfigured(false); return; }
+    try {
+      const res = await authFetch('/nps/config');
+      if (res && res.ok) { const d = await res.json(); setNpsConfigured(!!d.configured); }
+    } catch (e) { /* ignore */ }
+  }, [isAdmin, authFetch]);
+  useEffect(() => { checkNps(); }, [checkNps]);
+
   return (
     <>
       {drawerMode && mobileOpen && (
@@ -140,6 +154,7 @@ export default function Navbar({ onAddDevice }) {
 
             <button className={cls('/mac-search')} onClick={() => go('/mac-search')}>MAC Search</button>
             {isAdmin && <button className={cls('/command-line')} onClick={() => go('/command-line')}>Command-line</button>}
+            {isAdmin && npsConfigured && <button className={cls('/nps')} onClick={() => go('/nps')}>NPS</button>}
             {isAdmin && (
               <div className={`dropdown ${logsOpen ? 'open' : ''}`}>
                 <button
@@ -153,7 +168,6 @@ export default function Navbar({ onAddDevice }) {
                 </div>
               </div>
             )}
-            {isAdmin && <button className={cls('/nps')} onClick={() => go('/nps')}>NPS</button>}
 
             {isAdmin && (path === '/devices' || path.startsWith('/topology')) && onAddDevice && (
               <button className="btn btn-primary btn-sm" style={{ marginLeft: 8 }} onClick={onAddDevice}>+ Add Device</button>
@@ -210,11 +224,11 @@ export default function Navbar({ onAddDevice }) {
           <button className={cls('/geomap')} onClick={() => go('/geomap')}>Geographic Map</button>
           <button className={cls('/mac-search')} onClick={() => go('/mac-search')}>MAC Search</button>
           {isAdmin && <button className={cls('/command-line')} onClick={() => go('/command-line')}>Command-line</button>}
+          {isAdmin && npsConfigured && <button className={cls('/nps')} onClick={() => go('/nps')}>NPS</button>}
           {/* Cekmecede ic ice menu YOK: dropdown'i parmakla acmak fazladan bir dokunus
               demek ve panel zaten dikey bir liste - iki giris duz olarak yaziliyor. */}
           {isAdmin && <button className={cls('/sessions')} onClick={() => go('/sessions')}>Session Log</button>}
           {isAdmin && <button className={cls('/audit')} onClick={() => go('/audit')}>Audit Log</button>}
-          {isAdmin && <button className={cls('/nps')} onClick={() => go('/nps')}>NPS</button>}
           {isAdmin && <button className={cls('/users')} onClick={() => go('/users')}>Users</button>}
           {isAdmin && (path === '/devices' || path.startsWith('/topology')) && onAddDevice && (
             <button className="btn btn-primary btn-sm" onClick={() => { onAddDevice(); setMobileOpen(false); }}>+ Add Device</button>
@@ -226,7 +240,7 @@ export default function Navbar({ onAddDevice }) {
           </div>
         </div>
       </header>
-      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+      {showSettings && <SettingsModal onClose={() => { setShowSettings(false); checkNps(); }} />}
       {showPing && <PingModal onClose={() => setShowPing(false)} />}
       {showTrace && <TraceModal onClose={() => setShowTrace(false)} />}
     </>

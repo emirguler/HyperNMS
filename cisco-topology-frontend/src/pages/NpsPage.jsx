@@ -118,6 +118,10 @@ export default function NpsPage() {
 
   const configured = !error?.notConfigured;
 
+  // NPS ayarlari tam degilse sayfayi GOSTERME — dashboard'a yonlendir.
+  // (Menu de zaten gizli; dogrudan URL ile gelinirse burada bounce edilir.)
+  if (!loading && error?.notConfigured) return <Navigate to="/dashboard" replace />;
+
   // Tiklanabilir baslik (masaustu/tablet); mobilde thead gizli oldugu icin
   // ayrica bir siralama menusu de var.
   const SortTh = ({ k, children, style }) => (
@@ -168,16 +172,10 @@ export default function NpsPage() {
         <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Loading NPS users…</div>
       ) : error ? (
         <div className="chart-container no-float" style={{ padding: 28, textAlign: 'center' }}>
-          <div style={{ fontSize: '2rem', marginBottom: 10 }}>{error.notConfigured ? '⚙️' : '⚠️'}</div>
-          <div style={{ color: 'var(--text-main)', fontWeight: 600, marginBottom: 6 }}>
-            {error.notConfigured ? 'NPS is not configured yet' : 'Could not reach NPS'}
-          </div>
-          <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', maxWidth: 460, margin: '0 auto 14px', lineHeight: 1.5 }}>
-            {error.notConfigured
-              ? 'Open Settings → NPS and enter the SSH host, username and password of your FreeRADIUS server.'
-              : error.message}
-          </div>
-          {!error.notConfigured && <button className="btn btn-ghost btn-sm" onClick={load}>Try again</button>}
+          <div style={{ fontSize: '2rem', marginBottom: 10 }}>⚠️</div>
+          <div style={{ color: 'var(--text-main)', fontWeight: 600, marginBottom: 6 }}>Could not reach NPS</div>
+          <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', maxWidth: 460, margin: '0 auto 14px', lineHeight: 1.5 }}>{error.message}</div>
+          <button className="btn btn-ghost btn-sm" onClick={load}>Try again</button>
         </div>
       ) : (
         <div className="chart-container no-float" style={{ padding: 0, overflow: 'hidden' }}>
