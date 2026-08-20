@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useViewport } from '../hooks/useViewport';
 import NotificationBell from './NotificationBell';
@@ -60,6 +60,9 @@ export default function Navbar({ onAddDevice }) {
   const landscape = width > height;
 
   const go = (p) => { navigate(p); setMobileOpen(false); setMapsOpen(false); setLogsOpen(false); };
+  // <Link> gezintisi kendiliginden olur; onClick yalnizca acik menuleri kapatir.
+  // Sag/orta/Ctrl-tik ise tarayiciya birakilir → "yeni sekmede ac" calisir.
+  const closeMenus = () => { setMobileOpen(false); setMapsOpen(false); setLogsOpen(false); };
   const cls = (p) => `nav-btn ${path === p ? 'active' : ''}`;
 
   // Acik menu su durumlarda erisilemez hale gelir ve kapanmali:
@@ -137,8 +140,8 @@ export default function Navbar({ onAddDevice }) {
           <div style={{ width: 1, height: 24, background: 'var(--border-color)', margin: '0 4px' }} className="nav-desktop-right" />
 
           <nav className="nav-menu">
-            <button className={cls('/dashboard')} onClick={() => go('/dashboard')}>Dashboard</button>
-            <button className={cls('/devices')} onClick={() => go('/devices')}>Devices</button>
+            <Link className={cls('/dashboard')} to="/dashboard" onClick={closeMenus}>Dashboard</Link>
+            <Link className={cls('/devices')} to="/devices" onClick={closeMenus}>Devices</Link>
 
             <div className={`dropdown ${mapsOpen ? 'open' : ''}`}>
               <button
@@ -147,14 +150,14 @@ export default function Navbar({ onAddDevice }) {
                 aria-expanded={mapsOpen}
               >Maps ▾</button>
               <div className="dropdown-content">
-                <a className="dropdown-item" onClick={() => go('/topology')}>Topology Map</a>
-                <a className="dropdown-item" onClick={() => go('/geomap')}>Geographic Map</a>
+                <Link className="dropdown-item" to="/topology" onClick={closeMenus}>Topology Map</Link>
+                <Link className="dropdown-item" to="/geomap" onClick={closeMenus}>Geographic Map</Link>
               </div>
             </div>
 
-            <button className={cls('/mac-search')} onClick={() => go('/mac-search')}>MAC Search</button>
-            {isAdmin && <button className={cls('/command-line')} onClick={() => go('/command-line')}>Command-line</button>}
-            {isAdmin && npsConfigured && <button className={cls('/nps')} onClick={() => go('/nps')}>NPS</button>}
+            <Link className={cls('/mac-search')} to="/mac-search" onClick={closeMenus}>MAC Search</Link>
+            {isAdmin && <Link className={cls('/command-line')} to="/command-line" onClick={closeMenus}>Command-line</Link>}
+            {isAdmin && npsConfigured && <Link className={cls('/nps')} to="/nps" onClick={closeMenus}>NPS</Link>}
             {isAdmin && (
               <div className={`dropdown ${logsOpen ? 'open' : ''}`}>
                 <button
@@ -163,8 +166,8 @@ export default function Navbar({ onAddDevice }) {
                   aria-expanded={logsOpen}
                 >Logs ▾</button>
                 <div className="dropdown-content">
-                  <a className="dropdown-item" onClick={() => go('/sessions')}>Session Log</a>
-                  <a className="dropdown-item" onClick={() => go('/audit')}>Audit Log</a>
+                  <Link className="dropdown-item" to="/sessions" onClick={closeMenus}>Session Log</Link>
+                  <Link className="dropdown-item" to="/audit" onClick={closeMenus}>Audit Log</Link>
                 </div>
               </div>
             )}
@@ -194,7 +197,7 @@ export default function Navbar({ onAddDevice }) {
           <NotificationBell />
 
           <span className="nav-desktop-right" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            {isAdmin && <button className={cls('/users')} onClick={() => go('/users')} title="User Management">Users</button>}
+            {isAdmin && <Link className={cls('/users')} to="/users" onClick={closeMenus} title="User Management">Users</Link>}
             {isAdmin && <button className="nav-btn" onClick={() => setShowSettings(true)} title="Settings" style={{ display: 'flex', alignItems: 'center', padding: '6px 10px' }}><SettingsIcon size={18} /></button>}
             <div style={{ width: 1, height: 20, background: 'var(--border-color)', margin: '0 4px' }} />
             <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginRight: 4 }}>{username}</span>
@@ -218,18 +221,18 @@ export default function Navbar({ onAddDevice }) {
               <button type="button" className="nav-hamburger" onClick={() => setMobileOpen(false)} aria-label="Close menu">✕</button>
             </div>
           )}
-          <button className={cls('/dashboard')} onClick={() => go('/dashboard')}>Dashboard</button>
-          <button className={cls('/devices')} onClick={() => go('/devices')}>Devices</button>
-          <button className={cls('/topology')} onClick={() => go('/topology')}>Topology Map</button>
-          <button className={cls('/geomap')} onClick={() => go('/geomap')}>Geographic Map</button>
-          <button className={cls('/mac-search')} onClick={() => go('/mac-search')}>MAC Search</button>
-          {isAdmin && <button className={cls('/command-line')} onClick={() => go('/command-line')}>Command-line</button>}
-          {isAdmin && npsConfigured && <button className={cls('/nps')} onClick={() => go('/nps')}>NPS</button>}
+          <Link className={cls('/dashboard')} to="/dashboard" onClick={closeMenus}>Dashboard</Link>
+          <Link className={cls('/devices')} to="/devices" onClick={closeMenus}>Devices</Link>
+          <Link className={cls('/topology')} to="/topology" onClick={closeMenus}>Topology Map</Link>
+          <Link className={cls('/geomap')} to="/geomap" onClick={closeMenus}>Geographic Map</Link>
+          <Link className={cls('/mac-search')} to="/mac-search" onClick={closeMenus}>MAC Search</Link>
+          {isAdmin && <Link className={cls('/command-line')} to="/command-line" onClick={closeMenus}>Command-line</Link>}
+          {isAdmin && npsConfigured && <Link className={cls('/nps')} to="/nps" onClick={closeMenus}>NPS</Link>}
           {/* Cekmecede ic ice menu YOK: dropdown'i parmakla acmak fazladan bir dokunus
               demek ve panel zaten dikey bir liste - iki giris duz olarak yaziliyor. */}
-          {isAdmin && <button className={cls('/sessions')} onClick={() => go('/sessions')}>Session Log</button>}
-          {isAdmin && <button className={cls('/audit')} onClick={() => go('/audit')}>Audit Log</button>}
-          {isAdmin && <button className={cls('/users')} onClick={() => go('/users')}>Users</button>}
+          {isAdmin && <Link className={cls('/sessions')} to="/sessions" onClick={closeMenus}>Session Log</Link>}
+          {isAdmin && <Link className={cls('/audit')} to="/audit" onClick={closeMenus}>Audit Log</Link>}
+          {isAdmin && <Link className={cls('/users')} to="/users" onClick={closeMenus}>Users</Link>}
           {isAdmin && (path === '/devices' || path.startsWith('/topology')) && onAddDevice && (
             <button className="btn btn-primary btn-sm" onClick={() => { onAddDevice(); setMobileOpen(false); }}>+ Add Device</button>
           )}

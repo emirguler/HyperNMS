@@ -158,6 +158,12 @@ body {
   background: transparent;
   border: none;
   color: var(--text-muted);
+  /* <a> (router Link) olarak da kullanilir → yeni sekmede acilabilsin. Link alt
+     cizgisini kaldir; mobil cekmecede width:100% + justify-content'in calismasi
+     icin flex olmali (buton gorunumu birebir korunur). */
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
   padding: 8px 14px;
   cursor: pointer;
   border-radius: var(--radius-sm);
@@ -618,6 +624,7 @@ body {
   padding: 8px 12px;
   cursor: pointer;
   color: var(--text-main);
+  text-decoration: none;
   display: block;
   border-radius: var(--radius-sm);
   transition: background 0.1s;
