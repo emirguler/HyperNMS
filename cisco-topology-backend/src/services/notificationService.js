@@ -11,6 +11,16 @@ const MAX_NOTIFICATIONS = 2000;           // güvenlik tavanı (flap fırtınas�
 let notifications = [];
 let notificationWss = null;
 let writeTimer = null;
+let idSeq = 0;
+
+// Benzersiz id. Date.now() TEK BAŞINA yetmiyor: flap fırtınasında aynı
+// milisaniyede onlarca bildirim üretilince id'ler çakışıyor, frontend'de
+// React key'leri tekrar edip DOM şişiyordu (silinmeyen bayat satırlar).
+// Sayaç eki id'yi aynı ms içinde de benzersiz yapar.
+function nextId() {
+    idSeq = (idSeq + 1) % 1e9;
+    return `${Date.now()}-${idSeq}`;
+}
 
 // timestamp'i (ISO) ms'ye çevir — bozuksa 0 → prune'da elenir
 function tsMs(n) {
@@ -101,7 +111,7 @@ function setupNotificationWs(server) {
 
 function addNotification(notification) {
     const entry = {
-        id: Date.now().toString(),
+        id: nextId(),
         timestamp: new Date().toISOString(),
         read: false,
         ...notification

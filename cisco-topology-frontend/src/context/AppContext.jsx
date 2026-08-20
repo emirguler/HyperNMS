@@ -77,11 +77,28 @@ export function AppProvider({ children }) {
     if (!isAuthenticated) { setNotifications([]); setUnreadCount(0); return; }
     let ws, reconnectTimer, closed = false;
 
+    // Aynı id'li kayıtları ele. Backend eskiden id = Date.now() üretiyordu; flap
+    // fırtınasında aynı ms'de gelen bildirimler aynı id'yi alıp React key'i
+    // çakıştırıyor, DOM'da bayat satırlar birikiyordu (filtre değişince "hepsi
+    // switch'te" görünmesinin sebebi buydu). Diskteki eski çift id'leri de temizler.
+    const dedupeById = (list) => {
+      const seen = new Set();
+      const out = [];
+      for (const n of list) {
+        const id = String(n && n.id);
+        if (seen.has(id)) continue;
+        seen.add(id);
+        out.push(n);
+      }
+      return out;
+    };
+
     // Sadece geçerli bir dizi geldiğinde uygula — başarısız/404 REST boş listeyi ezmesin
     const applyHistory = (list) => {
       if (!Array.isArray(list)) return;
-      setNotifications(list);
-      setUnreadCount(list.filter(n => !n.read).length);
+      const deduped = dedupeById(list).slice(0, 50);
+      setNotifications(deduped);
+      setUnreadCount(deduped.filter(n => !n.read).length);
     };
 
     // İlk yükleme (en yeni önce) — REST başarısızsa null döner, mevcut listeyi ezmez
@@ -111,7 +128,11 @@ export function AppProvider({ children }) {
         try {
           const msg = JSON.parse(event.data);
           if (msg.type === 'notification') {
-            setNotifications(prev => [msg.data, ...prev].slice(0, 50));
+            setNotifications(prev => (
+              prev.some(n => String(n.id) === String(msg.data && msg.data.id))
+                ? prev
+                : [msg.data, ...prev].slice(0, 50)
+            ));
             setUnreadCount(prev => prev + 1);
           } else if (msg.type === 'history') {
             applyHistory([...msg.data].reverse()); // her (re)bağlanışta 1 günlük geçmişi geri yükler
