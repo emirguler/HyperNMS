@@ -112,11 +112,22 @@ export default function DashboardPage() {
   const healthTypes = useMemo(() => [...new Set(rawDevices.map(d => d.type || 'switch'))].sort(), [rawDevices]);
   // Bildirim -> cihaz tipi: bildirimde tip yok, deviceId ile cihaz listesinden okunur
   // (mevcut bildirimler icin de calisir; silinmis cihazin bildirimi tipsiz kalir).
+  // DIKKAT: tipi bos/eksik cihazi 'switch' VARSAYMA — yoksa tipsiz bir anten 'switch'
+  // filtresine sizar. Tip normalize edilir (trim + kucuk harf) ki 'Switch'/'switch'
+  // ayrimi filtreyi bozmasin.
   const deviceTypeById = useMemo(() => {
     const m = {};
-    rawDevices.forEach(d => { m[String(d.id)] = d.type || 'switch'; });
+    rawDevices.forEach(d => {
+      const ty = String(d.type || '').trim().toLowerCase();
+      if (ty) m[String(d.id)] = ty;
+    });
     return m;
   }, [rawDevices]);
+  // Bildirim filtresi secenekleri: gercek cihaz tipleri (normalize, tipsizler haric).
+  const notifTypes = useMemo(
+    () => [...new Set(rawDevices.map(d => String(d.type || '').trim().toLowerCase()).filter(Boolean))].sort(),
+    [rawDevices]
+  );
   const healthStats = useMemo(() => {
     const devs = healthType === 'all' ? rawDevices : rawDevices.filter(d => (d.type || 'switch') === healthType);
     const up = devs.filter(d => d.status === 'UP').length;
@@ -242,7 +253,7 @@ export default function DashboardPage() {
               <select className="modern-input" value={notifType} onChange={e => setNotifType(e.target.value)}
                 aria-label="Filter notifications by device type" style={filterSelectStyle}>
                 <option value="all">{t('allTypes')}</option>
-                {healthTypes.map(ty => <option key={ty} value={ty} style={{ textTransform: 'capitalize' }}>{ty}</option>)}
+                {notifTypes.map(ty => <option key={ty} value={ty} style={{ textTransform: 'capitalize' }}>{ty}</option>)}
               </select>
             )}
           />
