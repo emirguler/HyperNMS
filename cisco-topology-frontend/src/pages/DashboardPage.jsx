@@ -86,6 +86,7 @@ export default function DashboardPage() {
   const [downType, setDownType] = useState('all');
   const [healthType, setHealthType] = useState('all'); // Network Health kartı cihaz-tipi filtresi
   const [showAllNotifs, setShowAllNotifs] = useState(false); // telefonda bildirim listesini aç
+  const [notifType, setNotifType] = useState('all'); // Bildirimler kartı cihaz-tipi filtresi
 
   const downDevices = useMemo(() => rawDevices.filter(d => d.status !== 'UP'), [rawDevices]);
   const downTypes = useMemo(() => [...new Set(downDevices.map(d => d.type || 'switch'))].sort(), [downDevices]);
@@ -109,6 +110,13 @@ export default function DashboardPage() {
 
   // Network Health — cihaz tipine göre filtrelenebilir (dropdown)
   const healthTypes = useMemo(() => [...new Set(rawDevices.map(d => d.type || 'switch'))].sort(), [rawDevices]);
+  // Bildirim -> cihaz tipi: bildirimde tip yok, deviceId ile cihaz listesinden okunur
+  // (mevcut bildirimler icin de calisir; silinmis cihazin bildirimi tipsiz kalir).
+  const deviceTypeById = useMemo(() => {
+    const m = {};
+    rawDevices.forEach(d => { m[String(d.id)] = d.type || 'switch'; });
+    return m;
+  }, [rawDevices]);
   const healthStats = useMemo(() => {
     const devs = healthType === 'all' ? rawDevices : rawDevices.filter(d => (d.type || 'switch') === healthType);
     const up = devs.filter(d => d.status === 'UP').length;
@@ -139,7 +147,11 @@ export default function DashboardPage() {
   const tdPadL = isPhone ? undefined : 24;
   const tdPadR = isPhone ? undefined : 24;
 
-  const visibleNotifs = (isPhone && !showAllNotifs) ? notifications.slice(0, NOTIF_PREVIEW) : notifications;
+  // Once cihaz-tipine gore filtrele, sonra telefonda ilk NOTIF_PREVIEW'i goster.
+  const filteredNotifs = useMemo(() => (
+    notifType === 'all' ? notifications : notifications.filter(n => deviceTypeById[String(n.deviceId)] === notifType)
+  ), [notifications, notifType, deviceTypeById]);
+  const visibleNotifs = (isPhone && !showAllNotifs) ? filteredNotifs.slice(0, NOTIF_PREVIEW) : filteredNotifs;
 
   return (
     // Dar govdede kolon flex: kartlar arasi sira `order` ile degisir. Masaustunde
@@ -225,7 +237,15 @@ export default function DashboardPage() {
 
         {/* Notifications (zil ile aynı veri) */}
         <div className="chart-container" style={stackedGrid ? { ...CARD_SHELL, order: 1 } : CARD_SHELL}>
-          <CardHead pad={cardHeadPad} minH={headMinH} title={<>🔔 {t('notifications')}</>} />
+          <CardHead pad={cardHeadPad} minH={headMinH} title={<>🔔 {t('notifications')}</>}
+            right={(
+              <select className="modern-input" value={notifType} onChange={e => setNotifType(e.target.value)}
+                aria-label="Filter notifications by device type" style={filterSelectStyle}>
+                <option value="all">{t('allTypes')}</option>
+                {healthTypes.map(ty => <option key={ty} value={ty} style={{ textTransform: 'capitalize' }}>{ty}</option>)}
+              </select>
+            )}
+          />
           <div style={innerScroll(190, 45, isPhone, isShort)}>
             {visibleNotifs.length > 0 ? visibleNotifs.map(n => (
               <div key={n.id}
@@ -253,10 +273,10 @@ export default function DashboardPage() {
               <div style={{ padding: 30, textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>{t('noNotifications')}</div>
             )}
           </div>
-          {isPhone && !showAllNotifs && notifications.length > NOTIF_PREVIEW && (
+          {isPhone && !showAllNotifs && filteredNotifs.length > NOTIF_PREVIEW && (
             <button type="button" className="btn btn-ghost" onClick={() => setShowAllNotifs(true)}
               style={{ width: '100%', borderRadius: 0, borderTop: '1px solid var(--border-color)' }}>
-              Show all ({notifications.length})
+              Show all ({filteredNotifs.length})
             </button>
           )}
         </div>
