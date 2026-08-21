@@ -13,10 +13,10 @@ const TYPE_COLOR = {
   antenna: '245, 158, 11',  // turuncu
 };
 
-// Cihaz tipine göre şekil: antenna yuvarlak, cloud elips, kalanı dikdörtgen
+// Cihaz şekli SADECE iki türde: antenna (yuvarlak) ve diğer her tip switch gibi
+// dikdörtgen ('rect'). Cloud dahil özel kutu yok — yalnız ikon tipe göre değişir.
 const TYPE_SHAPE = {
   antenna: 'circle',
-  cloud: 'ellipse',
 };
 
 const ICON_SIZE = 16;
