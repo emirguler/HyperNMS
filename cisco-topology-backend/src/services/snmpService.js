@@ -57,9 +57,9 @@ function getVendorConfig(sysDescr) {
     return config;
 }
 
-function formatUptime(ticks) {
-    if (!ticks) return '';
-    let seconds = Math.floor(ticks / 100);
+function formatUptimeSeconds(totalSeconds) {
+    if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) return '';
+    let seconds = Math.floor(totalSeconds);
     const days = Math.floor(seconds / (3600 * 24));
     seconds -= days * 3600 * 24;
     const hours = Math.floor(seconds / 3600);
@@ -72,6 +72,12 @@ function formatUptime(ticks) {
     if (minutes > 0) result.push(`${minutes} Mins`);
 
     return result.join(', ') || 'Just Started';
+}
+
+// sysUpTime TimeTicks (yüzde-saniye) → saniye. 32-bit sayaç 2^32/100 ≈ 497 günde SARAR.
+function formatUptime(ticks) {
+    if (!ticks) return '';
+    return formatUptimeSeconds(Math.floor(Number(ticks) / 100));
 }
 
 function parseSnmpInt(val) {
@@ -149,9 +155,10 @@ async function getDeviceDetails(device) {
 
         // 1. Temel bilgiler
         const baseOids = [
-            '1.3.6.1.2.1.1.5.0', // Hostname
-            '1.3.6.1.2.1.1.3.0', // Uptime
-            '1.3.6.1.2.1.1.1.0'  // sysDescr
+            '1.3.6.1.2.1.1.5.0',      // Hostname (sysName)
+            '1.3.6.1.2.1.1.3.0',      // sysUpTime (TimeTicks — 497 günde SARAR)
+            '1.3.6.1.2.1.1.1.0',      // sysDescr
+            '1.3.6.1.6.3.10.2.1.3.0'  // snmpEngineTime (saniye — pratikte sarmaz; uzun uptime için)
         ];
 
         const baseData = await getScalar(baseOids);
@@ -160,7 +167,23 @@ async function getDeviceDetails(device) {
 
         if (baseData) {
             if (!snmp.isVarbindError(baseData[0])) responseData.snmpHostname = baseData[0].value.toString();
-            if (!snmp.isVarbindError(baseData[1])) responseData.uptime = formatUptime(baseData[1].value);
+            // Uptime: sysUpTime TimeTicks 2^32/100 ≈ 497 günde sararak yanlış küçük değer
+            // verir (ör. 552 gün → 55 gün). snmpEngineTime saniye cinsindendir ve pratikte
+            // sarmaz. İkisinin BÜYÜĞÜNÜ al: sarma olduysa engine kazanır; engine yok/sıfırsa
+            // sysUpTime kullanılır.
+            {
+                let sysUpSec = null, engSec = null;
+                if (!snmp.isVarbindError(baseData[1])) {
+                    const t = Number(baseData[1].value);
+                    if (Number.isFinite(t) && t >= 0) sysUpSec = Math.floor(t / 100);
+                }
+                if (baseData[3] && !snmp.isVarbindError(baseData[3])) {
+                    const e = Number(baseData[3].value);
+                    if (Number.isFinite(e) && e > 0) engSec = e;
+                }
+                const cand = [sysUpSec, engSec].filter(v => v != null);
+                if (cand.length) responseData.uptime = formatUptimeSeconds(Math.max(...cand));
+            }
             if (!snmp.isVarbindError(baseData[2])) {
                 sysDescrStr = baseData[2].value.toString();
                 vendorConfig = getVendorConfig(sysDescrStr);
