@@ -13,11 +13,10 @@ const TYPE_COLOR = {
   antenna: '245, 158, 11',  // turuncu
 };
 
-// Cihaz şekli SADECE iki türde: antenna (yuvarlak) ve diğer her tip switch gibi
-// dikdörtgen ('rect'). Cloud dahil özel kutu yok — yalnız ikon tipe göre değişir.
-const TYPE_SHAPE = {
-  antenna: 'circle',
-};
+// Yalnız switch (dikdörtgen kutu) ve antenna (yuvarlak kutu) KUTULU çizilir.
+// Diğer TÜM tipler (router/firewall/server/pc/cloud) KUTUSUZ: sadece ikon +
+// ikonun kenarındaki bağlantı noktaları. Bilinmeyen tip switch gibi (kutulu).
+const BOXED_TYPES = new Set(['switch', 'antenna']);
 
 const ICON_SIZE = 16;
 
@@ -116,9 +115,11 @@ function SwitchNode({ data }) {
   const { isTouch } = useViewport();
   const IconComponent = ICON_MAP[data.type] || ICON_MAP.switch;
   const rgb = TYPE_COLOR[data.type] || TYPE_COLOR.switch;
-  const shape = TYPE_SHAPE[data.type] || 'rect';
   const isDown = data.status !== 'UP';
   const isAntenna = data.type === 'antenna';
+  const boxed = BOXED_TYPES.has(data.type) || !ICON_MAP[data.type]; // bilinmeyen tip = switch (kutulu)
+  const shape = !boxed ? 'bare' : (isAntenna ? 'circle' : 'rect');
+  const iconSize = isAntenna ? 12 : (boxed ? ICON_SIZE : 22); // kutusuzda ikon biraz büyük
 
   return (
     <div
@@ -126,10 +127,12 @@ function SwitchNode({ data }) {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      {/* Cihaz şekli: tip rengine göre dikdörtgen / yuvarlak / elips */}
+      {/* Şekil: switch/antenna KUTULU (kenarlık+dolgu); diğer tipler KUTUSUZ (yalnız ikon).
+          NOT: dokunma hedefi burada BUYUTULMEZ (düzeni bozardı); responsive.css'te
+          .node-shape::after ile akış dışı büyütülür. */}
       <div
         className={`node-shape ${shape}`}
-        style={{
+        style={boxed ? {
           borderColor: isDown ? 'var(--danger)' : `rgba(${rgb}, 0.9)`,
           borderStyle: isDown ? 'dashed' : 'solid', // renk dışı ipucu (renk körlüğü için)
           background: `linear-gradient(160deg, rgba(${rgb}, ${isDown ? 0.06 : 0.18}), rgba(${rgb}, 0.04)), var(--node-bg)`,
@@ -137,11 +140,10 @@ function SwitchNode({ data }) {
             ? '0 0 10px rgba(239,68,68,0.35), 0 4px 12px rgba(0,0,0,0.3)'
             : `0 0 10px rgba(${rgb}, 0.22), 0 4px 12px rgba(0,0,0,0.3)`,
           opacity: isDown ? 0.75 : 1,
-          // NOT: dokunma hedefi burada BUYUTULMEZ. Sekli 40px yapmak .topology-node'un
-          // (flex column) kutusunu buyutuyor, konumlar sabit oldugu icin dugumler
-          // birbirine giriyordu; ayrica inline stil .zoom-minimal'in 24px'e kucultmesini
-          // eziyordu. Hedef artik responsive.css'te .node-shape::after ile buyutuluyor:
-          // position:absolute oldugu icin akis disidir, duzeni hic etkilemez.
+        } : {
+          // Kutusuz: kutu görselleri yok. DOWN ipucu ikon üstünde — kırmızı hâle + solukluk.
+          opacity: isDown ? 0.55 : 1,
+          filter: isDown ? 'drop-shadow(0 0 5px rgba(239,68,68,0.85))' : 'drop-shadow(0 1px 2px rgba(0,0,0,0.45))',
         }}
       >
         <Handle type="source" position={Position.Top} id="top" style={handleStyle(rgb, isTouch)} />
@@ -152,7 +154,7 @@ function SwitchNode({ data }) {
         <span className="node-icon">
           {/* Sekil masaustuyle ayni 26px oldugu icin ikon da ayni: 18px 23px'lik ic
               bosluga sigmiyordu. */}
-          <IconComponent status={data.status} size={isAntenna ? 12 : ICON_SIZE} />
+          <IconComponent status={data.status} size={iconSize} />
         </span>
       </div>
 

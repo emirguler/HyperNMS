@@ -394,6 +394,13 @@ body {
   height: 38px;
   border-radius: 50%;
 }
+/* Kutusuz tipler (router/firewall/server/pc/cloud): çerçeve/dolgu yok — yalnız ikon.
+   Sabit boy yok → kap ikona göre küçülür, böylece bağlantı noktaları ikonun kenarında durur. */
+.node-shape.bare {
+  border: none;
+  background: none;
+  padding: 3px;
+}
 .topology-node:hover .node-shape { filter: brightness(1.15); }
 
 .node-icon { line-height: 0; pointer-events: none; }
@@ -452,6 +459,8 @@ body {
 .zoom-minimal .node-shape.rect { width: 44px; height: 20px; border-radius: 5px; }
 .zoom-minimal .node-shape.circle { width: 24px; height: 24px; }
 .zoom-minimal .node-shape.ellipse { width: 40px; height: 22px; }
+/* Kutusuzda minimal zoom'da gösterecek blok yok → ikon gizlenmesin, düğüm kaybolmasın. */
+.zoom-minimal .node-shape.bare .node-icon { display: block !important; }
 
 .zoom-minimal .node-label {
   font-size: 0.5rem;

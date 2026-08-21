@@ -413,6 +413,7 @@
   .node-shape.circle::after  { inset: -9px; }  /* 26 + 18 = 44 */
   .node-shape.rect::after    { inset: -6px; }  /* 32 + 12 = 44 */
   .node-shape.ellipse::after { inset: -3px; }  /* 38 +  6 = 44 */
+  .node-shape.bare::after    { inset: -8px; }  /* kutusuz ~28 + 16 = 44 */
 
   /* Uzaklasinca hedefi buyutmenin anlami yok, komsulari calmasin. */
   .zoom-minimal .node-shape::after,
