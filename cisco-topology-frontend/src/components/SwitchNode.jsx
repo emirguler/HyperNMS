@@ -23,18 +23,32 @@ const ICON_SIZE = 16;
 // --- Professional SVG Icons ---
 const RouterIcon = ({ size = ICON_SIZE }) => (
   <svg width={size} height={size} viewBox="0 0 40 40" fill="none">
-    <circle cx="20" cy="20" r="16" stroke="var(--primary)" strokeWidth="2" fill="rgba(56,189,248,0.08)" />
-    <path d="M12 20h16M20 12v16M14 14l12 12M26 14L14 26" stroke="var(--primary)" strokeWidth="1.5" strokeLinecap="round" opacity="0.7" />
-    <circle cx="20" cy="20" r="4" fill="var(--primary)" />
+    {/* antenler */}
+    <path d="M14 18l-3.5-8" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" />
+    <path d="M26 18l3.5-8" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" />
+    <circle cx="10.5" cy="9" r="2" fill="var(--primary)" />
+    <circle cx="29.5" cy="9" r="2" fill="var(--primary)" />
+    {/* gövde */}
+    <rect x="5" y="18" width="30" height="13" rx="4" fill="rgba(56,189,248,0.14)" stroke="var(--primary)" strokeWidth="2" />
+    {/* durum LED'leri + port ipucu */}
+    <circle cx="11" cy="24.5" r="1.6" fill="#34d399" />
+    <circle cx="16.5" cy="24.5" r="1.6" fill="var(--primary)" />
+    <path d="M24 24.5h7" stroke="var(--primary)" strokeWidth="1.6" strokeLinecap="round" opacity="0.55" />
   </svg>
 );
 
 const FirewallIcon = ({ size = ICON_SIZE }) => (
   <svg width={size} height={size} viewBox="0 0 40 40" fill="none">
-    <rect x="6" y="8" width="28" height="24" rx="3" stroke="#ef4444" strokeWidth="2" fill="rgba(239,68,68,0.08)" />
-    <rect x="6" y="8" width="28" height="8" rx="3" fill="rgba(239,68,68,0.15)" />
-    <line x1="6" y1="20" x2="34" y2="20" stroke="#ef4444" strokeWidth="1.5" />
-    <line x1="20" y1="8" x2="20" y2="32" stroke="#ef4444" strokeWidth="1.5" strokeDasharray="3 2" />
+    {/* kalkan */}
+    <path d="M20 5l13 4.2v8.5c0 8.4-5.5 14.3-13 16.8-7.5-2.5-13-8.4-13-16.8V9.2L20 5z"
+      fill="rgba(239,68,68,0.12)" stroke="#ef4444" strokeWidth="2" strokeLinejoin="round" />
+    {/* tuğla deseni */}
+    <g stroke="#ef4444" strokeWidth="1.5" strokeLinecap="round" opacity="0.75">
+      <path d="M8.5 17.5h23" />
+      <path d="M20 9.5v8" />
+      <path d="M14.5 17.5v7" />
+      <path d="M25.5 17.5v7" />
+    </g>
   </svg>
 );
 
@@ -73,8 +87,9 @@ const PcIcon = ({ size = ICON_SIZE }) => (
 );
 
 const CloudIcon = ({ size = ICON_SIZE }) => (
-  <svg width={size * 1.3} height={size} viewBox="0 0 44 32" fill="none">
-    <path d="M12 26c-3.3 0-6-2.7-6-6 0-2.8 1.9-5.1 4.5-5.8C11.3 10.3 14.8 8 19 8c4.8 0 8.8 3.2 10 7.5 3.2.5 5.5 3.2 5.5 6.5 0 3.6-2.9 6.5-6.5 6.5H12z" stroke="#0ea5e9" strokeWidth="1.5" fill="rgba(14,165,233,0.08)" />
+  <svg width={size * 1.25} height={size * 1.25} viewBox="0 0 24 24" fill="none">
+    <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"
+      fill="rgba(14,165,233,0.16)" stroke="#0ea5e9" strokeWidth="1.7" strokeLinejoin="round" strokeLinecap="round" />
   </svg>
 );
 
