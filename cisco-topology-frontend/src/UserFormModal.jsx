@@ -5,13 +5,10 @@ import { useViewport } from './hooks/useViewport';
 
 function UserFormModal({ mode, initialValues, topoPages = [], onCancel, onSave }) {
   const isEdit = mode === 'edit';
-  const { isPhone, isShort, isTablet, isTouch } = useViewport();
+  const { isPhone, isShort, isTouch } = useViewport();
 
   // responsive.css'teki .rw-sheet sorgusunun birebir esi: telefon VEYA kisa ekran.
   const sheet = isPhone || isShort;
-  // Tablet ama alt sayfa degil (or. 1024x768 iPad yatay): Operator secilince
-  // 5 satirlik textarea modali ekrandan tasiriyor -> kaydirilabilir kalsin.
-  const midTablet = isTablet && !sheet;
 
   const [values, setValues] = useState({
     username: '',
@@ -88,8 +85,11 @@ function UserFormModal({ mode, initialValues, topoPages = [], onCancel, onSave }
       {/* Genislik masaustunde 400px kalir; responsive.css dar/kisa ekranda !important ile ezer. */}
       <div className="modal-content rw-sheet" style={{
         width: '400px',
-        maxHeight: midTablet ? 'calc(100dvh - 32px)' : undefined,
-        overflowY: midTablet ? 'auto' : undefined,
+        // Alt sayfa (telefon/kısa) responsive.css ile kendi iç gövde kaydırmasını yönetir.
+        // Masaüstü/tablette içerik uzunsa (ör. Operator + sayfa listesi + komut kutusu)
+        // modal'ın KENDİSİ kaysın → alttaki Create/Update düğmelerine her zaman erişilir.
+        maxHeight: sheet ? undefined : 'calc(100dvh - 32px)',
+        overflowY: sheet ? undefined : 'auto',
       }}>
         <div className="rw-sheet-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: sheet ? 0 : '20px' }}>
           <h2 style={{ margin: 0, fontSize: sheet ? undefined : '1.25rem', fontWeight: 600, color: '#f1f5f9' }}>
