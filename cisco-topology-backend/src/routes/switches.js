@@ -4,7 +4,7 @@ const { authenticate, requireAdmin, requireOperator } = require('../middleware/a
 const { validateSwitch, sanitizeSwitch, isBlockedIP, isValidIPv4 } = require('../utils/validation');
 const { encryptPassword, decryptPassword } = require('../utils/crypto');
 const { getDeviceDetails, discoverNeighbors, searchMAC, inventoryAll, ipSlaStatus } = require('../services/snmpService');
-const { probeDevice, ipSlaViaSsh, runCommands, runShowCommand, kbAuth } = require('../services/sshService');
+const { probeDevice, ipSlaViaSsh, interfacesViaSsh, runCommands, runShowCommand, kbAuth } = require('../services/sshService');
 const { listBackups, getBackup, backupDevice } = require('../services/configBackupService');
 const { getImportableConfig } = require('../services/importableConfigService');
 const { identifyFromSsh } = require('../utils/sshIdentify');
@@ -834,6 +834,23 @@ router.get('/switches/:id/details', authenticate, async (req, res) => {
     const device = store.getSwitch(req.params.id);
     if (!device) return res.status(404).send();
     const details = await getDeviceDetails(device);
+    // SNMP interface döndüremediyse (ör. MD→GSM failover'da cihaz aynı IP'de ama
+    // SNMP UDP hücresel yoldan geçmezken SSH TCP geçiyor) → 'show interfaces status'
+    // ile SSH fallback. IP SLA'daki SSH fallback ile aynı desen. Kısa cache: SSH
+    // bağlantısı pahalı, detay poll'ünü boğmasın.
+    if ((!details.interfaces || details.interfaces.length === 0) &&
+        device.status === 'UP' && device.sshUsername && device.sshPassword) {
+        const key = `ifssh:${device.id}`;
+        let ifs = snmpCache.get(key);
+        if (!ifs) {
+            ifs = await interfacesViaSsh(device);
+            snmpCache.set(key, ifs, 30000);
+        }
+        if (ifs && ifs.length) {
+            details.interfaces = ifs;
+            details.interfaceSource = 'ssh'; // istemci ist/dilerse "SSH ile alındı" gösterebilir
+        }
+    }
     // SNMP'den taze sürüm okunduysa cihaz kaydına yaz (liste sıralaması bu alanı kullanır).
     if (details.version && details.version !== device.version) {
         store.updateSwitch(device.id, { version: details.version });

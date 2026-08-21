@@ -203,8 +203,11 @@ async function getDeviceDetails(device) {
             }
         }
 
-        // 3. Interface status
-        const oldTableData = await getSubtree('1.3.6.1.2.1.2.2.1.8');
+        // 3. Interface status — yalnızca SNMP yanıt veriyorsa (baseData). SNMP ölüyse
+        // (ör. cihaz GSM yolunda SNMP UDP'yi geçirmiyor) bu çoklu subtree yürüyüşleri
+        // boşuna ~30sn timeout ekler; canlılık kanıtı yoksa hiç girme — interface'i
+        // route katmanı SSH ('show interfaces status') fallback'i ile getirir.
+        const oldTableData = baseData ? await getSubtree('1.3.6.1.2.1.2.2.1.8') : [];
         const statusMap = {};
         oldTableData.forEach(vb => {
             const index = vb.oid.split('.').pop();
@@ -212,7 +215,7 @@ async function getDeviceDetails(device) {
         });
 
         // 4. ifXTable (64-bit counters)
-        const newTableData = await getSubtree('1.3.6.1.2.1.31.1.1.1');
+        const newTableData = baseData ? await getSubtree('1.3.6.1.2.1.31.1.1.1') : [];
         const interfacesMap = {};
 
         // VLAN
@@ -469,8 +472,8 @@ async function getDeviceDetails(device) {
         responseData.interfaces.sort((a, b) => parseInt(a.index) - parseInt(b.index));
         TRAFFIC_CACHE[device.id] = deviceCache;
 
-        // 6. RAM
-        try {
+        // 6. RAM — yalnızca SNMP canlıysa (baseData); ölü SNMP'de boşuna timeout ekleme.
+        if (baseData) try {
             const ramSession = createSnmpSession(device.ip, device.snmpCommunity, device.snmpPort, device.snmpVersion);
             const hrStorageData = await new Promise((resolve) => {
                 const results = [];

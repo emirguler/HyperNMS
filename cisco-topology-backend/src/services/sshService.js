@@ -356,6 +356,62 @@ async function ipSlaViaSsh(device) {
     }
 }
 
+// Cisco IOS "show interfaces status" çıktısını SNMP interface şekline parse et.
+// Başlık kolon ofsetlerine göre dilimlenir (Name boş/boşluklu olabildiği için
+// sabit-genişlik en sağlamı). Dönen şekil getDeviceDetails (SNMP) ile aynı alanlar:
+// { index, name, status:'up'|'down', vlan, vlanName, trunkVlans, speed(bps), trafficIn, trafficOut }.
+// Canlı trafik/CPU/RAM CLI'da yok → 0. Config butonu arayüzü ADIYLA hedeflediği
+// için (SNMP ifIndex gerekmez) sentetik index yalnızca satır anahtarı olur.
+function parseInterfacesStatus(text) {
+    const lines = String(text || '').replace(/\r/g, '').split('\n');
+    const hi = lines.findIndex(l => /\bPort\b/.test(l) && /\bStatus\b/.test(l) && /\bVlan\b/i.test(l));
+    if (hi === -1) return [];
+    const h = lines[hi];
+    const iPort = h.indexOf('Port'), iName = h.indexOf('Name'), iStatus = h.indexOf('Status'),
+          iVlan = h.indexOf('Vlan'), iDuplex = h.indexOf('Duplex'), iSpeed = h.indexOf('Speed'), iType = h.indexOf('Type');
+    if (iPort < 0 || iStatus < 0 || iVlan < 0) return [];
+    const nextOf = (...cands) => { for (const c of cands) if (c > 0) return c; return undefined; };
+    const out = [];
+    let seq = 0;
+    for (let k = hi + 1; k < lines.length; k++) {
+        const line = lines[k];
+        if (!line.trim() || /[#>]\s*$/.test(line)) continue; // boş satır / prompt
+        const cut = (a, b) => (b != null && b > a ? line.slice(a, b) : line.slice(a)).trim();
+        const port = cut(iPort, nextOf(iName, iStatus));
+        // Fiziksel/port-channel portu gibi görünmüyorsa atla (başlık tekrarı, gürültü)
+        if (!port || !/^[A-Za-z]{2,}[-\d]/.test(port)) continue;
+        const status = cut(iStatus, nextOf(iVlan));
+        if (!status) continue;
+        const vlan = cut(iVlan, nextOf(iDuplex, iSpeed, iType)) || '-';
+        const speedRaw = iSpeed >= 0 ? cut(iSpeed, nextOf(iType)) : '';
+        const mbpsM = speedRaw.match(/(\d+)/); // 'a-1000'|'1000'|'auto' → sayı ya da 0
+        out.push({
+            index: String(++seq),
+            name: port,
+            status: /\bconnected\b/i.test(status) ? 'up' : 'down',
+            vlan,
+            vlanName: '-',
+            trunkVlans: null,
+            speed: (mbpsM ? parseInt(mbpsM[1], 10) : 0) * 1000000,
+            trafficIn: 0,
+            trafficOut: 0,
+        });
+    }
+    return out;
+}
+
+// SNMP interface döndüremediğinde (ör. GSM failover yolunda SNMP UDP geçmiyor ama
+// SSH TCP geçiyor) CLI'dan interface listesi. ipSlaViaSsh ile aynı desen/koruma.
+async function interfacesViaSsh(device) {
+    if (!device || !device.sshUsername || !device.sshPassword || isBlockedIP(device.ip)) return [];
+    try {
+        const raw = await runShowCommand(device, 'show interfaces status');
+        return parseInterfacesStatus(raw);
+    } catch (e) {
+        return [];
+    }
+}
+
 // Toplu komut calistirma (Command-line sayfasi).
 //   config=false -> komutlar dogrudan exec modunda calisir (show/display).
 //   config=true  -> "configure terminal ... end" ile sarmalanip konfig satirlari gonderilir.
@@ -404,4 +460,4 @@ function runCommands(device, lines, { config = false, save = false, timeoutMs = 
     });
 }
 
-module.exports = { setupWebSocket, probeDevice, ipSlaViaSsh, runShowCommand, runCommands, kbAuth };
+module.exports = { setupWebSocket, probeDevice, ipSlaViaSsh, interfacesViaSsh, parseInterfacesStatus, runShowCommand, runCommands, kbAuth };
