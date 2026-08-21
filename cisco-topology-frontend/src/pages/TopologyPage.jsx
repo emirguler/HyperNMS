@@ -452,7 +452,9 @@ function TopologyInner({ onEdit, onClone }) {
   // backend'e kaydet. ReactFlow multi-drag'de her node için ayrı position change gönderir,
   // bu yüzden tek/çoklu sürüklemede tüm taşınan node'lar güvenle kalıcılaşır.
   const onNodesChange = useCallback((changes) => {
-    const stopped = changes.filter(c => c.type === 'position' && c.dragging === false).map(c => c.id);
+    // Pozisyonu yalnızca admin kaydeder. (Sürükleme zaten yalnız admin'de açık; bu
+    // ek güvenlik: Operator/Viewer'da hiç PUT denenmesin — boşuna 403 olmasın.)
+    const stopped = isAdmin ? changes.filter(c => c.type === 'position' && c.dragging === false).map(c => c.id) : [];
     setLocalNodes(nds => {
       const next = applyNodeChanges(changes, nds);
       for (const id of stopped) {
@@ -461,7 +463,7 @@ function TopologyInner({ onEdit, onClone }) {
       }
       return next;
     });
-  }, [authFetch]);
+  }, [authFetch, isAdmin]);
   const onEdgesChange = useCallback((changes) => setEdges(eds => applyEdgeChanges(changes, eds)), [setEdges]);
 
   // Sürüklenen sekmeyi hedefin bulunduğu konuma taşı
@@ -935,9 +937,12 @@ function TopologyInner({ onEdit, onClone }) {
           fitViewOptions={compactCanvas ? { padding: 0.15, minZoom: 0.1 } : undefined}
         >
           <Background color="var(--primary)" gap={25} size={1} style={{ opacity: 0.1 }} />
-          {/* 26x26 Controls parmakla kullanılamaz; dokunmatikte yerini 44px araç çubuğu alır */}
+          {/* 26x26 Controls parmakla kullanılamaz; dokunmatikte yerini 44px araç çubuğu alır.
+              showInteractive yalnız admin: kilit butonu ReactFlow'un setInteractive'iyle
+              nodesDraggable'ı store'da true yapıp nodesDraggable prop'unu eziyordu → Operator/
+              Viewer kilidi açıp cihazları sürükleyebiliyordu (kaydedilmese de). Admin'de kalsın. */}
           {!showTouchBar && (
-            <Controls style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-color)', borderRadius: 8 }} />
+            <Controls showInteractive={isAdmin} style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-color)', borderRadius: 8 }} />
           )}
 
           {/* Auto Topology Button — dokunmatikte araç çubuğuna taşınır */}
