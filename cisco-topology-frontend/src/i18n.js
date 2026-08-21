@@ -272,6 +272,9 @@ const translations = {
     refresh: 'Refresh',
     allowedCommandsLabel: 'Allowed SSH Commands',
     allowedCommandsHint: 'One command per line. Only for the Operator role — these appear as buttons in the SSH terminal and are the only commands this user can run.',
+    topoAccessLabel: 'Visible Topology Pages',
+    topoAccessAll: 'All pages',
+    topoAccessHint: 'Unchecked pages are hidden from this user everywhere — maps, device list and dashboard.',
 
     // Edge context menu
     deleteConnection: 'Delete Connection',
@@ -550,6 +553,9 @@ const translations = {
     refresh: 'Yenile',
     allowedCommandsLabel: '\u0130zinli SSH Komutlar\u0131',
     allowedCommandsHint: 'Her sat\u0131ra bir komut. Sadece User rol\u00fc i\u00e7in \u2014 SSH terminalinde buton olarak g\u00f6r\u00fcn\u00fcr ve bu kullan\u0131c\u0131 yaln\u0131zca bu komutlar\u0131 \u00e7al\u0131\u015ft\u0131rabilir.',
+    topoAccessLabel: 'G\u00f6rebilece\u011fi Topoloji Sayfalar\u0131',
+    topoAccessAll: 'T\u00fcm sayfalar',
+    topoAccessHint: '\u0130\u015faretlenmeyen sayfalar bu kullan\u0131c\u0131dan her yerde gizlenir \u2014 haritalar, cihaz listesi ve panel.',
 
     // Edge context menu
     deleteConnection: 'Ba\u011flant\u0131y\u0131 Sil',

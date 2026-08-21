@@ -25,7 +25,7 @@ const fmtLastLogin = (iso) => {
 };
 
 export default function UsersPage() {
-  const { users, fetchUsers } = useApp();
+  const { users, fetchUsers, topoTabs } = useApp();
   const { isAdmin, authFetch, username } = useAuth();
   // require2fa toggle'ini yalnizca yerlesik "admin" superkullanicisi yonetir
   const isSuperAdmin = username === 'admin';
@@ -184,7 +184,7 @@ export default function UsersPage() {
         </div>
       )}
 
-      {isModalOpen && <UserFormModal mode={editingUser ? 'edit' : 'add'} initialValues={editingUser} onCancel={() => setIsModalOpen(false)} onSave={async (f) => {
+      {isModalOpen && <UserFormModal mode={editingUser ? 'edit' : 'add'} initialValues={editingUser} topoPages={topoTabs} onCancel={() => setIsModalOpen(false)} onSave={async (f) => {
         const res = await authFetch(`/users${editingUser ? '/' + editingUser.id : ''}`, { method: editingUser ? 'PUT' : 'POST', body: JSON.stringify(f) });
         if (res && res.ok) showToast(editingUser ? t('userUpdated') : t('userCreated'), 'success');
         else { const d = res ? await res.json().catch(() => ({})) : {}; showToast(d.error || t('operationFailed'), 'error'); }

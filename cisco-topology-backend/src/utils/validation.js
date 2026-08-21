@@ -170,6 +170,18 @@ function sanitizeUser(data) {
                 .map(c => c.slice(0, 200))
             : [];
     }
+
+    // allowedTopoPages: kullanıcının görebileceği topoloji sayfası id'leri.
+    // null = tüm sayfalar (kısıtsız, geriye dönük varsayılan). Dizi = yalnızca bu id'ler.
+    if (data.allowedTopoPages !== undefined) {
+        clean.allowedTopoPages = Array.isArray(data.allowedTopoPages)
+            ? data.allowedTopoPages
+                .filter(p => typeof p === 'string')
+                .map(p => p.trim())
+                .filter(p => p.length > 0)
+                .slice(0, 500)
+            : null;
+    }
     return clean;
 }
 

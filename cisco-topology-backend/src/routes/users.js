@@ -40,6 +40,9 @@ router.post('/users', authenticate, requireAdmin, async (req, res) => {
         password: isAd ? '' : await bcrypt.hash(data.password, BCRYPT_ROUNDS), // AD: yerel sifre yok, AD'de dogrulanir
         role: data.role || 'Viewer',   // varsayilan en dusuk yetki (User / View Only)
         allowedCommands: data.allowedCommands || [],
+        // Görebileceği topoloji sayfaları: null = tümü (kısıtsız). Admin her zaman tümünü görür.
+        allowedTopoPages: (data.role === 'Administrator') ? null
+            : (data.allowedTopoPages !== undefined ? data.allowedTopoPages : null),
         // Operator'e ham (tam) SSH klavye erisimi. Varsayilan KAPALI.
         fullSsh: data.fullSsh === true
     };
@@ -62,6 +65,9 @@ router.put('/users/:id', authenticate, requireAdmin, async (req, res) => {
     if (data.role) updates.role = data.role;
     if (data.username) updates.username = data.username;
     if (data.allowedCommands !== undefined) updates.allowedCommands = data.allowedCommands;
+    if (data.allowedTopoPages !== undefined) updates.allowedTopoPages = data.allowedTopoPages;
+    // Administrator her zaman tüm sayfaları görür → kısıtı temizle (asılı kalmasın).
+    if (data.role === 'Administrator') updates.allowedTopoPages = null;
     if (data.fullSsh !== undefined) updates.fullSsh = data.fullSsh === true;
     // Rol Operator DISINA cikarsa bayrak anlamsizlasir ve unutulup asili kalmasin:
     // Viewer'a geri donen bir hesap sonradan tekrar Operator yapilinca sessizce

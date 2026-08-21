@@ -175,12 +175,25 @@ router.post('/traceroute', authenticate, traceLimiter, async (req, res) => {
     return res.json({ ip, hops: w.hops, viaGateway: w.stripped });
 });
 
+// Kullanıcının görebileceği topoloji sayfası id'leri (Set) ya da null = kısıtsız.
+// req.user JWT payload'ı olduğu için CANLI kaydı store'dan okuruz → admin bir
+// kullanıcının erişimini değiştirdiğinde yeniden login gerekmeden sonraki poll'de geçerli olur.
+// Administrator her zaman tüm sayfaları görür.
+function allowedPageSet(req) {
+    if (req.user.role === 'Administrator') return null;
+    const live = store.getUser(req.user.id);
+    const ap = live && live.allowedTopoPages;
+    return Array.isArray(ap) ? new Set(ap) : null;
+}
+const pageOf = (s) => s.topologyPage || 'main';
+
 router.get('/topology', authenticate, (req, res) => {
     const switches = store.getSwitches();
     const edges = store.getEdges();
     const isAdmin = req.user.role === 'Administrator';
+    const allowed = allowedPageSet(req); // null = kısıtsız
     const TOPOLOGY_ALLOWLIST = ['id', 'name', 'ip', 'type', 'status', 'latency', 'position', 'tags', 'topologyPage', 'lastLatency', 'healthIntervalSec', 'ipSlaEnabled', 'ipSlaOkLabel', 'ipSlaFailLabel', 'version'];
-    const safeSwitches = switches.map(({ sshPassword, ...s }) => {
+    let safeSwitches = switches.map(({ sshPassword, ...s }) => {
         if (!isAdmin) {
             const filtered = {};
             for (const key of TOPOLOGY_ALLOWLIST) {
@@ -191,13 +204,25 @@ router.get('/topology', authenticate, (req, res) => {
         s.sshPasswordSet = !!(sshPassword && sshPassword.length > 0);
         return s;
     });
-    const tabs = store.getTopoTabs();
-    res.json({ switches: safeSwitches, edges, tabs });
+    let tabs = store.getTopoTabs();
+    let safeEdges = edges;
+    // Sayfa kısıtı: yalnızca izinli sayfalar + o sayfalardaki cihazlar + iki ucu da
+    // görünür olan kenarlar. Güvenlik sınırı BURASI (frontend gizlemesi yalnız UX).
+    if (allowed) {
+        tabs = tabs.filter(t => allowed.has(t.id));
+        safeSwitches = safeSwitches.filter(s => allowed.has(pageOf(s)));
+        const visibleIds = new Set(safeSwitches.map(s => s.id));
+        safeEdges = edges.filter(e => visibleIds.has(e.source) && visibleIds.has(e.target));
+    }
+    res.json({ switches: safeSwitches, edges: safeEdges, tabs });
 });
 
 // --- Topology Tabs ---
 router.get('/topology/tabs', authenticate, (req, res) => {
-    res.json(store.getTopoTabs());
+    // Sekme çubuğu (TopologyPage) bunu okur → sayfa kısıtına uy.
+    const allowed = allowedPageSet(req);
+    const tabs = store.getTopoTabs();
+    res.json(allowed ? tabs.filter(t => allowed.has(t.id)) : tabs);
 });
 
 router.post('/topology/tabs', authenticate, requireAdmin, (req, res) => {

@@ -3,7 +3,7 @@ import './App.css';
 import { t } from './i18n';
 import { useViewport } from './hooks/useViewport';
 
-function UserFormModal({ mode, initialValues, onCancel, onSave }) {
+function UserFormModal({ mode, initialValues, topoPages = [], onCancel, onSave }) {
   const isEdit = mode === 'edit';
   const { isPhone, isShort, isTablet, isTouch } = useViewport();
 
@@ -20,6 +20,7 @@ function UserFormModal({ mode, initialValues, onCancel, onSave }) {
     fullSsh: false,   // Operator'e ham SSH klavye erisimi - varsayilan KAPALI
     authType: 'local', // 'local' | 'ad'
     allowedCommands: '', // textarea: her satıra bir komut
+    allowedTopoPages: null, // null = tüm topoloji sayfaları (kısıtsız); dizi = yalnızca bu id'ler
   });
 
   useEffect(() => {
@@ -35,6 +36,8 @@ function UserFormModal({ mode, initialValues, onCancel, onSave }) {
         // admin baska bir alani duzeltmek icin formu acip kaydettiginde fullSsh
         // sessizce KAPANIRDI.
         fullSsh: initialValues.fullSsh === true,
+        // Dizi = kısıtlı; null/undefined = tüm sayfalar.
+        allowedTopoPages: Array.isArray(initialValues.allowedTopoPages) ? initialValues.allowedTopoPages : null,
       });
     }
   }, [initialValues, isEdit]);
@@ -43,6 +46,19 @@ function UserFormModal({ mode, initialValues, onCancel, onSave }) {
     const { name, value } = e.target;
     setValues((prev) => ({ ...prev, [name]: value }));
   };
+
+  // --- Görebileceği topoloji sayfaları (checkbox) ---
+  // null = tümü (kısıtsız). Dizi = yalnızca seçili id'ler. Administrator her zaman tümü.
+  const pageIds = (topoPages || []).map(p => p.id);
+  const restricted = Array.isArray(values.allowedTopoPages);
+  const allPagesSelected = !restricted || (pageIds.length > 0 && pageIds.every(id => values.allowedTopoPages.includes(id)));
+  const isPageChecked = (id) => !restricted || values.allowedTopoPages.includes(id);
+  const togglePage = (id) => setValues(prev => {
+    const base = Array.isArray(prev.allowedTopoPages) ? [...prev.allowedTopoPages] : [...pageIds];
+    const next = base.includes(id) ? base.filter(x => x !== id) : [...base, id];
+    return { ...prev, allowedTopoPages: next };
+  });
+  const setAllPages = (all) => setValues(prev => ({ ...prev, allowedTopoPages: all ? null : [] }));
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -53,7 +69,15 @@ function UserFormModal({ mode, initialValues, onCancel, onSave }) {
       : [];
     // fullSsh yalnizca Operator icin anlamli; diger rollerde her zaman false gonder
     const fullSsh = values.role === 'Operator' && values.fullSsh === true;
-    const payload = { username: values.username, role: values.role, authType: values.authType, allowedCommands, fullSsh };
+    // Görebileceği sayfalar: admin → null (tümü). Tümü seçiliyse → null (yeni sayfalar da dahil).
+    // Aksi halde seçili id dizisi.
+    let allowedTopoPages;
+    if (values.role === 'Administrator' || !restricted || (pageIds.length > 0 && pageIds.every(id => values.allowedTopoPages.includes(id)))) {
+      allowedTopoPages = null;
+    } else {
+      allowedTopoPages = values.allowedTopoPages;
+    }
+    const payload = { username: values.username, role: values.role, authType: values.authType, allowedCommands, fullSsh, allowedTopoPages };
     // AD kullanicisinda yerel sifre yok — yalnizca local'de gonder
     if (values.authType === 'local') payload.password = values.password;
     onSave(payload);
@@ -159,6 +183,27 @@ function UserFormModal({ mode, initialValues, onCancel, onSave }) {
                 </div>
               )}
             </div>
+
+            {/* Görebileceği topoloji sayfaları — Administrator her sayfayı görür, gösterme.
+                İşaretlenmeyen sayfalar bu kullanıcıdan gizlenir (harita, cihaz listesi, panel). */}
+            {values.role !== 'Administrator' && pageIds.length > 0 && (
+              <div>
+                <label className="input-label" style={{ display: 'block', marginBottom: 8, color: '#94a3b8' }}>{t('topoAccessLabel')}</label>
+                <div style={{ border: '1px solid var(--border-color)', borderRadius: 8, maxHeight: 190, overflowY: 'auto' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: isTouch ? '11px 12px' : '8px 12px', cursor: 'pointer', borderBottom: '1px solid var(--border-color)' }}>
+                    <input type="checkbox" checked={allPagesSelected} onChange={e => setAllPages(e.target.checked)} style={{ width: 16, height: 16, flexShrink: 0, cursor: 'pointer' }} />
+                    <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#f1f5f9' }}>{t('topoAccessAll')}</span>
+                  </label>
+                  {topoPages.map(p => (
+                    <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: isTouch ? '11px 12px' : '8px 12px', cursor: 'pointer' }}>
+                      <input type="checkbox" checked={isPageChecked(p.id)} onChange={() => togglePage(p.id)} style={{ width: 16, height: 16, flexShrink: 0, cursor: 'pointer' }} />
+                      <span className="rw-truncate" style={{ fontSize: '0.85rem', color: 'var(--text-main)', minWidth: 0 }}>{p.name}</span>
+                    </label>
+                  ))}
+                </div>
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 6 }}>{t('topoAccessHint')}</div>
+              </div>
+            )}
 
             {values.role === 'Operator' && (
               // Tum satir tiklanabilir (44px): dokunmatikte 44x24'luk slider'i

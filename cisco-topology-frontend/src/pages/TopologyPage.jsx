@@ -240,6 +240,17 @@ function TopologyInner({ onEdit, onClone }) {
     }
   }, [activeTabId, fitView]);
 
+  // Sayfa erişim kısıtı (UX): kullanıcının göremediği bir sekmedeysek ilk izinli
+  // sekmeye geç — boş harita yerine geçerli sayfa açılsın. Güvenlik zaten backend'de
+  // (/topology veri filtresi); bu sadece yönlendirme. Admin'de tabs tümü → hiç tetiklenmez.
+  useEffect(() => {
+    if (isAdmin || tabs.length === 0) return;
+    if (!tabs.some(tb => tb.id === activeTabId)) {
+      const first = tabs[0];
+      navigate(first.id === 'main' ? '/topology' : `/topology/${first.id}`, { replace: true });
+    }
+  }, [isAdmin, tabs, activeTabId, navigate]);
+
   // Close all context menus on outside click.
   // pointerdown (mousedown değil): dokunmatikte sentetik mousedown ancak touchend'den
   // SONRA geldiği için menü geç kapanıyordu; pointerdown hem farede hem parmakta anında gelir.

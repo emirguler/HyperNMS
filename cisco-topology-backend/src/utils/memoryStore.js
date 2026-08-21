@@ -199,7 +199,7 @@ class MemoryStore {
         // DIKKAT: bu listede olmayan bir alan SESSIZCE dusurulur. 'username' ve
         // 'authType' eksikti - PUT /users/:id ikisini de hesaplayip gonderiyordu,
         // yani kullanici adi degistirme ve yerel<->AD gecisi kaydedilmiyordu.
-        const allowed = ['username', 'password', 'role', 'authType', 'mustChangePassword', 'allowedCommands', 'fullSsh', 'lastLogin',
+        const allowed = ['username', 'password', 'role', 'authType', 'mustChangePassword', 'allowedCommands', 'allowedTopoPages', 'fullSsh', 'lastLogin',
             // 2FA alanlari: BILEREK sanitizeUser'da YOK - kullanici formundan
             // degil, yalnizca /2fa rotalarindan degistirilebilirler. require2fa
             // ozellikle yalnizca "admin" superkullanicisinin ucuyla degisir.
