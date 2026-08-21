@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { useNavigate, useSearchParams, useParams } from 'react-router-dom';
 import ReactFlow, {
-  Background, Controls, MiniMap, applyNodeChanges,
+  Background, Controls, ControlButton, MiniMap, applyNodeChanges,
   addEdge, applyEdgeChanges, useReactFlow, ReactFlowProvider
 } from 'reactflow';
 import 'reactflow/dist/style.css';
@@ -216,6 +216,9 @@ function TopologyInner({ onEdit, onClone }) {
   const [renamingTab, setRenamingTab] = useState(null);
   const [renameValue, setRenameValue] = useState('');
   const [zoomLevel, setZoomLevel] = useState(1);
+  // Masaüstünde harita varsayılan KİLİTLİ (admin dahil): kazara cihaz taşımayı önler.
+  // Admin sol alttaki kilit butonuyla açar. (Dokunmatikte aynı işi touchEdit görür.)
+  const [mapUnlocked, setMapUnlocked] = useState(false);
   // --- Dokunmatik durum ---
   const [touchEdit, setTouchEdit] = useState(false);   // parmakla taşıma/bağlama kilidi (varsayılan KAPALI)
   const [selectMode, setSelectMode] = useState(false); // kutu ile çoklu seçim modu
@@ -917,10 +920,10 @@ function TopologyInner({ onEdit, onClone }) {
           onMoveStart={showTouchBar ? closeAllMenus : undefined}
           onMoveEnd={(_, viewport) => setZoomLevel(viewport.zoom)}
           isValidConnection={(c) => c.source !== c.target} // kendine bağlanma (loop) yok
-          // Dokunmatikte varsayılan KİLİTLİ: parmak teması düzeni yeniden yazıyordu
-          // (/switches PUT) veya kazara /edges POST atıyordu. Araç çubuğundaki "Edit" açar.
-          nodesDraggable={isAdmin && (!isTouch || touchEdit)}
-          nodesConnectable={isAdmin && (!isTouch || touchEdit)}
+          // Harita varsayılan KİLİTLİ (admin dahil): masaüstünde kilit butonu (mapUnlocked),
+          // dokunmatikte "Edit" (touchEdit) açar. Kazara cihaz taşıma / edge oluşturmayı önler.
+          nodesDraggable={isAdmin && (isTouch ? touchEdit : mapUnlocked)}
+          nodesConnectable={isAdmin && (isTouch ? touchEdit : mapUnlocked)}
           nodeDragThreshold={isTouch ? 8 : 0}
           connectionRadius={isTouch ? 40 : 20}
           elementsSelectable
@@ -938,11 +941,26 @@ function TopologyInner({ onEdit, onClone }) {
         >
           <Background color="var(--primary)" gap={25} size={1} style={{ opacity: 0.1 }} />
           {/* 26x26 Controls parmakla kullanılamaz; dokunmatikte yerini 44px araç çubuğu alır.
-              showInteractive yalnız admin: kilit butonu ReactFlow'un setInteractive'iyle
-              nodesDraggable'ı store'da true yapıp nodesDraggable prop'unu eziyordu → Operator/
-              Viewer kilidi açıp cihazları sürükleyebiliyordu (kaydedilmese de). Admin'de kalsın. */}
+              ReactFlow'un yerleşik interactive kilidi store'daki nodesDraggable'ı ezdiği için
+              (Operator/Viewer sızıntısı) kapatıldı (showInteractive=false). Yerine kendi
+              durumumuza (mapUnlocked) bağlı özel kilit butonu — YALNIZ admin. Harita varsayılan
+              kilitli açılır; admin bu butonla açıp cihazları taşır. */}
           {!showTouchBar && (
-            <Controls showInteractive={isAdmin} style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-color)', borderRadius: 8 }} />
+            <Controls showInteractive={false} style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-color)', borderRadius: 8 }}>
+              {isAdmin && (
+                <ControlButton
+                  onClick={() => setMapUnlocked(v => !v)}
+                  title={mapUnlocked ? 'Haritayı kilitle' : 'Kilidi aç (cihazları taşı)'}
+                  aria-label={mapUnlocked ? 'Lock map' : 'Unlock map'}
+                >
+                  {mapUnlocked ? (
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 1a5 5 0 0 0-5 5 1 1 0 0 0 2 0 3 3 0 0 1 6 0v3H6a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2h-7V6z"/></svg>
+                  ) : (
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 1a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2h-1V6a5 5 0 0 0-5-5zm3 8H9V6a3 3 0 0 1 6 0z"/></svg>
+                  )}
+                </ControlButton>
+              )}
+            </Controls>
           )}
 
           {/* Auto Topology Button — dokunmatikte araç çubuğuna taşınır */}
