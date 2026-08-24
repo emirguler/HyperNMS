@@ -6,12 +6,25 @@
 const { listBackups, getBackup, backupDevice } = require('./configBackupService');
 const { isBlockedIP } = require('../utils/validation');
 
+// running-config'te KORUNACAK global satirlar: preamble'da olmayan ama replikasyon
+// icin anlamli olanlar (STP modu, MTU, PTP, http kapatma, forward-protocol, aaa).
+// GUVENLIK: parola/kimlik iceren satir kaliplari BURADA YOK (yalnizca zararsiz global ayarlar).
+const GLOBAL_KEEP = [
+    /^no aaa new-model/i,
+    /^system mtu\b/i,
+    /^ptp mode\b/i,
+    /^spanning-tree mode\b/i,
+    /^spanning-tree extend\b/i,
+    /^no ip http /i,
+    /^ip forward-protocol\b/i,
+];
+
 // --- Ayristirici: Cisco IOS "show running-config" -> yapisal veri ---------------
 // Satir-bazli, girinti duyarli. Girintili satirlar bir onceki ust-seviye blok baglamina aittir.
 function parseRunningConfig(cfg) {
     const out = {
         hostname: null, domain: null, community: null, snmpHost: null, username: null,
-        vlans: [], svis: [], phys: [], routes: [], ipsla: [], ipslaSchedule: [], tracks: [], noStp: []
+        vlans: [], svis: [], phys: [], routes: [], ipsla: [], ipslaSchedule: [], tracks: [], noStp: [], globals: []
     };
     const lines = String(cfg || '').replace(/\r/g, '').split('\n');
     let ctx = null; // { t: 'vlan'|'svi'|'phys'|'ipsla', d: <obj> }
@@ -29,13 +42,14 @@ function parseRunningConfig(cfg) {
             if ((m = s.match(/^snmp-server host\s+(\S+)/i))) { if (!out.snmpHost) out.snmpHost = m[1]; continue; }
             if ((m = s.match(/^username\s+(\S+)/i))) { if (!out.username) out.username = m[1]; continue; }
             if ((m = s.match(/^vlan\s+(\d+)\s*$/i))) { const v = { id: m[1], name: null }; out.vlans.push(v); ctx = { t: 'vlan', d: v }; continue; }
-            if ((m = s.match(/^interface\s+Vlan\s*(\d+)/i))) { const svi = { id: m[1], ip: null, mask: null, shutdown: false }; out.svis.push(svi); ctx = { t: 'svi', d: svi }; continue; }
+            if ((m = s.match(/^interface\s+Vlan\s*(\d+)/i))) { const svi = { id: m[1], ip: null, mask: null, shutdown: false, extra: [] }; out.svis.push(svi); ctx = { t: 'svi', d: svi }; continue; }
             if ((m = s.match(/^interface\s+(\S+)/i))) { const p = { name: m[1], mode: null, access: null, voice: null, trunkAllowed: null, trunkNative: null, portfast: false, shutdown: false }; out.phys.push(p); ctx = { t: 'phys', d: p }; continue; }
             if (/^ip route\s+/i.test(s)) { out.routes.push(s); continue; }
             if (/^ip sla schedule\s+/i.test(s)) { out.ipslaSchedule.push(s); continue; }
             if ((m = s.match(/^ip sla\s+(\d+)\s*$/i))) { const b = { id: m[1], lines: [] }; out.ipsla.push(b); ctx = { t: 'ipsla', d: b }; continue; }
             if (/^track\s+\d+/i.test(s)) { out.tracks.push(s); continue; }
             if ((m = s.match(/^no span(?:ning-tree)? vlan\s+(.+)$/i))) { out.noStp.push(m[1].trim()); continue; }
+            if (GLOBAL_KEEP.some(re => re.test(s))) { out.globals.push(s); continue; }
             continue;
         }
 
@@ -46,6 +60,7 @@ function parseRunningConfig(cfg) {
         } else if (ctx.t === 'svi') {
             if ((m = s.match(/^ip address\s+(\S+)\s+(\S+)/i))) { ctx.d.ip = m[1]; ctx.d.mask = m[2]; }
             else if (/^shutdown$/i.test(s)) ctx.d.shutdown = true;
+            else if (!/^no ip address$/i.test(s)) ctx.d.extra.push(s); // no ip proxy-arp, ip helper-address vb.
         } else if (ctx.t === 'phys') {
             if ((m = s.match(/^switchport mode\s+(\S+)/i))) ctx.d.mode = m[1];
             else if ((m = s.match(/^switchport access vlan\s+(\d+)/i))) ctx.d.access = m[1];
@@ -96,6 +111,9 @@ function preamble(device, p) {
 function buildFromParsed(device, p) {
     const L = preamble(device, p);
 
+    // Cihaza ozgu global ayarlar (STP modu, MTU, PTP, http kapatma vb.) — running-config'ten aynen.
+    if (p.globals && p.globals.length) { for (const g of p.globals) L.push(g); L.push('!'); }
+
     // VLAN tanimlari
     if (p.vlans.length) {
         for (const v of p.vlans) { L.push(`vlan ${v.id}`); if (v.name) L.push(`name ${v.name}`); }
@@ -106,7 +124,12 @@ function buildFromParsed(device, p) {
     // SVI (yalnizca IP'si olan VLAN arayuzleri)
     const svis = p.svis.filter(s => s.ip && s.mask);
     if (svis.length) {
-        for (const s of svis) { L.push(`interface vlan ${s.id}`); L.push(`ip add ${s.ip} ${s.mask}`); L.push(s.shutdown ? 'shutdown' : 'no sh'); }
+        for (const s of svis) {
+            L.push(`interface vlan ${s.id}`);
+            L.push(`ip add ${s.ip} ${s.mask}`);
+            for (const ex of (s.extra || [])) L.push(ex); // no ip proxy-arp, ip helper-address vb.
+            L.push(s.shutdown ? 'shutdown' : 'no sh');
+        }
         L.push('exit', '!');
     }
     // Rotalar: once track'siz (default/host), sonra ip sla + track, sonra track'e bagli rotalar
