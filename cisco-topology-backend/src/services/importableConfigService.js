@@ -11,7 +11,7 @@ const { isBlockedIP } = require('../utils/validation');
 function parseRunningConfig(cfg) {
     const out = {
         hostname: null, domain: null, community: null, snmpHost: null, username: null,
-        vlans: [], svis: [], phys: [], routes: [], ipsla: [], ipslaSchedule: [], tracks: []
+        vlans: [], svis: [], phys: [], routes: [], ipsla: [], ipslaSchedule: [], tracks: [], noStp: []
     };
     const lines = String(cfg || '').replace(/\r/g, '').split('\n');
     let ctx = null; // { t: 'vlan'|'svi'|'phys'|'ipsla', d: <obj> }
@@ -35,6 +35,7 @@ function parseRunningConfig(cfg) {
             if (/^ip sla schedule\s+/i.test(s)) { out.ipslaSchedule.push(s); continue; }
             if ((m = s.match(/^ip sla\s+(\d+)\s*$/i))) { const b = { id: m[1], lines: [] }; out.ipsla.push(b); ctx = { t: 'ipsla', d: b }; continue; }
             if (/^track\s+\d+/i.test(s)) { out.tracks.push(s); continue; }
+            if ((m = s.match(/^no span(?:ning-tree)? vlan\s+(.+)$/i))) { out.noStp.push(m[1].trim()); continue; }
             continue;
         }
 
@@ -80,6 +81,7 @@ function preamble(device, p) {
         'no err dete cau link-flap', '!',
         'crypto key generate rsa modulus 1024', '!',
         'ip ssh ver 2', '!',
+        'line con 0', 'login local', 'exit', '!',
         'line vty 0 4', 'login local', 'transport input ssh', 'exit', '!',
         `snmp-server community ${community} RO`,
         `snmp-server host ${snmpHost} ${community}`,
@@ -99,6 +101,8 @@ function buildFromParsed(device, p) {
         for (const v of p.vlans) { L.push(`vlan ${v.id}`); if (v.name) L.push(`name ${v.name}`); }
         L.push('exit', '!');
     }
+    // Spanning-tree kapatilan VLAN'lar (or. anten VLAN'i) — global komut, VLAN blogundan sonra.
+    if (p.noStp.length) { for (const v of p.noStp) L.push(`no span vlan ${v}`); L.push('!'); }
     // SVI (yalnizca IP'si olan VLAN arayuzleri)
     const svis = p.svis.filter(s => s.ip && s.mask);
     if (svis.length) {
