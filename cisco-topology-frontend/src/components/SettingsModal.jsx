@@ -17,7 +17,7 @@ const TILES = [
   { id: 'ad', icon: '🪪', title: 'Active Directory', desc: 'LDAP sign-in for AD users' },
   { id: 'nps', icon: '📡', title: 'NPS (FreeRADIUS)', desc: 'SSH access for the NPS page' },
   { id: 'security', icon: '🔐', title: 'Two-Factor Auth', desc: 'TOTP codes for sign-in', adminOnly: true },
-  { id: 'license', icon: '🔑', title: 'Lisans', desc: 'Lisans durumu ve anahtar', adminOnly: true },
+  { id: 'license', icon: '🔑', title: 'License', desc: 'License status & key', adminOnly: true },
 ];
 
 // Kart (masaustu) ve satir (dar govde) gorunumleri. Modul seviyesinde:

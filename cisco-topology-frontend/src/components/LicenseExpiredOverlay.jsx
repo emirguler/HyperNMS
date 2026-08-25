@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
+import { t } from '../i18n';
 
 // Lisans blokeliyken (süresi dolmuş / yanlış kurulum) Dashboard dışı sayfalarda bu
 // popup gösterilir; sayfa render EDİLMEZ. Navbar (⚙️ Ayarlar) açık kalır → admin
@@ -8,14 +9,12 @@ export default function LicenseExpiredOverlay() {
   const navigate = useNavigate();
   const { license } = useApp();
   const status = license?.status;
-  const title = status === 'wrong_install' ? 'Lisans bu kuruluma ait değil'
-    : status === 'demo_expired' ? 'Demo süreniz doldu'
-    : 'Lisans süreniz doldu';
-  const message = status === 'wrong_install'
-    ? 'Girilen lisans bu kuruluma tanımlı değil. Doğru lisansı girene kadar bu sayfaya erişilemez.'
-    : status === 'demo_expired'
-      ? 'Deneme süreniz doldu. Devam etmek için bir lisans anahtarı girmeniz gerekiyor. İzleme (Dashboard) çalışmaya devam eder.'
-      : 'Uygulamanın bu bölümüne erişim için lisansınızı yenilemeniz gerekiyor. İzleme (Dashboard) çalışmaya devam eder.';
+  const title = status === 'wrong_install' ? t('licOvWrongTitle')
+    : status === 'demo_expired' ? t('licOvDemoTitle')
+    : t('licOvExpiredTitle');
+  const message = status === 'wrong_install' ? t('licOvWrongMsg')
+    : status === 'demo_expired' ? t('licOvDemoMsg')
+    : t('licOvExpiredMsg');
 
   return (
     <div style={{
@@ -32,10 +31,8 @@ export default function LicenseExpiredOverlay() {
         <h2 style={{ margin: '0 0 8px', fontSize: '1.25rem', color: 'var(--text-main)' }}>{title}</h2>
         <p style={{ margin: '0 0 20px', color: 'var(--text-muted)', fontSize: '0.9rem', lineHeight: 1.6 }}>{message}</p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <button className="btn btn-primary" onClick={() => navigate('/dashboard')}>Dashboard'a Dön</button>
-          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-            Yeni lisans için: Ayarlar (⚙️) → Lisans
-          </div>
+          <button className="btn btn-primary" onClick={() => navigate('/dashboard')}>{t('licBackToDashboard')}</button>
+          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{t('licRenewHint')}</div>
         </div>
       </div>
     </div>

@@ -119,12 +119,12 @@ function AppLayout() {
     <div className="app-container">
       {licenseDemo && (
         <div style={{ background: 'var(--primary)', color: '#04263a', textAlign: 'center', padding: '6px 12px', fontSize: '0.82rem', fontWeight: 600, flexShrink: 0 }}>
-          🎫 Demo sürümü — {license.demoDaysLeft} gün kaldı. Tam sürüm için lisans girin (Ayarlar → Lisans).
+          {t('licDemoBannerPre')} {license.demoDaysLeft} {t('licDemoBannerPost')}
         </div>
       )}
       {licenseWarn && (
         <div style={{ background: 'var(--warning)', color: '#3a2500', textAlign: 'center', padding: '6px 12px', fontSize: '0.82rem', fontWeight: 600, flexShrink: 0 }}>
-          ⚠️ Lisans süreniz {license.daysLeft} gün sonra doluyor — lütfen yenileyin.
+          {t('licWarnPre')} {license.daysLeft} {t('licWarnPost')}
         </div>
       )}
       <Navbar onAddDevice={isAdmin ? handleAddDevice : undefined} />
