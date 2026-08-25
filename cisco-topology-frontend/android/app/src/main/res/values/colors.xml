@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Uygulama kabugunun rengi: index.html'deki theme-color ile ayni (#0c111d).
+         Acilis ekrani, durum cubugu ve pencere zemini bu rengi kullanir; boylece
+         acilistan WebView'e gecerken beyaz parlama olmaz. -->
+    <color name="splashBackground">#0C111D</color>
+</resources>

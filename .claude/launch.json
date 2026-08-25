@@ -7,6 +7,13 @@
       "runtimeArgs": ["node_modules/vite/bin/vite.js", "--port", "5173"],
       "port": 5173,
       "cwd": "cisco-topology-frontend"
+    },
+    {
+      "name": "backend",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["src/index.js"],
+      "port": 4000,
+      "cwd": "cisco-topology-backend"
     }
   ]
 }

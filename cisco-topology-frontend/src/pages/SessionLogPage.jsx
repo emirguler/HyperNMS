@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
 import { useViewport } from '../hooks/useViewport';
 import { API_BASE } from '../config';
+import { downloadAuthedUrl } from '../native/apiClient';
 import { showToast } from '../Toast';
 
 /* ============================================================================
@@ -189,7 +190,9 @@ export default function SessionLogPage() {
     // API_BASE sart: gelistirmede prefix bos + origin http://localhost:4000,
     // production'da ayni origin uzerinde '/api'. Sabit '/api' yazmak gelistirmede
     // 404 verirdi.
-    window.open(`${API_BASE}/sessions/${s.id}/download`, '_blank');
+    // Native'de yeni sekme yok + cookie tasinmaz: istek token'la yapilip dosya
+    // cihaza kaydedilir. Web'de davranis aynen eskisi gibi (yeni sekme).
+    downloadAuthedUrl(`${API_BASE}/sessions/${s.id}/download`, `session-${s.id}.log`);
   };
 
   const kill = async (s) => {

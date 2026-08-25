@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 13+ "temali ikon" katmani: sistem bu cizimi tek renge boyar, bu yuzden
+  yalnizca siluet onemlidir. Dalga ic_launcher_foreground ile ayni geometridedir,
+  ancak temali modda ince kalmamasi icin cizgi biraz kalinlastirildi.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:pathData="M24.69,54 C34.46,25.86 44.23,25.86 54,54 C63.77,82.14 73.54,82.14 83.31,54"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3.4"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M20.23,54 a4.46,4.46 0 1,0 8.92,0 a4.46,4.46 0 1,0 -8.92,0 z"
+        android:fillColor="#FFFFFF" />
+    <path
+        android:pathData="M78.85,54 a4.46,4.46 0 1,0 8.92,0 a4.46,4.46 0 1,0 -8.92,0 z"
+        android:fillColor="#FFFFFF" />
+</vector>

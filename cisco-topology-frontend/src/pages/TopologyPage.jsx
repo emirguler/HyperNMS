@@ -17,6 +17,7 @@ import TraceIcon from '../components/TraceIcon';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { API_BASE } from '../config';
+import { isNative } from '../native/state';
 import { t } from '../i18n';
 import { showToast } from '../Toast';
 import { useTopologyTabs } from '../hooks/useTopologyTabs';
@@ -645,7 +646,11 @@ function TopologyInner({ onEdit, onClone }) {
       key: 'ssh', label: '💻 SSH Terminal',
       onClick: () => { openSshSession(menu.id, menu.label); setMenu(null); }
     },
-    menu.data?.type === 'antenna' && {
+    // Native'de gizli: cihaz arayuzu bir <iframe> icinde acilir, iframe istegine
+    // ne cerez ne de Authorization basligi eklenebilir — mobil uygulamada oturum
+    // cerez yerine token ile tasindigi icin proxy 401 doner. Bozuk bir dugme
+    // gostermek yerine bu eylem yalnizca web surumunde sunulur.
+    !isNative && menu.data?.type === 'antenna' && {
       key: 'web', label: '🌐 Web',
       onClick: () => { setWebModal({ id: menu.id, label: menu.label, ip: menu.data.ip, scheme: 'http' }); setMenu(null); }
     },

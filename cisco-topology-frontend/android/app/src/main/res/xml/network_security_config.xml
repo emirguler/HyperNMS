@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Kurulum-ici (on-prem) sunuculara baglanabilmek icin gerekli.
+  Uygulama internetteki bir servise degil, musterinin KENDI agindaki NetPulse
+  sunucusuna baglanir. Bu sunucular pratikte:
+    * ozel IP + port uzerinden duz HTTP ile (ornek: http://10.0.0.10:4000), ya da
+    * kurum kendi sertifika otoritesiyle imzalanmis HTTPS ile
+  yayin yapar. Android 9+ varsayilanlari ikisini de reddeder.
+
+  - cleartextTrafficPermitted: duz HTTP'ye izin (adres calisma aninda kullanicidan
+    gelir; derleme aninda bilinemeyecegi icin alan-bazli daraltma yapilamaz).
+  - certificates src="user": telefona ELLE kurulmus kurum kok sertifikasina guven.
+    Yalnizca cihaz sahibinin bilerek kurdugu sertifikalar gecerlidir.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

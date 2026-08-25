@@ -1,0 +1,28 @@
+# Docker imaji YALNIZCA backend + derlenmis frontend'i tasir.
+# Buradaki her satir "build context"e hic girmemesi gerekenleri eler; imaji
+# kucultmekten cok, her build'de gigabaytlarca dosyanin daemon'a kopyalanmasini
+# onler (Android projesi ve node_modules bunun buyuk kismi).
+
+# Bagimliliklar — imaj icinde `npm ci` ile yeniden kurulur
+node_modules
+**/node_modules
+
+# Android (Capacitor) native projesi — imajda hicbir karsiligi yok
+cisco-topology-frontend/android
+
+# Frontend build ciktisi — imajin kendi asamasinda uretilir
+cisco-topology-frontend/dist
+
+# Calisma zamani verisi (kalici volume'de tutulur)
+cisco-topology-backend/data
+
+# Yerel/gelistirme dosyalari
+.git
+.gitignore
+.github
+.vscode
+.idea
+.mcp.json
+**/*.log
+**/*.bak
+**/*.backup

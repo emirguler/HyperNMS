@@ -11,6 +11,13 @@ const twofactor = require('./twofactor');
 
 const router = express.Router();
 
+// Native (Android) istemci httpOnly cookie tasiyamaz — ayni JWT'yi yanit govdesinde
+// ister ve sonraki isteklerde "Authorization: Bearer" ile gonderir (middleware/auth
+// bunu zaten destekliyor). Token YALNIZCA 'X-Auth-Mode: token' gonderen istemciye
+// govdede verilir; web istemcisi bu basligi gondermez, yani token orada httpOnly
+// cookie'de kalmaya devam eder (XSS'e karsi koruma bozulmaz).
+const wantsTokenInBody = (req) => String(req.headers['x-auth-mode'] || '').toLowerCase() === 'token';
+
 // Password strength validator
 function validatePasswordStrength(password) {
     if (!password || password.length < 8) return 'Password must be at least 8 characters';
@@ -93,6 +100,7 @@ router.post('/login', async (req, res) => {
         // erken doner). Dolayisiyla require2fa aciksa kullanici kurulum ekranina
         // zorlanmali — sifre adimindan SONRA, mustChangePassword ile ayni desen.
         mustSetup2fa: user.require2fa === true,
+        ...(wantsTokenInBody(req) ? { token } : {}),
     });
 });
 
@@ -150,6 +158,7 @@ router.post('/login/2fa', twoFaLimiter, async (req, res) => {
         // Kurtarma koduyla girildiyse kullaniciya kalan sayiyi soyle
         recoveryUsed: v.viaRecovery,
         recoveryRemaining: Array.isArray(fresh.recoveryCodes) ? fresh.recoveryCodes.length : 0,
+        ...(wantsTokenInBody(req) ? { token } : {}),
     });
 });
 

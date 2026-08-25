@@ -293,6 +293,21 @@ const translations = {
     licOvWrongMsg: 'The entered license is not registered to this installation. This section stays locked until the correct license is entered.',
     licBackToDashboard: 'Back to Dashboard', licRenewHint: 'To renew: Settings (⚙️) → License',
 
+    // Mobile app — server setup / native shell
+    srvTitle: 'Connect to server',
+    srvSubtitle: 'Enter the address of your NetPulse server. It is stored on this device.',
+    srvAddress: 'SERVER ADDRESS',
+    srvPlaceholder: '10.0.0.10:4000',
+    srvHint: 'IP address or hostname. http:// or https:// is optional — both are tried.',
+    srvConnect: 'Connect',
+    srvConnecting: 'Connecting…',
+    srvInvalid: 'Enter a valid address',
+    srvUnreachable: 'No NetPulse server found at this address. Check the address and your network.',
+    srvChange: 'Change server',
+    exitConfirm: 'Press back again to exit',
+    dlReady: 'File ready',
+    dlFailed: 'Could not save the file',
+
     // Edge context menu
     deleteConnection: 'Delete Connection',
   },
@@ -590,6 +605,21 @@ const translations = {
     licOvDemoMsg: 'Deneme s\u00fcreniz doldu. Devam etmek i\u00e7in bir lisans anahtar\u0131 girin. \u0130zleme (Dashboard) \u00e7al\u0131\u015fmaya devam eder.',
     licOvWrongMsg: 'Girilen lisans bu kuruluma tan\u0131ml\u0131 de\u011fil. Do\u011fru lisans\u0131 girene kadar bu sayfaya eri\u015filemez.',
     licBackToDashboard: 'Panele D\u00f6n', licRenewHint: 'Yeni lisans i\u00e7in: Ayarlar (\u2699\ufe0f) \u2192 Lisans',
+
+    // Mobil uygulama \u2014 sunucu kurulumu / native kabuk
+    srvTitle: 'Sunucuya ba\u011flan',
+    srvSubtitle: 'NetPulse sunucunuzun adresini girin. Bu cihazda saklan\u0131r.',
+    srvAddress: 'SUNUCU ADRES\u0130',
+    srvPlaceholder: '10.0.0.10:4000',
+    srvHint: 'IP adresi ya da sunucu ad\u0131. http:// veya https:// yazmak zorunda de\u011filsiniz \u2014 ikisi de denenir.',
+    srvConnect: 'Ba\u011flan',
+    srvConnecting: 'Ba\u011flan\u0131l\u0131yor\u2026',
+    srvInvalid: 'Ge\u00e7erli bir adres girin',
+    srvUnreachable: 'Bu adreste NetPulse sunucusu bulunamad\u0131. Adresi ve a\u011f ba\u011flant\u0131n\u0131z\u0131 kontrol edin.',
+    srvChange: 'Sunucuyu de\u011fi\u015ftir',
+    exitConfirm: '\u00c7\u0131kmak i\u00e7in tekrar bas\u0131n',
+    dlReady: 'Dosya haz\u0131r',
+    dlFailed: 'Dosya kaydedilemedi',
 
     // Edge context menu
     deleteConnection: 'Ba\u011flant\u0131y\u0131 Sil',

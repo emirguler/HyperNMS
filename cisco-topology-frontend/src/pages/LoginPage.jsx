@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useViewport } from '../hooks/useViewport';
+import { isNative, getServerUrl } from '../native/state';
+import { requestServerSetup } from '../native/NativeGate';
+import { t } from '../i18n';
 
 // Goz ikonu. Modul seviyesinde: bilesen govdesinde tanimlanirsa her render'da
 // yeniden mount edilirdi.
@@ -220,6 +223,16 @@ export default function LoginPage() {
             {loading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
+        )}
+
+        {/* Mobil uygulama: yanlis/degisen sunucu adresi giris yapilamadan
+            duzeltilebilmeli — tek giris noktasi burasi. */}
+        {isNative && (
+          <button type="button" className="btn btn-ghost"
+            onClick={requestServerSetup}
+            style={{ width: '100%', marginTop: 14, minHeight: 44, fontSize: '0.8rem' }}>
+            {t('srvChange')} · {getServerUrl().replace(/^https?:\/\//, '')}
+          </button>
         )}
 
         <p style={{ marginTop: isShort ? 12 : 24, fontSize: '0.7rem', color: 'var(--text-dim)', textAlign: 'center' }}>

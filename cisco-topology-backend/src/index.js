@@ -40,8 +40,22 @@ app.set('trust proxy', true);
 
 // --- Core Middleware ---
 app.use(compression()); // JSON/statik yanıtları gzip'le (poll yükünü küçültür)
+
+// Capacitor (Android) WebView'i uygulamayi kendi yerel origin'inden servis eder;
+// API cagrilari bu yuzden cross-origin gelir. Bu origin'ler sabittir ve yalnizca
+// paketlenmis mobil uygulamaya aittir — disaridan bir siteye ait degildir.
+const NATIVE_ORIGINS = new Set([
+    'http://localhost', 'https://localhost',      // Capacitor androidScheme http/https
+    'capacitor://localhost', 'ionic://localhost', // eski/iOS semalari
+]);
+const allowedOrigins = String(config.CORS_ORIGIN).split(',').map(s => s.trim()).filter(Boolean);
 app.use(cors({
-    origin: config.CORS_ORIGIN,
+    origin: (origin, cb) => {
+        if (!origin) return cb(null, true);                    // curl / native HTTP istemcileri
+        if (allowedOrigins.includes('*')) return cb(null, true);
+        if (NATIVE_ORIGINS.has(origin)) return cb(null, true);  // mobil uygulama
+        return cb(null, allowedOrigins.includes(origin));
+    },
     credentials: true  // Required for httpOnly cookies
 }));
 app.use(express.json({ limit: '1mb' }));
@@ -84,6 +98,11 @@ app.use((req, res, next) => {
     // pending token'dir — taraycinin otomatik ekledigi bir seye dayanmaz.
     if (req.path === '/login' || req.path === '/api/login') return next();
     if (req.path === '/login/2fa' || req.path === '/api/login/2fa') return next();
+
+    // Kimlik "Authorization" basligiyla tasiniyorsa (mobil uygulama / API istemcisi)
+    // CSRF mumkun degil: tarayici bu basligi ucuncu bir siteden kendiliginden EKLEMEZ.
+    // CSRF yalnizca cookie ile tasinan kimliklere karsi anlamlidir.
+    if (!req.cookies?.token && req.headers.authorization) return next();
 
     // Web proxy: cihaz arayüzü formları CSRF token'ımızı bilemez — muaf tut
     if (req.path.includes('/webproxy/')) return next();

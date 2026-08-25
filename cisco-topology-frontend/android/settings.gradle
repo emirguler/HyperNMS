@@ -1,0 +1,14 @@
+// Capacitor eklentileri Java 21 "toolchain"i ile derlenir. Bu makinede kurulu tek
+// JDK, Android Studio'nun getirdigi JDK 25; Gradle uygun bir JDK bulamayinca
+// derleme durur. Foojay cozumleyicisi eksik toolchain'i Gradle'in kendi onbellegine
+// (~/.gradle/jdks) indirir — sistem geneline hicbir sey kurulmaz ve proje baska
+// makinelerde de ayni sekilde derlenir.
+plugins {
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
+}
+
+include ':app'
+include ':capacitor-cordova-android-plugins'
+project(':capacitor-cordova-android-plugins').projectDir = new File('./capacitor-cordova-android-plugins/')
+
+apply from: 'capacitor.settings.gradle'

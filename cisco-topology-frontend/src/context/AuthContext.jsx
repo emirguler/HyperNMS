@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { API_BASE } from '../config';
 import { showToast } from '../Toast';
+import { isNative, setAuthToken } from '../native/state';
 
 const AuthContext = createContext(null);
 
@@ -54,6 +55,8 @@ export function AuthProvider({ children }) {
           setUsername('');
           localStorage.removeItem('userRole');
           localStorage.removeItem('username');
+          // Native: oturum artik gecerli degil — saklanan JWT'yi de at
+          if (isNative) setAuthToken('');
         });
     }
   }, []);
@@ -72,6 +75,9 @@ export function AuthProvider({ children }) {
       return { success: false, twoFactorRequired: true, pendingToken: data.pendingToken };
     }
     if (res.ok) {
+      // Native: WebView cross-origin cookie tasiyamaz — ayni JWT govdede gelir,
+      // saklanir ve sonraki isteklerde Authorization basligiyla gonderilir.
+      if (isNative) await setAuthToken(data.token || '');
       setIsAuthenticated(true);
       setUserRole(data.role);
       setUsername(data.username);
@@ -100,6 +106,7 @@ export function AuthProvider({ children }) {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) return { success: false, error: data.error || 'Verification failed' };
 
+    if (isNative) await setAuthToken(data.token || '');
     setIsAuthenticated(true);
     setUserRole(data.role);
     setUsername(data.username);
@@ -126,6 +133,7 @@ export function AuthProvider({ children }) {
         headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {}
       });
     } catch { /* ignore */ }
+    if (isNative) await setAuthToken('');
     setIsAuthenticated(false);
     setUserRole('');
     setUsername('');

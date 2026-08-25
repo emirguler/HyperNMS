@@ -14,6 +14,11 @@ lisans-uretici.html
 *-private*.pem
 license-private*
 *.key
+
+# Android imzalama anahtarı ve parolaları — ASLA repoya girmemeli (güvenlik)
+cisco-topology-frontend/android/keystore.properties
+*.jks
+*.keystore
 cisco-topology-backend/*.json
 !cisco-topology-backend/package.json
 !cisco-topology-backend/package-lock.json
