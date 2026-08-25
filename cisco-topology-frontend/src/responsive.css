@@ -833,6 +833,21 @@
    11 - GUVENLI ALAN (notch / home indicator)
    index.html'e viewport-fit=cover eklendi, env() artik gercek deger dondurur.
    ========================================================================== */
+/* Uygulama kabugunun kendisi: ust/alt sistem cubuklarinin altina girmesin.
+   (pointer: coarse) — telefon VE tablet, boyuttan bagimsiz: Android 15'ten (API 35)
+   itibaren uygulamalar ZORUNLU olarak "edge-to-edge" cizer, yani WebView durum ve
+   gezinme cubuklarinin altina uzanir; Capacitor da bu insets'i env() olarak WebView'e
+   gecirir. Dolgu burada, kabukta verilir: icerideki her sayfa otomatik dogru olur.
+   Masaustunde bu blok hic calismaz; mobil TARAYICIDA da env() 0 doner (cubuk alani
+   zaten tarayicinin), yani web gorunumu degismez. */
+@media (pointer: coarse) {
+  .app-container {
+    box-sizing: border-box;   /* dolgu 100dvh'nin ICINDE kalsin, tasma olmasin */
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
 @media (max-width: 768px), (max-height: 500px) {
   .nav-header {
     padding-left: max(var(--rw-gutter), env(safe-area-inset-left));
@@ -842,12 +857,13 @@
   .list-container {
     padding-left: max(var(--rw-gutter), env(safe-area-inset-left));
     padding-right: max(var(--rw-gutter), env(safe-area-inset-right));
-    padding-bottom: calc(24px + env(safe-area-inset-bottom));
+    /* Alt guvenli alan ARTIK .app-container'da: burada tekrar eklenirse
+       gezinme cubugu boslugu iki kez sayilir. */
+    padding-bottom: 24px;
   }
 
-  /* Alta sabitlenen seyler home indicator'in ustunde kalsin.
-     (.terminal-panel sinifi terminal ajani tarafindan eklenecek; yoksa etkisiz.) */
-  .terminal-panel { padding-bottom: env(safe-area-inset-bottom); }
+  /* Ayni gerekce: panel zaten guvenli alanin icinde kaliyor. */
+  .terminal-panel { padding-bottom: 0; }
 }
 
 
