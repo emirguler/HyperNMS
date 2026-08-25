@@ -36,6 +36,7 @@ export function AppProvider({ children }) {
   const [edges, setEdges] = useState([]);
   const [topoTabs, setTopoTabs] = useState([{ id: 'main', name: 'Main Topology' }]);
   const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark');
+  const [license, setLicense] = useState(null); // /license durumu (guard + banner + kart)
   // Genel (cihaz geneli) ayarlar — sistem geneli; admin ayarlar, herkes okur
   const [general, setGeneral] = useState({ cometAnimation: true, wirelessAnimation: true });
 
@@ -180,6 +181,22 @@ export function AppProvider({ children }) {
     return () => { active = false; };
   }, [isAuthenticated, authFetch]);
 
+  // Lisans durumu — guard/banner buna bakar. Giriş yapınca çek + dakikada bir tazele
+  // (süre dolduğu an fark edilsin; ayrıca admin lisans girince fetchLicense çağrılır).
+  const fetchLicense = useCallback(async () => {
+    try {
+      const res = await authFetch('/license');
+      if (res && res.ok) setLicense(await res.json());
+    } catch { /* ignore */ }
+  }, [authFetch]);
+
+  useEffect(() => {
+    if (!isAuthenticated) { setLicense(null); return; }
+    fetchLicense();
+    const timer = setInterval(fetchLicense, 60000);
+    return () => clearInterval(timer);
+  }, [isAuthenticated, fetchLicense]);
+
   // Animasyon kapatma sınıfları → CSS ilgili edge animasyonunu durdurur (CPU tasarrufu)
   useEffect(() => {
     document.body.classList.toggle('comet-off', general.cometAnimation === false);
@@ -285,13 +302,15 @@ export function AppProvider({ children }) {
     fetchData, fetchUsers,
     sshSessions, activeSshTabId, setActiveSshTabId, terminalHeight, setTerminalHeight,
     openSshSession, closeSshSession, closeAllSessions, reconnectSshSession,
-    notifications, unreadCount, markNotificationsRead
+    notifications, unreadCount, markNotificationsRead,
+    license, fetchLicense
   }), [
     rawDevices, users, edges, setEdges, topoTabs, setTopoTabs, theme, toggleTheme,
     general, setGeneral,
     fetchData, fetchUsers, sshSessions, activeSshTabId, setActiveSshTabId,
     terminalHeight, setTerminalHeight, openSshSession, closeSshSession, closeAllSessions, reconnectSshSession,
-    notifications, unreadCount, markNotificationsRead
+    notifications, unreadCount, markNotificationsRead,
+    license, fetchLicense
   ]);
 
   return (

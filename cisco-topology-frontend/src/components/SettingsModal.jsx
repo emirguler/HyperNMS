@@ -4,6 +4,7 @@ import NpsSettingsCard from './NpsSettingsCard';
 import TwoFactorCard from './TwoFactorCard';
 import BackupRestorePanel from './BackupRestorePanel';
 import GeneralSettingsCard from './GeneralSettingsCard';
+import LicenseCard from './LicenseCard';
 import { useViewport } from '../hooks/useViewport';
 import { useAuth } from '../context/AuthContext';
 
@@ -16,6 +17,7 @@ const TILES = [
   { id: 'ad', icon: '🪪', title: 'Active Directory', desc: 'LDAP sign-in for AD users' },
   { id: 'nps', icon: '📡', title: 'NPS (FreeRADIUS)', desc: 'SSH access for the NPS page' },
   { id: 'security', icon: '🔐', title: 'Two-Factor Auth', desc: 'TOTP codes for sign-in', adminOnly: true },
+  { id: 'license', icon: '🔑', title: 'Lisans', desc: 'Lisans durumu ve anahtar', adminOnly: true },
 ];
 
 // Kart (masaustu) ve satir (dar govde) gorunumleri. Modul seviyesinde:
@@ -125,6 +127,7 @@ export default function SettingsModal({ onClose }) {
               {panel === 'ad' && <AdSettingsCard embedded />}
               {panel === 'nps' && <NpsSettingsCard />}
               {panel === 'security' && isSuperAdmin && <TwoFactorCard />}
+              {panel === 'license' && isSuperAdmin && <LicenseCard />}
             </div>
           </div>
         </div>

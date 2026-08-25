@@ -9,6 +9,7 @@ import SwitchFormModal from './SwitchFormModal';
 import LoginPage from './pages/LoginPage';
 import ForcePasswordChange from './components/ForcePasswordChange';
 import ForceTwoFactorSetup from './components/ForceTwoFactorSetup';
+import LicenseExpiredOverlay from './components/LicenseExpiredOverlay';
 import { showToast } from './Toast';
 
 // Kimlik-korumalı sayfalar ve terminal talebe göre yüklenir (başlangıç paketini küçültür:
@@ -57,7 +58,14 @@ function ProtectedRoute({ children }) {
 
 function AppLayout() {
   const { isAuthenticated, isAdmin, mustChangePassword, clearMustChangePassword, mustSetup2fa, clearMustSetup2fa, authFetch, csrfToken } = useAuth();
-  const { fetchData, topoTabs, rawDevices } = useApp();
+  const { fetchData, topoTabs, rawDevices, license } = useApp();
+  const location = useLocation();
+  // Lisans blokeliyken (süresi dolmuş / yanlış kurulum) Dashboard DIŞI sayfalar
+  // gösterilmez; yerine uyarı popup'ı çıkar. Dashboard + Ayarlar erişilebilir kalır.
+  const onDashboard = location.pathname === '/dashboard' || location.pathname === '/';
+  const licenseBlocked = !!(license && license.blocked) && !onDashboard;
+  // Bitişe az kala (varsayılan 15 gün) tüm sayfalarda ince uyarı bandı.
+  const licenseWarn = license && license.status === 'valid' && license.daysLeft != null && license.daysLeft <= (license.warnDays || 15);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState('add');
   const [editingNode, setEditingNode] = useState(null);
@@ -107,12 +115,19 @@ function AppLayout() {
 
   return (
     <div className="app-container">
+      {licenseWarn && (
+        <div style={{ background: 'var(--warning)', color: '#3a2500', textAlign: 'center', padding: '6px 12px', fontSize: '0.82rem', fontWeight: 600, flexShrink: 0 }}>
+          ⚠️ Lisans süreniz {license.daysLeft} gün sonra doluyor — lütfen yenileyin.
+        </div>
+      )}
       <Navbar onAddDevice={isAdmin ? handleAddDevice : undefined} />
       {/* .app-main: tek icerik bolgesi. Sinif tamamen ek — hicbir masaustu kurali
           buna bakmiyor; mobil katmanin overflow/dvh davranisini inline stile
           dokunmadan hedefleyebilmesi icin var. */}
       <main className="app-main" style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
         <Suspense fallback={<div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>…</div>}>
+          {licenseBlocked && <LicenseExpiredOverlay />}
+          {!licenseBlocked && (
           <Routes>
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/devices" element={<DeviceListPage onEdit={isAdmin ? handleEditDevice : undefined} />} />
@@ -128,6 +143,7 @@ function AppLayout() {
             <Route path="/nps" element={<NpsPage />} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>
+          )}
           <TerminalPanel />
         </Suspense>
       </main>

@@ -30,6 +30,8 @@ const sessionLog = require('./services/sessionLog');
 const settingsRoutes = require('./routes/settings');
 const webproxyRoutes = require('./routes/webproxy');
 const npsRoutes = require('./routes/nps');
+const licenseRoutes = require('./routes/license');
+const licenseGuard = require('./middleware/licenseGuard');
 
 const app = express();
 
@@ -114,6 +116,9 @@ app.use((req, res, next) => {
 // --- Routes ---
 // API routes — mounted at /api for production, root for dev
 const apiPrefix = config.NODE_ENV === 'production' ? '/api' : '';
+// Lisans savunmasi: blokeliyken yazma isteklerini reddet (GET/auth/license haric).
+app.use(apiPrefix, licenseGuard);
+app.use(apiPrefix, licenseRoutes);
 app.use(apiPrefix, authRoutes);
 app.use(apiPrefix, switchRoutes);
 app.use(apiPrefix, edgeRoutes);

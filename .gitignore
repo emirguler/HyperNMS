@@ -8,6 +8,12 @@ node_modules/
 
 # Data files (runtime generated)
 cisco-topology-backend/data/
+
+# Lisans üretici / özel anahtar — ASLA repoya girmemeli (güvenlik)
+lisans-uretici.html
+*-private*.pem
+license-private*
+*.key
 cisco-topology-backend/*.json
 !cisco-topology-backend/package.json
 !cisco-topology-backend/package-lock.json
