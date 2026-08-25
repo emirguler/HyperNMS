@@ -213,6 +213,33 @@
 
   /* Bos hucreler kartta bir satir israf etmesin. */
   table.rw-cards td:empty { display: none; }
+
+  /* Ad hucresi kartin BASLIGI olur: "NAME  netpulse-sw-01" seklinde etiketli bir
+     satir yerine, ustte tam genislikte kalin bir baslik. Etiket zaten gereksiz —
+     kartin ne oldugu adindan belli. Diger satirlar (Status/IP) altinda meta
+     bilgi olarak kalir. Yalnizca cihaz listesinde degil, ad kolonu tasiyan tum
+     rw-cards tablolarinda ayni fayda var. */
+  table.rw-cards td[data-label="Name"] {
+    display: block;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text-main);
+    padding-bottom: 2px;
+    overflow-wrap: anywhere;
+  }
+  table.rw-cards td[data-label="Name"]::before { content: none; }
+
+  /* Secim kutusu kartin ilk satirini "SELECT  [ ]" diye harcamasin: etiketsiz,
+     saga yaslanmis kucuk bir kutu olarak kartin ust kosesinde durur. */
+  table.rw-cards td[data-label="Select"] {
+    justify-content: flex-end;
+    /* !important sart: bolum 03'teki ".modern-table td.rw-tap-cell" kurali bu
+       hucreye 11px'lik dokunma dolgusu veriyor ve dosyada daha SONRA geliyor.
+       Dokunma hedefi kaybolmuyor — kutuyu saran <label> zaten 44x44. */
+    padding: 2px 14px 0 !important;
+    min-height: 0;
+  }
+  table.rw-cards td[data-label="Select"]::before { content: none; }
 }
 
 

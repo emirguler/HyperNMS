@@ -23,6 +23,14 @@ const TAP_BOX = {
 };
 
 // <=600px'te thead gizlendigi icin siralama tablonun ustundeki select'e tasinir.
+// Dar govdedeki uclu yonetici eylem satiri. Yatay dolgu BILEREK verilmiyor:
+// (pointer:coarse) blogu .btn-sm'e "padding: 10px 14px !important" diyor ve
+// inline stil onu ezemez. 0.75rem punto + tek satir kirpma ile uc dugme 375px'e
+// rahat sigiyor. Yukseklik durum segmentiyle ayni hizada (40px).
+const COMPACT_ACTION = {
+  fontSize: '0.75rem', minHeight: 40, justifyContent: 'center', minWidth: 0,
+};
+
 const SORT_OPTIONS = [
   { v: 'name|asc', label: 'Sort: Name A-Z' },
   { v: 'name|desc', label: 'Sort: Name Z-A' },
@@ -39,12 +47,14 @@ export default function DeviceListPage({ onEdit }) {
   // "Dar govde": telefon genisligi VEYA kisa (yatay telefon) ekran
   const compact = isPhone || isShort;
   const navigate = useNavigate();
-  const [showFilters, setShowFilters] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: 'name', dir: 'asc' });
   const [statusFilter, setStatusFilter] = useState('all');
   const [topoFilter, setTopoFilter] = useState('all');
-  const [typeFilter, setTypeFilter] = useState('all');
+  // Varsayilan 'switch': envanterin buyuk cogunlugu switch; anten/router gibi
+  // tipler tek dokunusla secilir. (Dashboard'daki DOWN karti da ayni varsayilani
+  // kullanir, iki sayfa tutarli acilir.)
+  const [typeFilter, setTypeFilter] = useState('switch');
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [showBulkImport, setShowBulkImport] = useState(false);
   const [showFindDevice, setShowFindDevice] = useState(false);
@@ -64,7 +74,11 @@ export default function DeviceListPage({ onEdit }) {
     if (topoFilter !== 'all') {
       list = list.filter(d => (d.topologyPage || 'main') === topoFilter);
     }
-    if (typeFilter !== 'all') list = list.filter(d => (d.type || '') === typeFilter);
+    // Tipi bos kalmis eski kayitlar switch sayilir — uygulamanin geri kalaninda
+    // (topoloji ikonu, Dashboard filtreleri) ayni varsayim gecerli. Varsayilan
+    // filtre artik 'switch' oldugu icin bu sart: aksi halde tipsiz cihazlar
+    // listeden sessizce dusecekti.
+    if (typeFilter !== 'all') list = list.filter(d => (d.type || 'switch') === typeFilter);
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       list = list.filter(d => d.name?.toLowerCase().includes(q) || d.ip?.toLowerCase().includes(q) || d.type?.toLowerCase().includes(q));
@@ -92,10 +106,13 @@ export default function DeviceListPage({ onEdit }) {
 
   // Cihaz tipleri elde yazilmaz, kayitlardan turetilir: yeni bir tip eklenirse
   // (or. router, firewall) filtre kendiliginden onu da listeler.
-  const deviceTypes = useMemo(
-    () => [...new Set(rawDevices.map(d => d.type).filter(Boolean))].sort(),
-    [rawDevices]
-  );
+  // Secili tip her zaman listede olmali: cihazlar henuz yuklenmemisken ya da o
+  // tipten hic kayit kalmamisken select bos gorunmesin.
+  const deviceTypes = useMemo(() => {
+    const set = new Set(rawDevices.map(d => d.type).filter(Boolean));
+    if (typeFilter !== 'all') set.add(typeFilter);
+    return [...set].sort();
+  }, [rawDevices, typeFilter]);
 
   const handleSort = (key) => setSortConfig(prev => ({ key, dir: prev.key === key && prev.dir === 'asc' ? 'desc' : 'asc' }));
   const sortIcon = (key) => sortConfig.key === key ? (sortConfig.dir === 'asc' ? ' ▲' : ' ▼') : '';
@@ -217,52 +234,72 @@ export default function DeviceListPage({ onEdit }) {
 
   return (
     <div className="list-container">
-      {/* Arac cubugu: dar govdede arama + tek "Filters" dugmesi kalir, gerisi acilir.
-          Boylece yatay telefonda ~170px dikey alan geri kazanilir. */}
-      <div className="rw-actions" style={{ display: 'flex', gap: 12, marginBottom: 20, alignItems: 'center', flexWrap: 'wrap' }}>
-        <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
+      {/* Arac cubugu.
+          Masaustu: tek satirda yan yana — eskisiyle birebir ayni.
+          Dar govde: filtreler ARTIK GIZLI DEGIL. Eski "⚙ Filters" dugmesi
+          filtreleri gorunmez kiliyordu; hangi filtrenin acik oldugunu anlamak
+          icin once dugmeye basmak gerekiyordu. Yerine sikistirilmis bir duzen
+          kondu: durum uc parcali tek bir segment, iki select yan yana, yonetici
+          eylemleri uclu satir. Hepsi acik haldeyken bile eski "acik filtre"
+          gorunumunun yaklasik yarisi kadar dikey yer kapliyor.
+          Sarmalayicilar masaustunde display:contents ile "yokmus gibi" davranir,
+          boylece masaustu yerlesimi hic degismez. */}
+      <div className="rw-actions" style={{ display: 'flex', gap: compact ? 8 : 12, marginBottom: compact ? 12 : 20, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div style={{ position: 'relative', flex: 1, minWidth: compact ? '100%' : 200 }}>
           {/* type="search" SADECE dokunmatikte: masaustu Chrome/Safari bu tipe kendi
               temizle (x) dugmesini ve searchfield gorunumunu ekliyor -> masaustu degisirdi. */}
           <input className="modern-input" type={isTouch ? 'search' : undefined} enterKeyHint="search" autoCapitalize="none" autoCorrect="off" spellCheck={false}
             placeholder={t('searchPlaceholder')} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} style={{ paddingLeft: 40 }} />
           <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: '1rem', pointerEvents: 'none' }}>🔍</span>
         </div>
-        {compact && (
-          <button className="btn btn-ghost btn-sm" aria-expanded={showFilters} onClick={() => setShowFilters(v => !v)}>
-            {showFilters ? '✕ Filters' : '⚙ Filters'}{(statusFilter !== 'all' || topoFilter !== 'all' || typeFilter !== 'all') ? ' •' : ''}
-          </button>
-        )}
-        {(!compact || showFilters) && (
-          <div style={{ display: 'flex', gap: 6, flexWrap: compact ? 'wrap' : undefined }}>
-            {[{ label: t('all'), value: 'all' }, { label: 'UP', value: 'UP' }, { label: 'DOWN', value: 'DOWN' }].map(f => (
-              <button key={f.value} className={`nav-btn ${statusFilter === f.value ? 'active' : ''}`}
-                style={{ fontSize: compact ? '0.85rem' : '0.8rem', padding: compact ? '10px 16px' : '8px 14px', border: '1px solid var(--border-color)' }}
-                onClick={() => setStatusFilter(f.value)}>{f.label}</button>
-            ))}
-          </div>
-        )}
-        {(!compact || showFilters) && (
+
+        {/* Durum filtresi — dar govdede uc esit parcali segment kontrolu */}
+        <div style={compact
+          ? { display: 'flex', width: '100%', border: '1px solid var(--border-color)', borderRadius: 8, overflow: 'hidden' }
+          : { display: 'flex', gap: 6 }}>
+          {[{ label: t('all'), value: 'all' }, { label: 'UP', value: 'UP' }, { label: 'DOWN', value: 'DOWN' }].map((f, i) => (
+            <button key={f.value} className={`nav-btn ${statusFilter === f.value ? 'active' : ''}`}
+              style={compact
+                ? { flex: 1, minWidth: 0, justifyContent: 'center', fontSize: '0.82rem', padding: '9px 4px', minHeight: 40, border: 'none', borderLeft: i ? '1px solid var(--border-color)' : 'none', borderRadius: 0 }
+                : { fontSize: '0.8rem', padding: '8px 14px', border: '1px solid var(--border-color)' }}
+              onClick={() => setStatusFilter(f.value)}>{f.label}</button>
+          ))}
+        </div>
+
+        {/* Sayfa + tip filtreleri — dar govdede yan yana iki kolon */}
+        <div style={compact ? { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, width: '100%' } : { display: 'contents' }}>
           <select className="modern-input" value={topoFilter} onChange={e => setTopoFilter(e.target.value)}
-            style={{ width: compact ? '100%' : 'auto', minWidth: compact ? 0 : 140, fontSize: compact ? '1rem' : '0.8rem', padding: compact ? '10px 12px' : '8px 12px' }}>
+            style={{ width: compact ? '100%' : 'auto', minWidth: 0, ...(compact ? null : { minWidth: 140, fontSize: '0.8rem' }), padding: compact ? '8px 10px' : '8px 12px' }}>
             <option value="all">All Pages</option>
             {topoTabs.map(tab => (
               <option key={tab.id} value={tab.id}>{tab.name}</option>
             ))}
           </select>
-        )}
-        {(!compact || showFilters) && (
           <select className="modern-input" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
-            style={{ width: compact ? '100%' : 'auto', minWidth: compact ? 0 : 130, fontSize: compact ? '1rem' : '0.8rem', padding: compact ? '10px 12px' : '8px 12px', textTransform: 'capitalize' }}>
+            style={{ width: compact ? '100%' : 'auto', minWidth: 0, ...(compact ? null : { minWidth: 130, fontSize: '0.8rem' }), padding: compact ? '8px 10px' : '8px 12px', textTransform: 'capitalize' }}>
             <option value="all">All Types</option>
             {deviceTypes.map(tp => (
               <option key={tp} value={tp}>{tp}</option>
             ))}
           </select>
+        </div>
+
+        {/* Yonetici eylemleri — dar govdede uclu satir, kisa etiketlerle */}
+        {isAdmin && (
+          <div style={compact ? { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, width: '100%' } : { display: 'contents' }}>
+            <button className="btn btn-ghost btn-sm rw-truncate" style={compact ? COMPACT_ACTION : undefined}
+              onClick={() => setShowFindDevice(true)} title={t('findDeviceTitle')}>🔍 {compact ? 'Find' : t('findDevice')}</button>
+            <button className="btn btn-ghost btn-sm rw-truncate" style={compact ? COMPACT_ACTION : undefined}
+              onClick={() => setShowBulkImport(true)} title="Bulk Import">📤 {compact ? 'Import' : 'Import List'}</button>
+            <button className="btn btn-ghost btn-sm rw-truncate" style={compact ? COMPACT_ACTION : undefined}
+              onClick={() => setShowDownloadMenu(true)} title="Export CSV">📥 {compact ? 'Export' : 'Download List'}</button>
+          </div>
         )}
-        {isAdmin && (!compact || showFilters) && <button className="btn btn-ghost btn-sm" onClick={() => setShowFindDevice(true)} title={t('findDeviceTitle')}>🔍 {t('findDevice')}</button>}
-        {isAdmin && (!compact || showFilters) && <button className="btn btn-ghost btn-sm" onClick={() => setShowBulkImport(true)} title="Bulk Import">📤 Import List</button>}
-        {isAdmin && (!compact || showFilters) && <button className="btn btn-ghost btn-sm" onClick={() => setShowDownloadMenu(true)} title="Export CSV">📥 Download List</button>}
-        <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{filteredDevices.length} / {rawDevices.length} {t('deviceCount')}</span>
+
+        <span style={{
+          color: 'var(--text-muted)', fontSize: compact ? '0.75rem' : '0.8rem',
+          ...(compact ? { width: '100%', textAlign: 'right' } : null)
+        }}>{filteredDevices.length} / {rawDevices.length} {t('deviceCount')}</span>
       </div>
 
       {/* Toplu islem cubugu. Satir kaydirma .rw-actions'tan gelir (<=1024px);

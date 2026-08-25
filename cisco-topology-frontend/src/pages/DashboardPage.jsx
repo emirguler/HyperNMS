@@ -83,13 +83,21 @@ export default function DashboardPage() {
 
   // DOWN cihazlar tablosu — topoloji sayfası + tip filtresi
   const [downPage, setDownPage] = useState('all');
-  const [downType, setDownType] = useState('all');
+  // Varsayilan 'switch': ag envanterinin buyuk cogunlugu switch ve operatorun
+  // ilk baktigi sey bu. Diger tipler (anten, router...) tek dokunusla secilir.
+  const [downType, setDownType] = useState('switch');
   const [healthType, setHealthType] = useState('all'); // Network Health kartı cihaz-tipi filtresi
   const [showAllNotifs, setShowAllNotifs] = useState(false); // telefonda bildirim listesini aç
   const [notifType, setNotifType] = useState('all'); // Bildirimler kartı cihaz-tipi filtresi
 
   const downDevices = useMemo(() => rawDevices.filter(d => d.status !== 'UP'), [rawDevices]);
-  const downTypes = useMemo(() => [...new Set(downDevices.map(d => d.type || 'switch'))].sort(), [downDevices]);
+  // Secili tip her zaman listede kalmali: hicbir switch DOWN degilken liste
+  // yalnizca DOWN cihazlardan turetilseydi select bos gorunurdu.
+  const downTypes = useMemo(() => {
+    const set = new Set(downDevices.map(d => d.type || 'switch'));
+    if (downType !== 'all') set.add(downType);
+    return [...set].sort();
+  }, [downDevices, downType]);
   const filteredDown = useMemo(() => downDevices.filter(d =>
     (downPage === 'all' || (d.topologyPage || 'main') === downPage) &&
     (downType === 'all' || (d.type || 'switch') === downType)
