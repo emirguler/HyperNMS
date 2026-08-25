@@ -9,6 +9,7 @@ import PingIcon from './PingIcon';
 import TraceModal from './TraceModal';
 import TraceIcon from './TraceIcon';
 import SettingsIcon from './SettingsIcon';
+import MenuIcon from './MenuIcon';
 
 // Marka artik <div onClick> degil gercek bir <button>: klavye ve ekran okuyucu
 // erisimi icin. font:'inherit' tarayici varsayilanlarini eski div ile birebir
@@ -130,8 +131,18 @@ export default function Navbar({ onAddDevice }) {
       )}
 
       <header className="nav-header" onClick={e => e.stopPropagation()}>
-        {/* Left — Brand + Nav */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 24, minWidth: 0 }}>
+        {/* Left — Menu + Brand + Nav */}
+        <div className="nav-left" style={{ display: 'flex', alignItems: 'center', gap: 24, minWidth: 0 }}>
+          {/* Hamburger EN SOLDA: basparmagin dogal olarak ulastigi kose. Masaustunde
+              .nav-hamburger zaten gizli, dolayisiyla orada hicbir sey degismez. */}
+          <button
+            className="nav-hamburger"
+            onClick={() => setMobileOpen(o => !o)}
+            aria-label={mobileOpen ? 'Close menu' : 'Menu'}
+            aria-expanded={mobileOpen}
+            aria-controls="nav-mobile-panel"
+          ><MenuIcon open={mobileOpen} /></button>
+
           <button type="button" className="rw-tap" style={brandButtonStyle} onClick={() => go('/dashboard')} aria-label="NetPulse home">
             <img src="/app-icon.png" alt="" style={{ width: 26, height: 26, filter: 'drop-shadow(0 0 6px var(--primary))' }} />
             <span className="rw-truncate" style={{ fontSize: '1rem', fontWeight: 700, letterSpacing: '-0.3px', color: 'var(--text-main)' }}>NetPulse</span>
@@ -178,23 +189,28 @@ export default function Navbar({ onAddDevice }) {
           </nav>
         </div>
 
-        {/* Right — bell always visible; details on desktop, hamburger on mobile */}
+        {/* Right — quick actions; details on desktop only */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
           <button
-            className="btn btn-primary btn-sm"
+            className="btn btn-primary btn-sm nav-quick"
             onClick={() => setShowPing(true)}
             title="Ping"
             aria-label="Ping"
             style={iconOnly ? { minWidth: 44 } : undefined}
           ><PingIcon size={16} />{!iconOnly && ' Ping'}</button>
           <button
-            className="btn btn-primary btn-sm"
+            className="btn btn-primary btn-sm nav-quick"
             onClick={() => setShowTrace(true)}
             title="Trace"
             aria-label="Trace"
             style={iconOnly ? { minWidth: 44 } : undefined}
           ><TraceIcon size={16} />{!iconOnly && ' Trace'}</button>
-          <NotificationBell />
+          {/* Zil yalnizca masaustunde: dar govdede bildirimler zaten Dashboard'daki
+              NOTIFICATIONS kartinda tam listeyle duruyor, ustteki rozet yalnizca
+              dar navbar'i kalabaliklastiriyordu. */}
+          <span className="nav-bell" style={{ display: 'flex', alignItems: 'center' }}>
+            <NotificationBell />
+          </span>
 
           <span className="nav-desktop-right" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             {isAdmin && <Link className={cls('/users')} to="/users" onClick={closeMenus} title="User Management">Users</Link>}
@@ -203,14 +219,6 @@ export default function Navbar({ onAddDevice }) {
             <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginRight: 4 }}>{username}</span>
             <button className="btn btn-ghost btn-sm" onClick={() => { logout(); navigate('/login'); }} style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>Sign Out</button>
           </span>
-
-          <button
-            className="nav-hamburger"
-            onClick={() => setMobileOpen(o => !o)}
-            aria-label={mobileOpen ? 'Close menu' : 'Menu'}
-            aria-expanded={mobileOpen}
-            aria-controls="nav-mobile-panel"
-          >{mobileOpen ? '✕' : '☰'}</button>
         </div>
 
         {/* Mobile drawer */}
@@ -218,7 +226,7 @@ export default function Navbar({ onAddDevice }) {
           {drawerMode && (
             <div style={drawerHeadStyle}>
               <span style={drawerTitleStyle}>Menu</span>
-              <button type="button" className="nav-hamburger" onClick={() => setMobileOpen(false)} aria-label="Close menu">✕</button>
+              <button type="button" className="nav-hamburger" onClick={() => setMobileOpen(false)} aria-label="Close menu"><MenuIcon open size={20} /></button>
             </div>
           )}
           <Link className={cls('/dashboard')} to="/dashboard" onClick={closeMenus}>Dashboard</Link>

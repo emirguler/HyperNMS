@@ -1,4 +1,13 @@
 /* index.css — minimal reset, App.css has the full design system */
+
+html {
+  /* Android WebView "font boosting": uzun metin bloklarinin punto'sunu kendi
+     kararyla buyutur. Mobil uygulamada bu, ayni ekranda farkli buyuklukte
+     yazilar cikmasina yol aciyor. 100% = "sen karisma, CSS ne diyorsa o". */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 #root {
   width: 100%;
   /* 100vh mobil tarayicilarda URL cubugu acikken gorunen alandan buyuktur;

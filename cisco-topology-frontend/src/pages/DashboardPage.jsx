@@ -168,8 +168,10 @@ export default function DashboardPage() {
     // Dar govdede kolon flex: kartlar arasi sira `order` ile degisir. Masaustunde
     // kap duz blok kalir, `order` yok sayilir -> masaustu duzeni birebir ayni.
     <div className="list-container" style={compact ? { display: 'flex', flexDirection: 'column', gap: 14 } : undefined}>
-      {/* order 2: DOWN listesinden sonra, dekoratif kartlardan once */}
-      <div className="grid-stats" style={compact ? { order: 2, flexShrink: 0 } : { marginBottom: 14 }}>
+      {/* order 1: dar govdede EN USTTE. Ekran acilir acilmaz gorulmesi gereken
+          sey agin ozeti (toplam / UP / DOWN / gecikme); DOWN listesi bunun
+          hemen altinda gelir. */}
+      <div className="grid-stats" style={compact ? { order: 1, flexShrink: 0 } : { marginBottom: 14 }}>
         {[
           { label: t('totalDevices'), value: rawDevices.length, color: undefined },
           { label: t('activeUp'), value: stats.upCount, color: 'var(--success)' },
@@ -295,9 +297,9 @@ export default function DashboardPage() {
       </div>
 
       {/* DOWN cihazlar — sayfa sekmeleri + tip filtresi */}
-      {/* order 1: sayfanin TEK eyleme donuk karti, dar govdede en uste gelir. */}
+      {/* order 2: ozet kartlarinin hemen altinda; dekoratif kartlardan once. */}
       <div className="chart-container no-float"
-        style={compact ? { padding: 0, overflow: 'hidden', order: 1, flexShrink: 0 } : { padding: 0, overflow: 'hidden', marginTop: 14 }}>
+        style={compact ? { padding: 0, overflow: 'hidden', order: 2, flexShrink: 0 } : { padding: 0, overflow: 'hidden', marginTop: 14 }}>
         <CardHead
           pad={cardHeadPad} minH={headMinH}
           title={<>🔴 {t('downDevices')} <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>({filteredDown.length})</span></>}

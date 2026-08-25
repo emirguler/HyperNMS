@@ -1,4 +1,10 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+/* Uzak yazi tipi (Google Fonts Inter) BILEREK yok.
+   Uretimde backend'in CSP'si zaten "style-src 'self'; font-src 'self'" diyor —
+   yani Inter hicbir zaman yuklenmiyordu, arayuz her zaman sistem yazi tipiyle
+   ciziliyordu. Kapali (on-prem / SCADA) agda ve mobil uygulamada bu istek
+   ayrica ilk boyamayi geciktiriyordu. Artik platformun kendi yazi tipi ACIKCA
+   kullaniliyor: Windows'ta Segoe UI, Android'de Roboto, macOS/iOS'ta SF —
+   gorunum uretimde birebir ayni, uygulama ise disariya hic bagimli degil. */
 
 :root {
   /* --- CORPORATE DARK THEME --- */
@@ -58,7 +64,7 @@
 body {
   margin: 0;
   padding: 0;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   background-color: var(--bg-dark);
   color: var(--text-main);
   /* dvh: mobil tarayici adres cubugu acilip kapandiginda gercek yukseklik */

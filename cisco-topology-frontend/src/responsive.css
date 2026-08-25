@@ -33,6 +33,7 @@
      12  Login ekrani
      13  Kisa ekran "dar govde" modu - en sonda, cunku o kazanmali
      14  Hareket azaltma tercihi
+     15  Mobil tipografi + ust bar olculeri
    ========================================================================== */
 
 
@@ -464,24 +465,36 @@
   .nav-menu,
   .nav-desktop-right { display: none !important; }
 
+  /* Bildirim zili dar govdede gizli: ayni bilgi Dashboard'daki NOTIFICATIONS
+     kartinda tam listeyle duruyor, ustteki rozet yalnizca yer kapliyordu. */
+  .nav-bell { display: none !important; }
+
+  /* Hamburger artik markanin SOLUNDA (JSX sirasi). Aralarindaki 24px'lik
+     masaustu bosluğu burada daralir. */
+  .nav-left { gap: 10px !important; }
+
   .nav-hamburger {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: transparent;
-    border: none;
+    /* Belirgin bir dugme gibi dursun: seffaf bir glif degil, cerceveli kutu.
+       Ust barda tek gezinme girisi bu oldugu icin gorunur olmasi onemli. */
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid var(--border-color);
     color: var(--text-main);
-    font-size: 1.4rem;
     line-height: 1;
     cursor: pointer;
     padding: 0;
-    min-width: var(--tap);
-    min-height: var(--tap);
-    border-radius: var(--radius-sm);
+    min-width: 40px;
+    min-height: 40px;
+    border-radius: 10px;
     -webkit-tap-highlight-color: rgba(59, 130, 246, 0.18);
     touch-action: manipulation;
   }
-  .nav-hamburger:active { background: rgba(255, 255, 255, 0.08); }
+  .nav-hamburger:active {
+    background: rgba(255, 255, 255, 0.16);
+    border-color: var(--primary);
+  }
 
   .nav-mobile-panel.open {
     display: flex;
@@ -493,11 +506,13 @@
     background: var(--bg-panel);
     border-bottom: 1px solid var(--border-color);
     box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
-    padding: 8px;
-    padding-bottom: calc(8px + env(safe-area-inset-bottom));
-    padding-left: max(8px, env(safe-area-inset-left));
-    padding-right: max(8px, env(safe-area-inset-right));
-    gap: 2px;
+    padding: 6px;
+    padding-bottom: calc(6px + env(safe-area-inset-bottom));
+    padding-left: max(6px, env(safe-area-inset-left));
+    padding-right: max(6px, env(safe-area-inset-right));
+    /* Satirlar bitisik: liste tek bir blok gibi okunur, panel de kisalir —
+       admin'de 10 satir varken kaydirmadan sigma sansi artar. */
+    gap: 0;
     z-index: 10000;
     /* Admin'de 9 satir + kullanici satiri var; panel kendi icinde kaymali. */
     max-height: calc(100vh - var(--nav-h));
@@ -512,8 +527,11 @@
     width: 100%;
     text-align: left;
     justify-content: flex-start;
-    min-height: 48px;
+    /* 48 -> 42: dokunma hedefi hala rahat, satirlar birbirine yakin. */
+    min-height: 42px;
+    padding: 8px 12px;
     font-size: 0.9rem;
+    border-radius: 8px;
   }
   .nav-mobile-panel .nav-mobile-user {
     display: flex;
@@ -973,4 +991,45 @@
     transition-duration: .01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+
+/* ============================================================================
+   15 - MOBIL TIPOGRAFI + UST BAR OLCULERI
+   Masaustu olculeri 24" bir ekran icin secilmis: dar govdede ayni degerler
+   kartlari gereksiz uzatiyor ve sayfa "buyutulmus masaustu" gibi duruyor.
+   Burasi yalnizca telefon/dokunmatik icin olcu ayari yapar; renk, agirlik ve
+   hiyerarsi degismez.
+   ========================================================================== */
+@media (max-width: 480px) {
+  /* Ust bardaki Ping/Trace: 44x40 -> 38x34. Dokunma hedefi hala rahat, bar
+     nefes aliyor. Inline minWidth verildigi icin !important sart. */
+  .nav-header .nav-quick {
+    min-width: 38px !important;
+    min-height: 34px !important;
+    padding: 6px 8px !important;
+    border-radius: 9px;
+  }
+}
+
+@media (max-width: 768px), (max-height: 500px) {
+  /* Ozet kartlari: 2rem'lik rakam telefonda karti kartin icerigi kadar
+     buyutuyordu. tabular-nums: rakam genisligi sabit, 5 saniyede bir guncellenen
+     sayilarda satir titremez. */
+  .dash-stat-value {
+    font-size: 1.6rem;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.5px;
+  }
+  .dash-stat-label {
+    font-size: 0.68rem;
+    letter-spacing: 0.4px;
+  }
+  .dash-stat-card { gap: 6px; }
+
+  /* Kart ic bosluklari: 24px masaustu degeri, dar ekranda icerigi sikistiriyor. */
+  .chart-container { padding: 14px; }
+  .chart-container.no-float { padding: 0; }
+
+  .dash-section-title { font-size: 0.72rem; }
 }
