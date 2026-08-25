@@ -7,7 +7,15 @@ import { useApp } from '../context/AppContext';
 export default function LicenseExpiredOverlay() {
   const navigate = useNavigate();
   const { license } = useApp();
-  const wrongInstall = license?.status === 'wrong_install';
+  const status = license?.status;
+  const title = status === 'wrong_install' ? 'Lisans bu kuruluma ait değil'
+    : status === 'demo_expired' ? 'Demo süreniz doldu'
+    : 'Lisans süreniz doldu';
+  const message = status === 'wrong_install'
+    ? 'Girilen lisans bu kuruluma tanımlı değil. Doğru lisansı girene kadar bu sayfaya erişilemez.'
+    : status === 'demo_expired'
+      ? 'Deneme süreniz doldu. Devam etmek için bir lisans anahtarı girmeniz gerekiyor. İzleme (Dashboard) çalışmaya devam eder.'
+      : 'Uygulamanın bu bölümüne erişim için lisansınızı yenilemeniz gerekiyor. İzleme (Dashboard) çalışmaya devam eder.';
 
   return (
     <div style={{
@@ -21,14 +29,8 @@ export default function LicenseExpiredOverlay() {
         borderRadius: 16, padding: '32px 28px', boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
       }}>
         <div style={{ fontSize: '2.4rem', lineHeight: 1, marginBottom: 12 }}>🔒</div>
-        <h2 style={{ margin: '0 0 8px', fontSize: '1.25rem', color: 'var(--text-main)' }}>
-          {wrongInstall ? 'Lisans bu kuruluma ait değil' : 'Lisans süreniz doldu'}
-        </h2>
-        <p style={{ margin: '0 0 20px', color: 'var(--text-muted)', fontSize: '0.9rem', lineHeight: 1.6 }}>
-          {wrongInstall
-            ? 'Girilen lisans bu kuruluma tanımlı değil. Doğru lisansı girene kadar bu sayfaya erişilemez.'
-            : 'Uygulamanın bu bölümüne erişim için lisansınızı yenilemeniz gerekiyor. İzleme (Dashboard) çalışmaya devam eder.'}
-        </p>
+        <h2 style={{ margin: '0 0 8px', fontSize: '1.25rem', color: 'var(--text-main)' }}>{title}</h2>
+        <p style={{ margin: '0 0 20px', color: 'var(--text-muted)', fontSize: '0.9rem', lineHeight: 1.6 }}>{message}</p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <button className="btn btn-primary" onClick={() => navigate('/dashboard')}>Dashboard'a Dön</button>
           <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>

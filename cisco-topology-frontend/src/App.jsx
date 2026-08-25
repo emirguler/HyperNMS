@@ -66,6 +66,8 @@ function AppLayout() {
   const licenseBlocked = !!(license && license.blocked) && !onDashboard;
   // Bitişe az kala (varsayılan 15 gün) tüm sayfalarda ince uyarı bandı.
   const licenseWarn = license && license.status === 'valid' && license.daysLeft != null && license.daysLeft <= (license.warnDays || 15);
+  // Lisans girilmemişse 30 günlük demo aktif — banda "Demo" yaz. Lisans aktifse gösterme.
+  const licenseDemo = license && license.isDemo && !license.blocked;
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState('add');
   const [editingNode, setEditingNode] = useState(null);
@@ -115,6 +117,11 @@ function AppLayout() {
 
   return (
     <div className="app-container">
+      {licenseDemo && (
+        <div style={{ background: 'var(--primary)', color: '#04263a', textAlign: 'center', padding: '6px 12px', fontSize: '0.82rem', fontWeight: 600, flexShrink: 0 }}>
+          🎫 Demo sürümü — {license.demoDaysLeft} gün kaldı. Tam sürüm için lisans girin (Ayarlar → Lisans).
+        </div>
+      )}
       {licenseWarn && (
         <div style={{ background: 'var(--warning)', color: '#3a2500', textAlign: 'center', padding: '6px 12px', fontSize: '0.82rem', fontWeight: 600, flexShrink: 0 }}>
           ⚠️ Lisans süreniz {license.daysLeft} gün sonra doluyor — lütfen yenileyin.

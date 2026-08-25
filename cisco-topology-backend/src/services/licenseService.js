@@ -19,6 +19,8 @@ try {
 }
 
 const WARN_DAYS = 15; // bitise bu kadar gun kala uyari banner'i
+const DEMO_DAYS = 30; // lisans girilmemisse taninan deneme suresi
+const DEMO_MS = DEMO_DAYS * 86400000;
 
 function b64urlToBuf(s) {
     let str = String(s).replace(/-/g, '+').replace(/_/g, '/');
@@ -57,8 +59,16 @@ function parseLicenseKey(key) {
 function getStatus() {
     const installId = getInstallId();
     const key = store.getSettings().license || null;
-    const base = { installId, customer: null, edition: null, issuedAt: null, expiresAt: null, daysLeft: null, warnDays: WARN_DAYS };
-    if (!key) return { ...base, status: 'none', valid: false, blocked: false };
+    const base = { installId, customer: null, edition: null, issuedAt: null, expiresAt: null, daysLeft: null, warnDays: WARN_DAYS, isDemo: false, demoDaysLeft: null, demoDays: DEMO_DAYS };
+    if (!key) {
+        // Lisans yok → 30 günlük DEMO. Başlangıç ilk çağrıda saklanır (kurulum-id gibi).
+        let demoStart = store.getSettings().demoStartedAt;
+        if (!demoStart) { demoStart = new Date().toISOString(); store.updateSettings({ demoStartedAt: demoStart }); }
+        const elapsed = Date.now() - new Date(demoStart).getTime();
+        const demoExpired = elapsed > DEMO_MS;
+        const demoDaysLeft = demoExpired ? 0 : Math.max(0, Math.ceil((DEMO_MS - elapsed) / 86400000));
+        return { ...base, status: demoExpired ? 'demo_expired' : 'demo', valid: !demoExpired, blocked: demoExpired, isDemo: true, demoDaysLeft };
+    }
     const p = parseLicenseKey(key);
     if (!p) return { ...base, status: 'invalid', valid: false, blocked: false };
     if (p.boundTo && p.boundTo !== installId) return { ...base, status: 'wrong_install', valid: false, blocked: true, customer: p.customer || null };

@@ -5,6 +5,8 @@ import { showToast } from '../Toast';
 
 // Durum -> gorsel etiket/renk
 const STATUS_META = {
+  demo:          { label: 'Demo',                 color: 'var(--primary)', bg: 'rgba(56,189,248,0.15)', bd: 'rgba(56,189,248,0.4)' },
+  demo_expired:  { label: 'Demo süresi doldu',    color: 'var(--danger)',  bg: 'rgba(239,68,68,0.15)', bd: 'rgba(239,68,68,0.4)' },
   valid:         { label: 'Geçerli',              color: 'var(--success)', bg: 'rgba(34,197,94,0.15)', bd: 'rgba(34,197,94,0.4)' },
   expired:       { label: 'Süresi doldu',         color: 'var(--danger)',  bg: 'rgba(239,68,68,0.15)', bd: 'rgba(239,68,68,0.4)' },
   wrong_install: { label: 'Bu kuruluma ait değil', color: 'var(--danger)',  bg: 'rgba(239,68,68,0.15)', bd: 'rgba(239,68,68,0.4)' },
@@ -53,6 +55,18 @@ export default function LicenseCard() {
         <span style={lblStyle}>Durum</span>
         <span className="status-badge" style={{ background: meta.bg, color: meta.color, border: `1px solid ${meta.bd}` }}>{meta.label}</span>
       </div>
+
+      {/* Demo bilgisi (lisans girilmemişken) */}
+      {st.isDemo && (
+        <div style={{ background: 'rgba(56,189,248,0.08)', border: '1px solid rgba(56,189,248,0.3)', borderRadius: 8, padding: '12px 14px' }}>
+          <div style={{ fontSize: '0.9rem', fontWeight: 600, color: st.status === 'demo_expired' ? 'var(--danger)' : 'var(--text-main)' }}>
+            {st.status === 'demo_expired' ? 'Demo süresi doldu' : `Demo sürümü — ${st.demoDaysLeft} gün kaldı`}
+          </div>
+          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 4 }}>
+            {st.demoDays || 30} günlük deneme. Tam sürüm için aşağıya lisans anahtarını yapıştırıp Uygula'ya basın.
+          </div>
+        </div>
+      )}
 
       {/* Lisans detaylari (varsa) */}
       {(st.status === 'valid' || st.status === 'expired') && (
