@@ -116,7 +116,7 @@ function AppLayout() {
           <Routes>
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/devices" element={<DeviceListPage onEdit={isAdmin ? handleEditDevice : undefined} />} />
-            <Route path="/devices/:id" element={<DeviceDetailPage />} />
+            <Route path="/devices/:id" element={<DeviceDetailPage onEdit={isAdmin ? handleEditDevice : undefined} />} />
             <Route path="/topology" element={<TopologyPage onEdit={isAdmin ? handleEditDevice : undefined} onClone={isAdmin ? handleCloneDevice : undefined} />} />
             <Route path="/topology/:tabId" element={<TopologyPage onEdit={isAdmin ? handleEditDevice : undefined} onClone={isAdmin ? handleCloneDevice : undefined} />} />
             <Route path="/users" element={<UsersPage />} />

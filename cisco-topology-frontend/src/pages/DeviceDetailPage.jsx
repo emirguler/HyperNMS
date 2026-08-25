@@ -15,7 +15,7 @@ import ConfigBackupCard from '../components/ConfigBackupCard';
 import { useViewport } from '../hooks/useViewport';
 import { t } from '../i18n';
 
-export default function DeviceDetailPage() {
+export default function DeviceDetailPage({ onEdit }) {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -154,12 +154,20 @@ export default function DeviceDetailPage() {
     showToast(ok ? `${label} copied` : 'Copy not supported here — use Download', ok ? 'success' : 'error');
   };
 
+  // Cihaz kaydi (form icin): /topology'den gelen ham nesne — SwitchFormModal'in
+  // ihtiyaci olan alanlari (ad/ip/tip/community/ssh/tags/topologyPage/ipSla...) tasir.
+  // Duzenleme yalnizca admin (onEdit yalnizca admin'de tanimli).
+  const editDevice = (rawDevices || []).find(d => String(d.id) === String(id));
+
   // Dar govdedeki "..." sayfasinin icerigi. Masaustunde HIC uretilmez;
   // asagidaki masaustu aksiyon satiri bugunku haliyle BIREBIR korunur.
   const sheetActions = [];
   if (compact) {
     if (isOperator && (isAdmin || fullSsh || allowedCommands.length > 0)) {
       sheetActions.push({ key: 'ssh', icon: <span aria-hidden="true">💻</span>, label: 'SSH Terminal', onClick: () => openSshSession(id, displayHostname || details.name || id) });
+    }
+    if (onEdit && editDevice) {
+      sheetActions.push({ key: 'edit', icon: <span aria-hidden="true">✏️</span>, label: t('edit'), onClick: () => onEdit(editDevice) });
     }
     if (details.ip) {
       sheetActions.push({ key: 'ping', icon: <PingIcon size={16} />, label: t('pingTool'), onClick: () => setShowPing(true) });
@@ -190,6 +198,11 @@ export default function DeviceDetailPage() {
           {isOperator && (isAdmin || fullSsh || allowedCommands.length > 0) && (
             <button className="btn btn-primary btn-sm" onClick={() => openSshSession(id, displayHostname || details.name || id)}>
               💻 SSH Terminal
+            </button>
+          )}
+          {onEdit && editDevice && (
+            <button className="btn btn-primary btn-sm" onClick={() => onEdit(editDevice)}>
+              ✏️ {t('edit')}
             </button>
           )}
           {details.ip && (
