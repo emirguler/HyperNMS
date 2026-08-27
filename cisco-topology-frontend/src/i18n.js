@@ -11,9 +11,7 @@ const translations = {
 
     // Nav
     devices: 'Devices',
-    maps: 'Maps',
     topology: 'Topology',
-    geographic: 'Geographic',
     addDevice: '+ Add Device',
     changeTheme: 'Change Theme',
     users: 'Users',
@@ -228,9 +226,6 @@ const translations = {
     userUpdated: 'User updated',
     userCreated: 'User created',
 
-    // Geomap
-    geoMap: 'Geographic Map',
-    geoMapWip: 'This feature is under development.',
 
     // Find Device
     findDevice: 'Find Device',
@@ -324,9 +319,7 @@ const translations = {
 
     // Nav
     devices: 'Cihazlar',
-    maps: 'Haritalar',
     topology: 'Topoloji',
-    geographic: 'Co\u011frafi',
     addDevice: '+ Cihaz Ekle',
     changeTheme: 'Temay\u0131 De\u011fi\u015ftir',
     users: 'Kullan\u0131c\u0131lar',
@@ -541,9 +534,6 @@ const translations = {
     userUpdated: 'Kullan\u0131c\u0131 g\u00fcncellendi',
     userCreated: 'Kullan\u0131c\u0131 olu\u015fturuldu',
 
-    // Geomap
-    geoMap: 'Co\u011frafi Harita',
-    geoMapWip: 'Bu \u00f6zellik hen\u00fcz geli\u015ftirme a\u015famas\u0131nda.',
 
     // Find Device
     findDevice: 'Cihaz Bul',

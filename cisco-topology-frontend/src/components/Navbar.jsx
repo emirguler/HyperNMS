@@ -50,7 +50,6 @@ export default function Navbar({ onAddDevice }) {
   const [showPing, setShowPing] = useState(false);
   const [showTrace, setShowTrace] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [mapsOpen, setMapsOpen] = useState(false);
   const [logsOpen, setLogsOpen] = useState(false);
 
   const { isTablet, isShort, width, height } = useViewport();
@@ -60,10 +59,10 @@ export default function Navbar({ onAddDevice }) {
   const iconOnly = width <= 480;
   const landscape = width > height;
 
-  const go = (p) => { navigate(p); setMobileOpen(false); setMapsOpen(false); setLogsOpen(false); };
+  const go = (p) => { navigate(p); setMobileOpen(false); setLogsOpen(false); };
   // <Link> gezintisi kendiliginden olur; onClick yalnizca acik menuleri kapatir.
   // Sag/orta/Ctrl-tik ise tarayiciya birakilir → "yeni sekmede ac" calisir.
-  const closeMenus = () => { setMobileOpen(false); setMapsOpen(false); setLogsOpen(false); };
+  const closeMenus = () => { setMobileOpen(false); setLogsOpen(false); };
   const cls = (p) => `nav-btn ${path === p ? 'active' : ''}`;
 
   // Acik menu su durumlarda erisilemez hale gelir ve kapanmali:
@@ -77,7 +76,6 @@ export default function Navbar({ onAddDevice }) {
   if (prevResetKey !== resetKey) {
     setPrevResetKey(resetKey);
     if (mobileOpen) setMobileOpen(false);
-    if (mapsOpen) setMapsOpen(false);
   }
 
   // Cekmece aciksa: Escape kapatir, arkadaki sayfa kaymaz.
@@ -93,24 +91,19 @@ export default function Navbar({ onAddDevice }) {
     };
   }, [mobileOpen, drawerMode]);
 
-  // Maps menusu dokunmatikte hover ile acilamiyor -> tik ile aciliyor.
+  // Logs menusu dokunmatikte hover ile acilamiyor -> tik ile aciliyor.
   // Disari dokununca kapansin (pointerdown hem fare hem parmagi kapsar).
   useEffect(() => {
-    if (!mapsOpen && !logsOpen) return;
+    if (!logsOpen) return;
     const onDown = (e) => {
       const el = e.target;
       if (!el || typeof el.closest !== 'function' || !el.closest('.dropdown')) {
-        setMapsOpen(false);
         setLogsOpen(false);
       }
     };
     document.addEventListener('pointerdown', onDown);
     return () => document.removeEventListener('pointerdown', onDown);
-  }, [mapsOpen, logsOpen]);
-
-  // Ayni anda tek menu acik kalsin (ikisi ust uste binmesin)
-  useEffect(() => { if (mapsOpen) setLogsOpen(false); }, [mapsOpen]);
-  useEffect(() => { if (logsOpen) setMapsOpen(false); }, [logsOpen]);
+  }, [logsOpen]);
 
   // NPS ayarinin tam olup olmadigini oku (yalnizca admin). Ayarlar SSH gerektirmez,
   // sadece kayitli host/kullanici/sifre var mi diye bakar. Settings kapaninca da
@@ -154,17 +147,7 @@ export default function Navbar({ onAddDevice }) {
             <Link className={cls('/dashboard')} to="/dashboard" onClick={closeMenus}>Dashboard</Link>
             <Link className={cls('/devices')} to="/devices" onClick={closeMenus}>Devices</Link>
 
-            <div className={`dropdown ${mapsOpen ? 'open' : ''}`}>
-              <button
-                className={`nav-btn ${path.startsWith('/topology') || path === '/geomap' ? 'active' : ''}`}
-                onClick={() => setMapsOpen(o => !o)}
-                aria-expanded={mapsOpen}
-              >Maps ▾</button>
-              <div className="dropdown-content">
-                <Link className="dropdown-item" to="/topology" onClick={closeMenus}>Topology Map</Link>
-                <Link className="dropdown-item" to="/geomap" onClick={closeMenus}>Geographic Map</Link>
-              </div>
-            </div>
+            <Link className={`nav-btn ${path.startsWith('/topology') ? 'active' : ''}`} to="/topology" onClick={closeMenus}>Topology Map</Link>
 
             <Link className={cls('/mac-search')} to="/mac-search" onClick={closeMenus}>MAC Search</Link>
             {isAdmin && <Link className={cls('/command-line')} to="/command-line" onClick={closeMenus}>Command-line</Link>}
@@ -232,7 +215,6 @@ export default function Navbar({ onAddDevice }) {
           <Link className={cls('/dashboard')} to="/dashboard" onClick={closeMenus}>Dashboard</Link>
           <Link className={cls('/devices')} to="/devices" onClick={closeMenus}>Devices</Link>
           <Link className={cls('/topology')} to="/topology" onClick={closeMenus}>Topology Map</Link>
-          <Link className={cls('/geomap')} to="/geomap" onClick={closeMenus}>Geographic Map</Link>
           <Link className={cls('/mac-search')} to="/mac-search" onClick={closeMenus}>MAC Search</Link>
           {isAdmin && <Link className={cls('/command-line')} to="/command-line" onClick={closeMenus}>Command-line</Link>}
           {isAdmin && npsConfigured && <Link className={cls('/nps')} to="/nps" onClick={closeMenus}>NPS</Link>}
