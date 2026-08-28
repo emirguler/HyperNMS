@@ -5,7 +5,7 @@ import { useViewport } from '../hooks/useViewport';
 // Cihaz tipine göre şekil rengi (r, g, b)
 const TYPE_COLOR = {
   switch: '56, 189, 248',   // mavi
-  router: '56, 189, 248',   // mavi
+  router: '59, 130, 246',   // mavi (--primary ile ayni)
   firewall: '239, 68, 68',  // kırmızı
   server: '168, 85, 247',   // mor
   pc: '100, 116, 139',      // gri
@@ -21,19 +21,21 @@ const BOXED_TYPES = new Set(['switch', 'antenna']);
 const ICON_SIZE = 16;
 
 // --- Professional SVG Icons ---
+// Router: mavi disk + dort ok. Dikey oklar ICERI (yakinsar), yatay oklar DISARI
+// bakar — klasik yonlendirici simgesi (kullanicinin verdigi gorselin karsiligi).
 const RouterIcon = ({ size = ICON_SIZE }) => (
   <svg width={size} height={size} viewBox="0 0 40 40" fill="none">
-    {/* antenler */}
-    <path d="M14 18l-3.5-8" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" />
-    <path d="M26 18l3.5-8" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" />
-    <circle cx="10.5" cy="9" r="2" fill="var(--primary)" />
-    <circle cx="29.5" cy="9" r="2" fill="var(--primary)" />
-    {/* gövde */}
-    <rect x="5" y="18" width="30" height="13" rx="4" fill="rgba(56,189,248,0.14)" stroke="var(--primary)" strokeWidth="2" />
-    {/* durum LED'leri + port ipucu */}
-    <circle cx="11" cy="24.5" r="1.6" fill="#34d399" />
-    <circle cx="16.5" cy="24.5" r="1.6" fill="var(--primary)" />
-    <path d="M24 24.5h7" stroke="var(--primary)" strokeWidth="1.6" strokeLinecap="round" opacity="0.55" />
+    <circle cx="20" cy="20" r="18" fill="var(--primary)" />
+    <g stroke="#fff" strokeWidth="3.1" strokeLinecap="round" strokeLinejoin="round">
+      {/* ust ok: asagi (iceri) */}
+      <path d="M20 6.5V16.5M15.6 12 20 16.5 24.4 12" />
+      {/* alt ok: yukari (iceri) */}
+      <path d="M20 33.5V23.5M15.6 28 20 23.5 24.4 28" />
+      {/* sol ok: sola (disari) */}
+      <path d="M16.5 20H6.5M11 15.6 6.5 20 11 24.4" />
+      {/* sag ok: saga (disari) */}
+      <path d="M23.5 20H33.5M29 15.6 33.5 20 29 24.4" />
+    </g>
   </svg>
 );
 
