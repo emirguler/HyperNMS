@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useViewport } from '../hooks/useViewport';
+import { useDragOffset } from '../hooks/useDragOffset';
 import TraceIcon from './TraceIcon';
 import PlayStopButton from './PlayStopButton';
 import { t } from '../i18n';
@@ -14,6 +15,8 @@ export default function TraceModal({ ip: initialIp = '', lockIp = false, onClose
   // -> (max-width: 768px) VEYA (max-height: 500px). Bu durumda .rw-sheet devrede.
   const { isPhone, isShort, isTouch } = useViewport();
   const sheet = isPhone || isShort;
+  // Masaustunde basliktan tutup surukle (mobil/alt-sayfada pasif).
+  const drag = useDragOffset(!sheet);
   const [ip, setIp] = useState(initialIp);
   const [running, setRunning] = useState(false);
   const [hops, setHops] = useState(null); // null = henüz çalışmadı, [] = sonuç geldi
@@ -84,9 +87,10 @@ export default function TraceModal({ ip: initialIp = '', lockIp = false, onClose
       {/* .rw-sheet yalnızca dar gövde media query'sinde tanımlıdır -> masaüstünde etkisiz.
           DOM sırası masaüstü sırasıdır; telefonda sıralamayı inline `order` yapar
           (blok düzende `order` yok sayıldığı için masaüstü hiç etkilenmez). */}
-      <div className="modal-content rw-sheet" style={{ width: 460 }} onClick={e => e.stopPropagation()}>
+      <div className="modal-content rw-sheet" style={{ width: 460, ...drag.style }} onClick={e => e.stopPropagation()}>
         <div className="rw-sheet-head"
-          style={sheet ? undefined : { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+          {...(drag.handleProps.onPointerDown ? { onPointerDown: drag.handleProps.onPointerDown } : {})}
+          style={sheet ? undefined : { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, ...(drag.handleProps.style || {}) }}>
           <h2 style={{ margin: 0, fontSize: sheet ? '1rem' : '1.2rem', fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: 8 }}><TraceIcon size={20} /> {t('traceTool')}</h2>
           <button onClick={onClose} className="rw-sheet-close rw-tap" aria-label="Close"
             style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '1.5rem', cursor: 'pointer' }}>&times;</button>

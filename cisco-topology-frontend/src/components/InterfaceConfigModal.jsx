@@ -7,7 +7,7 @@ import { useViewport } from '../hooks/useViewport';
 // Sol: arayüzün mevcut ayarları (show running-config interface <name>).
 // Sağ: mode (access/trunk) + VLAN seçimleriyle yeni ayar uygula. Hem user hem admin.
 export default function InterfaceConfigModal({ deviceId, iface, onClose }) {
-  const { authFetch } = useAuth();
+  const { authFetch, isAdmin } = useAuth();
   const { isPhone, isShort, isTablet, isTouch } = useViewport();
   const name = iface?.name || '';
 
@@ -174,6 +174,10 @@ export default function InterfaceConfigModal({ deviceId, iface, onClose }) {
                   <div style={{ paddingBottom: 12 }}>{currentCfg}</div>
                 </details>
               ) : currentCfg}
+
+              {/* Mevcut ayarların ALTINDA: hızlı-eylem butonları + sabit Clear Config */}
+              <InterfaceActions deviceId={deviceId} ifaceName={name} isAdmin={isAdmin}
+                isTouch={isTouch} compact={sheet} save={save} />
             </div>
 
             {/* SAĞ: yeni ayar */}
@@ -327,6 +331,155 @@ function CurrentConfig({ compact, touch, outLoading, outErr, output, onReload })
         {outLoading ? `⏳ ${t('loading')}...` : (outErr ? `✕ ${outErr}` : (output || '—'))}
       </pre>
     </>
+  );
+}
+
+// Arayüz hızlı-eylem butonları: "Current config"in ALTINDA. Seçili arayüz üzerinde
+// tek tıkla config komutu çalıştırır. Sabit "Clear Config" (default interface X) her
+// zaman vardır ve DÜZENLENEMEZ; iki adımlı onayla çalışır. Diğer butonlar sistem geneli
+// (settings) saklanır: yalnızca admin düzenler (+ ile ekler/siler), herkes çalıştırır.
+// Komut tanımları sunucuda id ile tutulduğundan istemci keyfi komut enjekte edemez.
+function InterfaceActions({ deviceId, ifaceName, isAdmin, isTouch, compact, save }) {
+  const { authFetch } = useAuth();
+  const [buttons, setButtons] = useState([]);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState([]);      // [{ id, label, cmdText }]
+  const [runId, setRunId] = useState(null);    // çalışan buton id'si | 'clear' | null
+  const [msg, setMsg] = useState(null);        // { ok, text }
+  const [confirmClear, setConfirmClear] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    authFetch('/settings/interface-buttons')
+      .then(r => (r && r.ok ? r.json() : null))
+      .then(d => { if (alive && d && Array.isArray(d.buttons)) setButtons(d.buttons); })
+      .catch(() => { /* buton çekilemezse yalnızca Clear Config kalır */ });
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const run = async (payload, id) => {
+    setRunId(id); setMsg(null); setConfirmClear(false);
+    try {
+      const res = await authFetch(`/switches/${deviceId}/interface-command`,
+        { method: 'POST', body: JSON.stringify({ name: ifaceName, save, ...payload }) });
+      const d = res ? await res.json().catch(() => ({})) : {};
+      setMsg(res && res.ok ? { ok: true, text: t('ifaceActionDone') } : { ok: false, text: d.error || t('ifaceActionFail') });
+    } catch { setMsg({ ok: false, text: t('ifaceActionFail') }); }
+    finally { setRunId(null); }
+  };
+
+  const startEdit = () => {
+    setDraft(buttons.map(b => ({ id: b.id, label: b.label, cmdText: (b.commands || []).join('\n') })));
+    setMsg(null); setEditing(true);
+  };
+  const addDraft = () => setDraft(d => [...d, { id: '', label: '', cmdText: '' }]);
+  const delDraft = (i) => setDraft(d => d.filter((_, x) => x !== i));
+  const setField = (i, k, v) => setDraft(d => d.map((row, x) => (x === i ? { ...row, [k]: v } : row)));
+
+  const saveButtons = async () => {
+    const payload = draft
+      .map(r => ({ id: r.id || undefined, label: r.label.trim(), commands: r.cmdText.split('\n').map(s => s.trim()).filter(Boolean) }))
+      .filter(r => r.label && r.commands.length);
+    setSaving(true); setMsg(null);
+    try {
+      const res = await authFetch('/settings/interface-buttons', { method: 'PUT', body: JSON.stringify({ buttons: payload }) });
+      const d = res ? await res.json().catch(() => ({})) : {};
+      if (res && res.ok) { setButtons(d.buttons || []); setEditing(false); setMsg({ ok: true, text: t('ifaceButtonsSaved') }); }
+      else setMsg({ ok: false, text: d.error || t('ifaceButtonsSaveFail') });
+    } catch { setMsg({ ok: false, text: t('ifaceButtonsSaveFail') }); }
+    finally { setSaving(false); }
+  };
+
+  const pill = {
+    fontSize: compact ? '0.85rem' : '0.8rem', padding: compact ? '9px 14px' : '7px 12px',
+    borderRadius: 8, border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.03)',
+    color: 'var(--text-main)', cursor: 'pointer', minHeight: isTouch ? 44 : undefined,
+  };
+
+  return (
+    <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--border-color)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 10 }}>
+        <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)' }}>{t('ifaceActions')}</span>
+        {isAdmin && (
+          <button type="button" onClick={() => (editing ? setEditing(false) : startEdit())}
+            style={{ fontSize: '0.72rem', fontWeight: 600, padding: '4px 11px', color: 'var(--primary)',
+              background: 'rgba(59,130,246,0.12)', border: '1px solid var(--primary)', borderRadius: 6, cursor: 'pointer' }}>
+            {editing ? t('ifaceDone') : t('ifaceEdit')}
+          </button>
+        )}
+      </div>
+
+      {editing ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {draft.map((row, i) => (
+            <div key={i} style={{ border: '1px solid var(--border-color)', borderRadius: 8, padding: 10, background: 'rgba(255,255,255,0.02)' }}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
+                <input className="modern-input" value={row.label} onChange={e => setField(i, 'label', e.target.value)}
+                  placeholder={t('ifaceBtnLabel')} maxLength={40} style={{ flex: 1, minWidth: 0 }} />
+                <button type="button" className="rw-tap" onClick={() => delDraft(i)} aria-label="Delete"
+                  style={{ background: 'none', border: 'none', color: 'var(--danger)', fontSize: '1.3rem', cursor: 'pointer', flexShrink: 0, lineHeight: 1 }}>&times;</button>
+              </div>
+              <textarea className="modern-input" value={row.cmdText} onChange={e => setField(i, 'cmdText', e.target.value)}
+                placeholder={t('ifaceBtnCommands')} rows={2} spellCheck={false} autoCapitalize="none" autoCorrect="off"
+                style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'monospace', fontSize: '0.78rem', resize: 'vertical' }} />
+            </div>
+          ))}
+          <div style={{ fontSize: '0.68rem', color: 'var(--text-dim)' }}>{t('ifaceBtnCommandsHint')}</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={addDraft} style={{ minHeight: isTouch ? 44 : undefined }}>+ {t('ifaceAddButton')}</button>
+            <button type="button" className="btn btn-primary btn-sm" onClick={saveButtons} disabled={saving} style={{ minHeight: isTouch ? 44 : undefined }}>
+              {saving ? t('ifaceSavingButtons') : t('ifaceSaveButtons')}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {buttons.map(b => (
+            <button key={b.id} type="button" onClick={() => run({ buttonId: b.id }, b.id)} disabled={runId != null}
+              title={(b.commands || []).join(' / ')} style={pill}>
+              {runId === b.id ? t('ifaceRunning') : b.label}
+            </button>
+          ))}
+          {!buttons.length && (
+            <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)', alignSelf: 'center' }}>
+              {isAdmin ? t('ifaceNoButtonsAdmin') : t('ifaceNoButtons')}
+            </span>
+          )}
+          {/* Sabit Clear Config — DÜZENLENEMEZ; kazara tıklamaya karşı iki adımlı onay. */}
+          {confirmClear ? (
+            <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+              <button type="button" onClick={() => run({ action: 'clear' }, 'clear')} disabled={runId != null}
+                style={{ ...pill, color: '#fff', background: 'var(--danger)', border: '1px solid var(--danger)' }}>
+                {runId === 'clear' ? t('ifaceRunning') : t('ifaceConfirm')}
+              </button>
+              <button type="button" onClick={() => setConfirmClear(false)} style={pill}>{t('cancel')}</button>
+            </span>
+          ) : (
+            <button type="button" onClick={() => { setConfirmClear(true); setMsg(null); }} disabled={runId != null}
+              title={t('ifaceClearConfirm')}
+              style={{ ...pill, color: 'var(--danger)', borderColor: 'rgba(239,68,68,0.5)', background: 'rgba(239,68,68,0.08)' }}>
+              {t('ifaceClearConfig')}
+            </button>
+          )}
+        </div>
+      )}
+
+      {confirmClear && !editing && (
+        <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', marginTop: 6 }}>{t('ifaceClearConfirm')}</div>
+      )}
+      {msg && (
+        <div style={{
+          marginTop: 10, padding: '8px 11px', borderRadius: 8, fontSize: '0.78rem',
+          background: msg.ok ? 'rgba(52,211,153,0.12)' : 'rgba(239,68,68,0.12)',
+          border: `1px solid ${msg.ok ? 'rgba(52,211,153,0.35)' : 'rgba(239,68,68,0.35)'}`,
+          color: msg.ok ? 'var(--success)' : 'var(--danger)',
+        }}>
+          {msg.ok ? '✓' : '✕'} {msg.text}
+        </div>
+      )}
+    </div>
   );
 }
 

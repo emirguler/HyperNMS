@@ -376,4 +376,59 @@ router.put('/settings/general', authenticate, requireAdmin, (req, res) => {
     res.json(readGeneral());
 });
 
+// --- Arayuz hizli-eylem butonlari ---
+// Cihaz detayindaki Interface Config modalinda, secili arayuz uzerinde tek tikla
+// config komutlari calistiran butonlar. Tanimlar sistem geneli (settings) tutulur:
+// admin duzenler, operator/kullanici yalnizca CALISTIRIR. Butonlar sunucuda id ile
+// saklandigi icin istemci keyfi komut enjekte edemez — yalnizca adminin onayladigi
+// komut dizileri buton id'siyle calistirilir (bkz. /switches/:id/interface-command).
+const MAX_IFBTNS = 24, MAX_IFBTN_CMDS = 24, IFBTN_CMD_MAX = 200, IFBTN_LABEL_MAX = 40;
+
+function readInterfaceButtons() {
+    const list = store.getSettings().interfaceButtons;
+    if (!Array.isArray(list)) return [];
+    return list.map(b => ({
+        id: String(b.id || ''),
+        label: String(b.label || ''),
+        commands: Array.isArray(b.commands) ? b.commands.map(String) : [],
+    })).filter(b => b.id && b.label && b.commands.length);
+}
+
+// Okuma: her kimligi dogrulanmis kullanici (operator butonlari gorup calistirabilmeli)
+router.get('/settings/interface-buttons', authenticate, (req, res) => {
+    res.json({ buttons: readInterfaceButtons() });
+});
+
+// Yazma: yalnizca admin. Her komut TEK satirdir (newline/kontrol karakteri yasak);
+// gerisi serbest IOS config metnidir (admin guvenilir). Uzunluk ve adet sinirlari var.
+router.put('/settings/interface-buttons', authenticate, requireAdmin, async (req, res) => {
+    const raw = Array.isArray(req.body && req.body.buttons) ? req.body.buttons : null;
+    if (!raw) return res.status(400).json({ error: 'buttons array required' });
+    if (raw.length > MAX_IFBTNS) return res.status(400).json({ error: 'Too many buttons (max ' + MAX_IFBTNS + ')' });
+
+    const clean = [];
+    for (const b of raw) {
+        const label = String((b && b.label) || '').trim().slice(0, IFBTN_LABEL_MAX);
+        if (!label) return res.status(400).json({ error: 'Every button needs a label' });
+        const cmdsRaw = Array.isArray(b && b.commands) ? b.commands : [];
+        const commands = [];
+        for (const c of cmdsRaw) {
+            const line = String(c == null ? '' : c).replace(/[\r\n\t\x00-\x1f]/g, '').trim();
+            if (line) commands.push(line.slice(0, IFBTN_CMD_MAX));
+        }
+        if (!commands.length) return res.status(400).json({ error: 'Button "' + label + '" has no commands' });
+        if (commands.length > MAX_IFBTN_CMDS) return res.status(400).json({ error: 'Button "' + label + '" has too many commands' });
+        // id: mevcutsa koru, yoksa uret (istemciden gelen id'yi de temizle)
+        const id = String((b && b.id) || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 32) || ('b' + crypto.randomBytes(5).toString('hex'));
+        clean.push({ id, label, commands });
+    }
+    // id benzersizligini garanti et (istemci ayni id'yi iki kez gonderirse)
+    const seen = new Set();
+    for (const b of clean) { while (seen.has(b.id)) b.id = 'b' + crypto.randomBytes(5).toString('hex'); seen.add(b.id); }
+
+    store.updateSettings({ interfaceButtons: clean });
+    await logAction(req.user, 'IFACE_BUTTONS_UPDATE', clean.length + ' button(s)');
+    res.json({ buttons: clean });
+});
+
 module.exports = router;

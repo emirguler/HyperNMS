@@ -1349,6 +1349,52 @@ router.post('/switches/:id/interface-config', authenticate, requireOperator, asy
     }
 });
 
+// Arayuz hizli-eylem: onceden tanimli buton (settings/interface-buttons) YA DA sabit
+// "clear" (default interface X). Buton komutlari SUNUCU tarafindan id ile alinir →
+// istemci keyfi config komutu enjekte edemez. Interface Config modaliyla ayni kitle:
+// requireOperator. Her calistirma denetime yazilir.
+router.post('/switches/:id/interface-command', authenticate, requireOperator, async (req, res) => {
+    const device = store.getSwitch(req.params.id);
+    if (!device) return res.status(404).json({ error: 'Device not found' });
+    if (!device.sshUsername || !device.sshPassword) return res.status(400).json({ error: 'SSH credentials missing' });
+    if (isBlockedIP(device.ip)) return res.status(403).json({ error: 'Connection to this IP is not allowed' });
+
+    const ifName = String((req.body && req.body.name) || '').trim();
+    if (!IFNAME_RE.test(ifName)) return res.status(400).json({ error: 'Invalid interface name' });
+
+    const action = req.body && req.body.action;
+    const save = !!(req.body && req.body.save);
+    let cmds, label;
+
+    if (action === 'clear') {
+        // "default interface X" GLOBAL config komutudur (interface baglaminda DEGIL) —
+        // portu fabrika varsayilanina dondurur.
+        cmds = [`default interface ${ifName}`];
+        label = 'Clear Config';
+    } else {
+        const buttonId = String((req.body && req.body.buttonId) || '');
+        const list = Array.isArray(store.getSettings().interfaceButtons) ? store.getSettings().interfaceButtons : [];
+        const btn = list.find(b => String(b.id) === buttonId);
+        if (!btn || !Array.isArray(btn.commands) || !btn.commands.length) {
+            return res.status(400).json({ error: 'Unknown or empty button' });
+        }
+        // Komutlar arayuz baglaminda calisir. Tanim sunucudan alindigi icin enjeksiyon
+        // yok; yine de her satiri tek satira indir (savunma amacli).
+        const lines = btn.commands.map(c => String(c).replace(/[\r\n]/g, ' ').trim()).filter(Boolean);
+        cmds = [`interface ${ifName}`, ...lines];
+        label = btn.label;
+    }
+
+    try {
+        const output = await runCommands(device, cmds, { config: true, save });
+        const clean = String(output || '').replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '').replace(/\r/g, '').trim();
+        await logAction(req.user, 'IFACE_COMMAND', `${device.name} ${ifName} — ${label}`, { cmds, save });
+        res.json({ ok: true, commands: cmds, output: clean });
+    } catch (e) {
+        res.status(500).json({ error: 'SSH error: ' + (e.message || 'failed') });
+    }
+});
+
 // Cihazı yeniden başlat (reload) — "reload" + onay ("Proceed with reload? [confirm]") Enter'ı SSH ile
 // gönderir. YIKICI (cihaz reboot olur). Komut sabit, enjeksiyon yok → Administrator ve Operator
 // çağırabilir; Viewer (User / View Only) çağıramaz. İşlem denetime yazılır.

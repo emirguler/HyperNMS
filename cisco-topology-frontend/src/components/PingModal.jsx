@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import { useViewport } from '../hooks/useViewport';
+import { useDragOffset } from '../hooks/useDragOffset';
 import PingIcon from './PingIcon';
 import PingPanel from './PingPanel';
 import { t } from '../i18n';
@@ -12,6 +13,8 @@ export default function PingModal({ ip: initialIp = '', lockIp = false, onClose 
   const { isPhone, isShort } = useViewport();
   const sheet = isPhone || isShort;
   const multi = !lockIp; // coklu ping yalnizca serbest-IP modunda
+  // Masaustunde basliktan tutup surukle (mobil/alt-sayfada pasif).
+  const drag = useDragOffset(!sheet);
 
   const [panels, setPanels] = useState([{ id: 0, ip: initialIp, autoStart: lockIp }]);
   const nextId = useRef(1);
@@ -22,9 +25,10 @@ export default function PingModal({ ip: initialIp = '', lockIp = false, onClose 
   return (
     <div className="modal-overlay" onClick={onClose} onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
       <div className="modal-content" onClick={e => e.stopPropagation()}
-        style={{ width: sheet ? 'min(440px, 94vw)' : `min(${panels.length * 332 + 64}px, 94vw)`, maxWidth: '94vw', maxHeight: '88dvh', overflowY: 'auto', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
-        {/* Baslik + (coklu ise) ekle butonu + kapat */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, gap: 10, flexShrink: 0 }}>
+        style={{ width: sheet ? 'min(440px, 94vw)' : `min(${panels.length * 332 + 64}px, 94vw)`, maxWidth: '94vw', maxHeight: '88dvh', overflowY: 'auto', display: 'flex', flexDirection: 'column', boxSizing: 'border-box', ...drag.style }}>
+        {/* Baslik + (coklu ise) ekle butonu + kapat — masaustunde suruklenebilir tutamac */}
+        <div {...(drag.handleProps.onPointerDown ? { onPointerDown: drag.handleProps.onPointerDown } : {})}
+          style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, gap: 10, flexShrink: 0, ...(drag.handleProps.style || {}) }}>
           <h2 style={{ margin: 0, fontSize: sheet ? '1rem' : '1.2rem', fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: 8 }}>
             <PingIcon size={20} /> {t('pingTool')}{multi && panels.length > 1 ? ` (${panels.length})` : ''}
           </h2>
