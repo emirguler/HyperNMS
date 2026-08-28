@@ -58,6 +58,8 @@ export default function DeviceDetailPage({ onEdit }) {
       topologyPage: s.topologyPage, tags: s.tags, version: s.version, latency: s.latency,
       snmpCommunity: s.snmpCommunity, sshUsername: s.sshUsername,
       sshPasswordSet: s.sshPasswordSet, model: s.model,
+      // Seri numarası kayda /details ile yazılır; canlı değeri (prev) blanklamamak için ?? fallback.
+      serial: s.serial ?? prev.serial,
     }));
   }, [rawDevices, id, snmpLoaded]);
 
@@ -249,7 +251,9 @@ export default function DeviceDetailPage({ onEdit }) {
               { label: 'IP Address', value: details.ip, mono: true, copy: true },
               { label: 'Vendor', value: details.detectedVendor || '-' },
               { label: 'Version', value: details.version || '-' },
-              { label: 'System Uptime', value: details.uptime || '-' }
+              { label: 'System Uptime', value: details.uptime || '-' },
+              // Version'ın altındaki boş hücreye: seri numarası (SNMP ENTITY-MIB'den).
+              { label: 'Serial Number', value: details.serial || '-', mono: true, copy: true }
             ].map((item, i) => {
               const raw = String(item.value ?? '');
               // Dokunmatikte title tooltip'i YOK: kirpilan deger geri getirilemiyordu.

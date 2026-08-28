@@ -880,6 +880,12 @@ router.get('/switches/:id/details', authenticate, async (req, res) => {
     if (details.version && details.version !== device.version) {
         store.updateSwitch(device.id, { version: details.version });
     }
+    // Seri numarası donanım bilgisi; okununca kayda yaz → SNMP sonradan düşse de görünür.
+    if (details.serial && details.serial !== device.serial) {
+        store.updateSwitch(device.id, { serial: details.serial });
+    } else if (details.serial == null && device.serial) {
+        details.serial = device.serial; // bu poll'de gelmedi → son bilinen değeri göster
+    }
     details.topologyPage = device.topologyPage || 'main'; // cihazın bulunduğu topoloji sayfası (id)
     // IP SLA rozet etiketleri (OK→birincil, Timeout→yedek). Boşsa varsayılan MD/GSM. Her iki rol görebilir.
     details.ipSlaOkLabel = device.ipSlaOkLabel || 'MD';

@@ -200,9 +200,12 @@ async function getDeviceDetails(device) {
         // ekler (sayfa gecikmesinin ana kaynağı). Boş dönerse kayıttaki son bilinen sürüm korunur.
         if (baseData) {
             try {
-                const [entClassVbs, entSwVbs] = await Promise.all([getSubtree(ENT_CLASS), getSubtree(ENT_SW_REV)]);
+                // Sürüm + seri numarası aynı ENTITY-MIB yürüyüşünden (chassis öncelikli).
+                const [entClassVbs, entSwVbs, entSerialVbs] = await Promise.all([getSubtree(ENT_CLASS), getSubtree(ENT_SW_REV), getSubtree(ENT_SERIAL)]);
                 const ver = pickVersion(entClassVbs, entSwVbs, sysDescrStr);
                 if (ver) responseData.version = ver;
+                const serial = pickSerial(entClassVbs, entSerialVbs);
+                if (serial) responseData.serial = serial;
             } catch (e) {
                 const ver = imageVersionFromSysDescr(sysDescrStr);
                 if (ver) responseData.version = ver;
@@ -1174,6 +1177,19 @@ function pickVersion(entClassVbs, entSwVbs, sysDescr) {
     const pick = idxs.find(i => ent[i].cls === 3 && ent[i].sw) || idxs.find(i => ent[i].sw);
     const sw = pick ? ent[pick].sw : '';
     return (sw && sw.trim()) || imageVersionFromSysDescr(sysDescr) || '';
+}
+
+// entPhysicalSerialNum'dan chassis (entPhysicalClass==3) seri numarası; chassis
+// yoksa ilk dolu seri. inventoryDevice ile aynı seçim mantığı → detay ve detaylı
+// liste tutarlı olur.
+function pickSerial(entClassVbs, entSerialVbs) {
+    const clean = (v) => v.toString().replace(/\x00/g, '').trim();
+    const ent = {};
+    for (const vb of entClassVbs || [])  { const i = entIndex(ENT_CLASS, vb.oid);  (ent[i] || (ent[i] = {})).cls = parseSnmpInt(vb.value); }
+    for (const vb of entSerialVbs || []) { const i = entIndex(ENT_SERIAL, vb.oid); (ent[i] || (ent[i] = {})).serial = clean(vb.value); }
+    const idxs = Object.keys(ent).sort((a, b) => Number(a) - Number(b));
+    const pick = idxs.find(i => ent[i].cls === 3 && ent[i].serial) || idxs.find(i => ent[i].serial);
+    return pick ? ent[pick].serial : '';
 }
 
 // Arka plan sürüm yenileme için hafif SNMP sorgusu (sysDescr + entPhysicalSoftwareRev).
