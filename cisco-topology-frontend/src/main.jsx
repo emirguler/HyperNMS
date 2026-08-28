@@ -18,6 +18,11 @@ import { isNative } from './native/state.js'
 // doner. HashRouter bu sinifi tamamen ortadan kaldirir. Web'de hicbir sey degismez.
 const Router = isNative ? HashRouter : BrowserRouter
 
+// Paketlenmis (Android) uygulamada koke 'is-native' sinifi eklenir. CSS bunu
+// hedefleyerek iOS-zoom kaygisi olmayan yerlerde (native'de odak-zoom yok) daha
+// kompakt olculer verebilir. Web'de bu sinif HIC eklenmez → 16px kurallari kalir.
+if (isNative && typeof document !== 'undefined') document.documentElement.classList.add('is-native')
+
 function Root() {
   return (
     <StrictMode>

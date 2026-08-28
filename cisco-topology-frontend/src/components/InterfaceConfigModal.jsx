@@ -403,73 +403,49 @@ function InterfaceActions({ deviceId, ifaceName, isAdmin, isTouch, compact, save
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 10 }}>
         <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)' }}>{t('ifaceActions')}</span>
         {isAdmin && (
-          <button type="button" onClick={() => (editing ? setEditing(false) : startEdit())}
+          <button type="button" onClick={startEdit}
             style={{ fontSize: '0.72rem', fontWeight: 600, padding: '4px 11px', color: 'var(--primary)',
               background: 'rgba(59,130,246,0.12)', border: '1px solid var(--primary)', borderRadius: 6, cursor: 'pointer' }}>
-            {editing ? t('ifaceDone') : t('ifaceEdit')}
+            {t('ifaceEdit')}
           </button>
         )}
       </div>
 
-      {editing ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {draft.map((row, i) => (
-            <div key={i} style={{ border: '1px solid var(--border-color)', borderRadius: 8, padding: 10, background: 'rgba(255,255,255,0.02)' }}>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
-                <input className="modern-input" value={row.label} onChange={e => setField(i, 'label', e.target.value)}
-                  placeholder={t('ifaceBtnLabel')} maxLength={40} style={{ flex: 1, minWidth: 0 }} />
-                <button type="button" className="rw-tap" onClick={() => delDraft(i)} aria-label="Delete"
-                  style={{ background: 'none', border: 'none', color: 'var(--danger)', fontSize: '1.3rem', cursor: 'pointer', flexShrink: 0, lineHeight: 1 }}>&times;</button>
-              </div>
-              <textarea className="modern-input" value={row.cmdText} onChange={e => setField(i, 'cmdText', e.target.value)}
-                placeholder={t('ifaceBtnCommands')} rows={2} spellCheck={false} autoCapitalize="none" autoCorrect="off"
-                style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'monospace', fontSize: '0.78rem', resize: 'vertical' }} />
-            </div>
-          ))}
-          <div style={{ fontSize: '0.68rem', color: 'var(--text-dim)' }}>{t('ifaceBtnCommandsHint')}</div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button type="button" className="btn btn-ghost btn-sm" onClick={addDraft} style={{ minHeight: isTouch ? 44 : undefined }}>+ {t('ifaceAddButton')}</button>
-            <button type="button" className="btn btn-primary btn-sm" onClick={saveButtons} disabled={saving} style={{ minHeight: isTouch ? 44 : undefined }}>
-              {saving ? t('ifaceSavingButtons') : t('ifaceSaveButtons')}
+      {/* Butonlar her zaman burada; düzenleme ayrı bir POPUP'ta yapılır. */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        {buttons.map(b => (
+          <button key={b.id} type="button" onClick={() => run({ buttonId: b.id }, b.id)} disabled={runId != null}
+            title={(b.commands || []).join(' / ')} style={pill}>
+            {runId === b.id ? t('ifaceRunning') : b.label}
+          </button>
+        ))}
+        {!buttons.length && (
+          <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)', alignSelf: 'center' }}>
+            {isAdmin ? t('ifaceNoButtonsAdmin') : t('ifaceNoButtons')}
+          </span>
+        )}
+        {/* Sabit Clear Config — DÜZENLENEMEZ; kazara tıklamaya karşı iki adımlı onay. */}
+        {confirmClear ? (
+          <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+            <button type="button" onClick={() => run({ action: 'clear' }, 'clear')} disabled={runId != null}
+              style={{ ...pill, color: '#fff', background: 'var(--danger)', border: '1px solid var(--danger)' }}>
+              {runId === 'clear' ? t('ifaceRunning') : t('ifaceConfirm')}
             </button>
-          </div>
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {buttons.map(b => (
-            <button key={b.id} type="button" onClick={() => run({ buttonId: b.id }, b.id)} disabled={runId != null}
-              title={(b.commands || []).join(' / ')} style={pill}>
-              {runId === b.id ? t('ifaceRunning') : b.label}
-            </button>
-          ))}
-          {!buttons.length && (
-            <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)', alignSelf: 'center' }}>
-              {isAdmin ? t('ifaceNoButtonsAdmin') : t('ifaceNoButtons')}
-            </span>
-          )}
-          {/* Sabit Clear Config — DÜZENLENEMEZ; kazara tıklamaya karşı iki adımlı onay. */}
-          {confirmClear ? (
-            <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
-              <button type="button" onClick={() => run({ action: 'clear' }, 'clear')} disabled={runId != null}
-                style={{ ...pill, color: '#fff', background: 'var(--danger)', border: '1px solid var(--danger)' }}>
-                {runId === 'clear' ? t('ifaceRunning') : t('ifaceConfirm')}
-              </button>
-              <button type="button" onClick={() => setConfirmClear(false)} style={pill}>{t('cancel')}</button>
-            </span>
-          ) : (
-            <button type="button" onClick={() => { setConfirmClear(true); setMsg(null); }} disabled={runId != null}
-              title={t('ifaceClearConfirm')}
-              style={{ ...pill, color: 'var(--danger)', borderColor: 'rgba(239,68,68,0.5)', background: 'rgba(239,68,68,0.08)' }}>
-              {t('ifaceClearConfig')}
-            </button>
-          )}
-        </div>
-      )}
+            <button type="button" onClick={() => setConfirmClear(false)} style={pill}>{t('cancel')}</button>
+          </span>
+        ) : (
+          <button type="button" onClick={() => { setConfirmClear(true); setMsg(null); }} disabled={runId != null}
+            title={t('ifaceClearConfirm')}
+            style={{ ...pill, color: 'var(--danger)', borderColor: 'rgba(239,68,68,0.5)', background: 'rgba(239,68,68,0.08)' }}>
+            {t('ifaceClearConfig')}
+          </button>
+        )}
+      </div>
 
-      {confirmClear && !editing && (
+      {confirmClear && (
         <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', marginTop: 6 }}>{t('ifaceClearConfirm')}</div>
       )}
-      {msg && (
+      {msg && !editing && (
         <div style={{
           marginTop: 10, padding: '8px 11px', borderRadius: 8, fontSize: '0.78rem',
           background: msg.ok ? 'rgba(52,211,153,0.12)' : 'rgba(239,68,68,0.12)',
@@ -477,6 +453,64 @@ function InterfaceActions({ deviceId, ifaceName, isAdmin, isTouch, compact, save
           color: msg.ok ? 'var(--success)' : 'var(--danger)',
         }}>
           {msg.ok ? '✓' : '✕'} {msg.text}
+        </div>
+      )}
+
+      {/* DÜZENLEME POPUP'ı (admin). Etiket + komut kutuları burada; kaydedince kapanır.
+          Escape/backdrop yalnızca bu popup'ı kapatır (parent modalı DEĞİL) — bu yüzden
+          hem onClick hem onKeyDown'da stopPropagation var. */}
+      {editing && (
+        <div className="modal-overlay" style={{ zIndex: 2200 }}
+          onClick={(e) => { e.stopPropagation(); setEditing(false); }}
+          onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setEditing(false); } }}>
+          <div className={compact ? 'modal-content rw-sheet' : 'modal-content'}
+            style={{ width: 520, maxWidth: '95vw', maxHeight: '88dvh', overflowY: 'auto' }}
+            onClick={(e) => e.stopPropagation()}>
+            <div className={compact ? 'rw-sheet-head' : undefined}
+              style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: compact ? 0 : 16, gap: 10 }}>
+              <h2 style={{ margin: 0, fontSize: compact ? '1rem' : '1.15rem', fontWeight: 600, color: 'var(--text-main)' }}>{t('ifaceActions')}</h2>
+              <button type="button" onClick={() => setEditing(false)} aria-label={t('cancel')}
+                className={compact ? 'rw-sheet-close rw-tap' : 'rw-tap'}
+                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '1.5rem', cursor: 'pointer', flexShrink: 0 }}>&times;</button>
+            </div>
+
+            <div className={compact ? 'rw-sheet-body' : undefined} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {draft.map((row, i) => (
+                <div key={i} style={{ border: '1px solid var(--border-color)', borderRadius: 8, padding: 10, background: 'rgba(255,255,255,0.02)' }}>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
+                    <input className="modern-input ifbtn-field" value={row.label} onChange={e => setField(i, 'label', e.target.value)}
+                      placeholder={t('ifaceBtnLabel')} maxLength={40} style={{ flex: 1, minWidth: 0 }} />
+                    <button type="button" className="rw-tap" onClick={() => delDraft(i)} aria-label="Delete"
+                      style={{ background: 'none', border: 'none', color: 'var(--danger)', fontSize: '1.3rem', cursor: 'pointer', flexShrink: 0, lineHeight: 1 }}>&times;</button>
+                  </div>
+                  <textarea className="modern-input ifbtn-field" value={row.cmdText} onChange={e => setField(i, 'cmdText', e.target.value)}
+                    placeholder={t('ifaceBtnCommands')} rows={2} spellCheck={false} autoCapitalize="none" autoCorrect="off"
+                    style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'monospace', resize: 'vertical' }} />
+                </div>
+              ))}
+              {!draft.length && (
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)', textAlign: 'center', padding: '10px 0' }}>{t('ifaceNoButtons')}</div>
+              )}
+              <div style={{ fontSize: '0.68rem', color: 'var(--text-dim)' }}>{t('ifaceBtnCommandsHint')}</div>
+            </div>
+
+            <div className={compact ? 'rw-sheet-foot' : undefined} style={{ marginTop: compact ? 0 : 14 }}>
+              {msg && (
+                <div style={{
+                  marginBottom: 10, padding: '8px 11px', borderRadius: 8, fontSize: '0.78rem',
+                  background: msg.ok ? 'rgba(52,211,153,0.12)' : 'rgba(239,68,68,0.12)',
+                  border: `1px solid ${msg.ok ? 'rgba(52,211,153,0.35)' : 'rgba(239,68,68,0.35)'}`,
+                  color: msg.ok ? 'var(--success)' : 'var(--danger)',
+                }}>{msg.ok ? '✓' : '✕'} {msg.text}</div>
+              )}
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={addDraft} style={{ minHeight: isTouch ? 44 : undefined }}>+ {t('ifaceAddButton')}</button>
+                <button type="button" className="btn btn-primary btn-sm" onClick={saveButtons} disabled={saving} style={{ minHeight: isTouch ? 44 : undefined, marginLeft: 'auto' }}>
+                  {saving ? t('ifaceSavingButtons') : t('ifaceSaveButtons')}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

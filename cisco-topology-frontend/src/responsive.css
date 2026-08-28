@@ -1060,3 +1060,20 @@
 
   .dash-section-title { font-size: 0.72rem; }
 }
+
+
+/* ============================================================================
+   16 - NATIVE (ANDROID) UYGULAMAYA OZEL OLCU AYARLARI
+   'is-native' sinifi YALNIZCA paketlenmis uygulamada koke eklenir (main.jsx);
+   web/iOS'ta hic yoktur. Bu yuzden buradaki kurallar masaustu/tarayici goruntusunu
+   ASLA etkilemez ve golden-rule'u bozmaz.
+   Neden: bolum 03'teki "input/select/textarea/.modern-input { font-size:16px }"
+   iOS'un odak-zoom'unu onlemek icindir. Native Android WebView'de odak-zoom yok,
+   dolayisiyla belirli alanlar (interface quick-action etiket/komut kutulari) daha
+   kompakt olabilir. Ozgulluk, o !important 16px kuralini gecmek icin bilerek yuksek
+   (input:not([type])x3 = 0,3,1 → burada element+3 sinif ile 0,3,2).
+   ========================================================================== */
+html.is-native input.modern-input.ifbtn-field,
+html.is-native textarea.modern-input.ifbtn-field {
+  font-size: 13px !important;
+}
