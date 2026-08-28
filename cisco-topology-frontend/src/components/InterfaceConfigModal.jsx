@@ -177,7 +177,7 @@ export default function InterfaceConfigModal({ deviceId, iface, onClose }) {
 
               {/* Mevcut ayarların ALTINDA: hızlı-eylem butonları + sabit Clear Config */}
               <InterfaceActions deviceId={deviceId} ifaceName={name} isAdmin={isAdmin}
-                isTouch={isTouch} compact={sheet} save={save} />
+                isTouch={isTouch} compact={sheet} save={save} onChanged={() => loadOutput()} />
             </div>
 
             {/* SAĞ: yeni ayar */}
@@ -339,7 +339,7 @@ function CurrentConfig({ compact, touch, outLoading, outErr, output, onReload })
 // zaman vardır ve DÜZENLENEMEZ; iki adımlı onayla çalışır. Diğer butonlar sistem geneli
 // (settings) saklanır: yalnızca admin düzenler (+ ile ekler/siler), herkes çalıştırır.
 // Komut tanımları sunucuda id ile tutulduğundan istemci keyfi komut enjekte edemez.
-function InterfaceActions({ deviceId, ifaceName, isAdmin, isTouch, compact, save }) {
+function InterfaceActions({ deviceId, ifaceName, isAdmin, isTouch, compact, save, onChanged }) {
   const { authFetch } = useAuth();
   const [buttons, setButtons] = useState([]);
   const [editing, setEditing] = useState(false);
@@ -365,7 +365,13 @@ function InterfaceActions({ deviceId, ifaceName, isAdmin, isTouch, compact, save
       const res = await authFetch(`/switches/${deviceId}/interface-command`,
         { method: 'POST', body: JSON.stringify({ name: ifaceName, save, ...payload }) });
       const d = res ? await res.json().catch(() => ({})) : {};
-      setMsg(res && res.ok ? { ok: true, text: t('ifaceActionDone') } : { ok: false, text: d.error || t('ifaceActionFail') });
+      if (res && res.ok) {
+        setMsg({ ok: true, text: t('ifaceActionDone') });
+        // Config değişti → soldaki "Current setting" çıktısını tazele.
+        if (onChanged) onChanged();
+      } else {
+        setMsg({ ok: false, text: d.error || t('ifaceActionFail') });
+      }
     } catch { setMsg({ ok: false, text: t('ifaceActionFail') }); }
     finally { setRunId(null); }
   };
