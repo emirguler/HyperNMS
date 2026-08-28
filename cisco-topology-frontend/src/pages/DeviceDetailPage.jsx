@@ -59,7 +59,8 @@ export default function DeviceDetailPage({ onEdit }) {
       snmpCommunity: s.snmpCommunity, sshUsername: s.sshUsername,
       sshPasswordSet: s.sshPasswordSet, model: s.model,
       // Seri numarası kayda /details ile yazılır; canlı değeri (prev) blanklamamak için ?? fallback.
-      serial: s.serial ?? prev.serial,
+      // prev İLK render'da null olabilir → optional chaining şart (aksi halde "reading 'serial'" hatası).
+      serial: s.serial ?? prev?.serial,
     }));
   }, [rawDevices, id, snmpLoaded]);
 
