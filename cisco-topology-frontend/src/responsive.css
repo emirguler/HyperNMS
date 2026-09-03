@@ -983,7 +983,12 @@
   /* Yatayda ekran GENIS: dikey yigmayi zorlamak yerine kolonlari koru.
      (App.css @media(max-width:900px) 812/844px yatay telefonlarda tetikleniyor
      ve tek kolona indirip sayfayi 1500px uzunlugunda bir seride ceviriyor.) */
-  .grid-dash-main { grid-template-columns: 1fr 1fr 2fr; }
+  /* grid-stats (repeat 4, gap 12) ile birebir hizalı: Notifications .dash-wide ile
+     2 kolona yayılır. Eski "1fr 1fr 2fr" + 20px gap üstteki satırdan kayıyordu. */
+  .grid-dash-main { grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  /* Bu blok çok-kolonu geri getiriyor → App.css'in ≤900px'te verdiği "span:auto"yu
+     ez, Notifications yine 2 kolona yayılsın (aksi halde bu satırda tek kolon kalır). */
+  .grid-dash-main > .dash-wide { grid-column: span 2; }
   .grid-detail-main { grid-template-columns: 2fr 1fr 1fr; }
   .grid-detail-main.with-backup { grid-template-columns: 2fr 1fr 1fr 1fr; }
   .grid-stats { grid-template-columns: repeat(4, 1fr); gap: 12px; }
@@ -998,6 +1003,8 @@
   .grid-dash-main,
   .grid-detail-main,
   .grid-detail-main.with-backup { grid-template-columns: 1fr; }
+  /* Tek kolon → span kapalı (yukarıdaki max-height:500px span:2'sini ez). */
+  .grid-dash-main > .dash-wide { grid-column: auto; }
   .grid-stats { grid-template-columns: repeat(2, 1fr); }
   .grid-2col { grid-template-columns: 1fr; }
 }

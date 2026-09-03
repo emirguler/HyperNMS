@@ -256,8 +256,8 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Notifications (zil ile aynı veri) */}
-        <div className="chart-container" style={stackedGrid ? { ...CARD_SHELL, order: 1 } : CARD_SHELL}>
+        {/* Notifications (zil ile aynı veri) — masaüstünde 2 kolona yayılır (dash-wide) */}
+        <div className="chart-container dash-wide" style={stackedGrid ? { ...CARD_SHELL, order: 1 } : CARD_SHELL}>
           <CardHead pad={cardHeadPad} minH={headMinH} title={<>🔔 {t('notifications')}</>}
             right={(
               <select className="modern-input" value={notifType} onChange={e => setNotifType(e.target.value)}

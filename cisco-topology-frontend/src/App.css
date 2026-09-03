@@ -945,7 +945,12 @@ body.wireless-off .wireless-edge path { animation: none !important; }
 /* Responsive grid yardımcıları — masaüstü varsayılanı, mobilde media query ile yığılır.
    (Inline gridTemplateColumns media query ile ezilemediğinden sınıfa çevrildi.) */
 .grid-stats     { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
-.grid-dash-main { display: grid; grid-template-columns: 1fr 1fr 2fr; gap: 20px; align-items: stretch; }
+/* grid-dash-main da 4 kolon: Network Health + Device Types tek kolon, Notifications
+   iki kolona yayılır. Böylece kolon sınırları üstteki grid-stats (4 kolon, aynı gap)
+   ile BİREBİR hizalanır — eski "1fr 1fr 2fr" düzeninde 2fr kart aradaki boşluğu
+   içermediği için alt satır her boşlukta ~5px kayıyordu. */
+.grid-dash-main { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; align-items: stretch; }
+.grid-dash-main > .dash-wide { grid-column: span 2; }
 .grid-detail-main { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 24px; }
 .grid-detail-main.with-backup { grid-template-columns: 2fr 1fr 1fr 1fr; } /* admin: CPU/RAM daralır + Config Backup kartı */
 .grid-2col      { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
@@ -973,6 +978,8 @@ body.wireless-off .wireless-edge path { animation: none !important; }
 @media (max-width: 900px) {
   .grid-stats { grid-template-columns: repeat(2, 1fr); }
   .grid-dash-main { grid-template-columns: 1fr; }
+  /* Tek kolonda span kapalı: aksi halde grid 2. bir örtük kolon üretir. */
+  .grid-dash-main > .dash-wide { grid-column: auto; }
   .grid-detail-main, .grid-detail-main.with-backup { grid-template-columns: 1fr; }
 }
 
