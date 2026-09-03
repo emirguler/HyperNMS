@@ -200,12 +200,14 @@ async function getDeviceDetails(device) {
         // ekler (sayfa gecikmesinin ana kaynağı). Boş dönerse kayıttaki son bilinen sürüm korunur.
         if (baseData) {
             try {
-                // Sürüm + seri numarası aynı ENTITY-MIB yürüyüşünden (chassis öncelikli).
-                const [entClassVbs, entSwVbs, entSerialVbs] = await Promise.all([getSubtree(ENT_CLASS), getSubtree(ENT_SW_REV), getSubtree(ENT_SERIAL)]);
+                // Sürüm + seri + model aynı ENTITY-MIB yürüyüşünden (chassis öncelikli).
+                const [entClassVbs, entSwVbs, entSerialVbs, entModelVbs] = await Promise.all([getSubtree(ENT_CLASS), getSubtree(ENT_SW_REV), getSubtree(ENT_SERIAL), getSubtree(ENT_MODEL)]);
                 const ver = pickVersion(entClassVbs, entSwVbs, sysDescrStr);
                 if (ver) responseData.version = ver;
                 const serial = pickSerial(entClassVbs, entSerialVbs);
                 if (serial) responseData.serial = serial;
+                const model = pickModel(entClassVbs, entModelVbs);
+                if (model) responseData.snmpModel = model;
             } catch (e) {
                 const ver = imageVersionFromSysDescr(sysDescrStr);
                 if (ver) responseData.version = ver;
@@ -1190,6 +1192,18 @@ function pickSerial(entClassVbs, entSerialVbs) {
     const idxs = Object.keys(ent).sort((a, b) => Number(a) - Number(b));
     const pick = idxs.find(i => ent[i].cls === 3 && ent[i].serial) || idxs.find(i => ent[i].serial);
     return pick ? ent[pick].serial : '';
+}
+
+// entPhysicalModelName'den chassis (entPhysicalClass==3) model adı; yoksa ilk dolu.
+// Manuel (kayıttaki) model önceliklidir; bu yalnızca elle girilmediğinde kullanılır.
+function pickModel(entClassVbs, entModelVbs) {
+    const clean = (v) => v.toString().replace(/\x00/g, '').trim();
+    const ent = {};
+    for (const vb of entClassVbs || []) { const i = entIndex(ENT_CLASS, vb.oid); (ent[i] || (ent[i] = {})).cls = parseSnmpInt(vb.value); }
+    for (const vb of entModelVbs || []) { const i = entIndex(ENT_MODEL, vb.oid); (ent[i] || (ent[i] = {})).model = clean(vb.value); }
+    const idxs = Object.keys(ent).sort((a, b) => Number(a) - Number(b));
+    const pick = idxs.find(i => ent[i].cls === 3 && ent[i].model) || idxs.find(i => ent[i].model);
+    return pick ? ent[pick].model : '';
 }
 
 // Arka plan sürüm yenileme için hafif SNMP sorgusu (sysDescr + entPhysicalSoftwareRev).

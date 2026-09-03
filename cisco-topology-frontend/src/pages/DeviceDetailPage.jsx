@@ -57,7 +57,9 @@ export default function DeviceDetailPage({ onEdit }) {
       name: s.name, ip: s.ip, status: s.status, type: s.type,
       topologyPage: s.topologyPage, tags: s.tags, version: s.version, latency: s.latency,
       snmpCommunity: s.snmpCommunity, sshUsername: s.sshUsername,
-      sshPasswordSet: s.sshPasswordSet, model: s.model,
+      // Model: elle girilen (kayıt) öncelikli; boşsa /details'ten gelen (SNMP) değeri koru.
+      // prev ilk render'da null olabilir → optional chaining.
+      sshPasswordSet: s.sshPasswordSet, model: s.model || prev?.model,
       // Seri numarası kayda /details ile yazılır; canlı değeri (prev) blanklamamak için ?? fallback.
       // prev İLK render'da null olabilir → optional chaining şart (aksi halde "reading 'serial'" hatası).
       serial: s.serial ?? prev?.serial,

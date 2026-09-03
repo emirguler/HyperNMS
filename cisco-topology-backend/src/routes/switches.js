@@ -886,6 +886,13 @@ router.get('/switches/:id/details', authenticate, async (req, res) => {
     } else if (details.serial == null && device.serial) {
         details.serial = device.serial; // bu poll'de gelmedi → son bilinen değeri göster
     }
+    // SNMP'den okunan model (entPhysicalModelName). Manuel model ÖNCELİKLİ; bu yalnızca
+    // yedek. Kayda yazılır → SNMP sonradan düşse de son bilinen değer kullanılabilir.
+    if (details.snmpModel && details.snmpModel !== device.snmpModel) {
+        store.updateSwitch(device.id, { snmpModel: details.snmpModel });
+    } else if (!details.snmpModel && device.snmpModel) {
+        details.snmpModel = device.snmpModel;
+    }
     details.topologyPage = device.topologyPage || 'main'; // cihazın bulunduğu topoloji sayfası (id)
     // IP SLA rozet etiketleri (OK→birincil, Timeout→yedek). Boşsa varsayılan MD/GSM. Her iki rol görebilir.
     details.ipSlaOkLabel = device.ipSlaOkLabel || 'MD';
@@ -895,7 +902,8 @@ router.get('/switches/:id/details', authenticate, async (req, res) => {
         details.snmpCommunity = device.snmpCommunity || '';
         details.sshUsername = device.sshUsername || '';
         details.sshPasswordSet = !!(device.sshPassword && device.sshPassword.length > 0);
-        details.model = device.model || '';
+        // Model: elle girilen (device.model) öncelikli; boşsa SNMP'den okunan.
+        details.model = device.model || details.snmpModel || '';
     }
     res.json(details);
 });
