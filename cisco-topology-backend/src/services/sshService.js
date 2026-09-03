@@ -382,6 +382,9 @@ function parseInterfacesStatus(text) {
         if (!port || !/^[A-Za-z]{2,}[-\d]/.test(port)) continue;
         const status = cut(iStatus, nextOf(iVlan));
         if (!status) continue;
+        // "Name" kolonu = port description; "disabled" durumu = idari kapalı (shutdown).
+        const descr = iName >= 0 ? cut(iName, nextOf(iStatus)) : '';
+        const shutdown = /\bdisabled\b/i.test(status);
         const vlan = cut(iVlan, nextOf(iDuplex, iSpeed, iType)) || '-';
         const speedRaw = iSpeed >= 0 ? cut(iSpeed, nextOf(iType)) : '';
         const mbpsM = speedRaw.match(/(\d+)/); // 'a-1000'|'1000'|'auto' → sayı ya da 0
@@ -389,6 +392,8 @@ function parseInterfacesStatus(text) {
             index: String(++seq),
             name: port,
             status: /\bconnected\b/i.test(status) ? 'up' : 'down',
+            shutdown, adminKnown: true,
+            description: descr || '',
             vlan,
             vlanName: '-',
             trunkVlans: null,

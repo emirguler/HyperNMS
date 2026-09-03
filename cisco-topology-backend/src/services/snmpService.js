@@ -242,6 +242,16 @@ async function getDeviceDetails(device) {
             statusMap[index] = parseSnmpInt(vb.value) === 1 ? 'up' : 'down';
         });
 
+        // ifAdminStatus (.7): 1=up, 2=down (idari kapalı = elle shutdown), 3=testing.
+        // Port'un OPER durumundan (statusMap) bağımsız: bir port up olabilir ama admin
+        // shutdown; ya da admin up olup fiziksel down. Bu kolon "elle kapatıldı mı"yı gösterir.
+        const adminTableData = baseData ? await getSubtree('1.3.6.1.2.1.2.2.1.7') : [];
+        const adminMap = {};
+        adminTableData.forEach(vb => {
+            const index = vb.oid.split('.').pop();
+            adminMap[index] = parseSnmpInt(vb.value); // 1 | 2 | 3
+        });
+
         // 4. ifXTable (64-bit counters)
         const newTableData = baseData ? await getSubtree('1.3.6.1.2.1.31.1.1.1') : [];
         const interfacesMap = {};
@@ -418,6 +428,7 @@ async function getDeviceDetails(device) {
             }
             interfacesMap[index] = {
                 index, name: '', status: statusMap[index] || 'down',
+                adminStatus: adminMap[index], description: '',
                 vlan: vlanStr, vlanName: vlanNameStr, trunkVlans,
                 speedMbps: 0, rawIn: BigInt(0), rawOut: BigInt(0)
             };
@@ -435,6 +446,7 @@ async function getDeviceDetails(device) {
             else if (column === '15') interfacesMap[index].speedMbps = vb.value;
             else if (column === '6') interfacesMap[index].rawIn = bufferToBigInt(vb.value);
             else if (column === '10') interfacesMap[index].rawOut = bufferToBigInt(vb.value);
+            else if (column === '18') interfacesMap[index].description = vb.value.toString().replace(/\x00/g, '').trim(); // ifAlias (port "description")
         });
 
         // Fallback: if ifXTable returned nothing, use ifTable (32-bit counters)
@@ -492,6 +504,9 @@ async function getDeviceDetails(device) {
 
                 return {
                     index: i.index, name: i.name, status: i.status,
+                    // shutdown: adminStatus 2 = idari kapalı. 1/3/undefined → değil/bilinmiyor.
+                    shutdown: i.adminStatus === 2, adminKnown: i.adminStatus != null,
+                    description: i.description || '',
                     vlan: i.vlan, vlanName: i.vlanName, trunkVlans: i.trunkVlans,
                     speed: i.speedMbps * 1000000, trafficIn: smoothedIn, trafficOut: smoothedOut
                 };

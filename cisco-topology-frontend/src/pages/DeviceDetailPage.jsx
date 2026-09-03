@@ -149,8 +149,8 @@ export default function DeviceDetailPage({ onEdit }) {
   // orada Port %20 = 112px ve "GigabitEthernet1/0/24" komsu kolona tasiyor -> Port'u genislet.
   // (<=600px'te tablo zaten .rw-cards ile karta donuyor, genislikler devre disi kaliyor.)
   const ifaceW = isPhone
-    ? { port: '30%', vlan: '14%', vlanName: '18%', status: '16%', cap: '10%', cfg: '12%' }
-    : { port: '20%', vlan: '12%', vlanName: '22%', status: '15%', cap: '10%', cfg: '15%' };
+    ? { port: '26%', vlan: '13%', vlanName: '16%', status: '15%', admin: '13%', cap: '10%', descr: '18%', cfg: '13%' }
+    : { port: '15%', vlan: '10%', vlanName: '14%', status: '11%', admin: '9%', cap: '10%', descr: '15%', cfg: '16%' };
   const ifacePadL = isPhone ? 12 : 24;
 
   // Deger kopyalama (dokunmatikte title tooltip'i yok). Basari DOGRULANIR, yoksa hata toast'i.
@@ -379,7 +379,9 @@ export default function DeviceDetailPage({ onEdit }) {
               <th style={{ width: ifaceW.vlan }}>VLAN</th>
               <th className="rw-hide-sm" style={{ width: ifaceW.vlanName }}>VLAN Name</th>
               <th style={{ width: ifaceW.status }}>Status</th>
+              <th style={{ width: ifaceW.admin }}>Admin</th>
               <th className="rw-hide-sm" style={{ width: ifaceW.cap }}>Capacity</th>
+              <th style={{ width: ifaceW.descr }}>Description</th>
               {isOperator && <th style={{ width: ifaceW.cfg, textAlign: 'center' }}>Config</th>}
             </tr>
           </thead>
@@ -409,7 +411,21 @@ export default function DeviceDetailPage({ onEdit }) {
                     {i.status === 'up' ? '● UP' : '○ DOWN'}
                   </span>
                 </td>
+                {/* Admin (idari) durum: elle shutdown mı? Oper Status'tan bağımsız. */}
+                <td data-label="Admin">
+                  {i.adminKnown === false ? (
+                    <span style={{ color: 'var(--text-muted)' }}>-</span>
+                  ) : i.shutdown ? (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 20, fontSize: '0.75rem', fontWeight: 700, background: 'rgba(248,113,113,0.12)', color: 'var(--danger)', border: '1px solid rgba(248,113,113,0.3)' }}>shutdown</span>
+                  ) : (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 20, fontSize: '0.75rem', fontWeight: 600, background: 'rgba(255,255,255,0.05)', color: 'var(--text-muted)' }}>up</span>
+                  )}
+                </td>
                 <td className="rw-hide-sm" data-label="Capacity" style={{ fontFamily: 'monospace', fontSize: '0.9rem', color: 'var(--text-muted)' }}>{formatSpeed(i.speed)}</td>
+                {/* Port description (SNMP ifAlias / CLI "Name" kolonu). Yoksa "-". */}
+                <td data-label="Description" style={{ fontSize: '0.82rem', color: i.description ? 'var(--text-main)' : 'var(--text-muted)', overflowWrap: 'anywhere' }}>
+                  {i.description || '-'}
+                </td>
                 {/* Arayüz konfigi Operator+ yetkisi ister — Viewer (View Only) rolünde kolon hiç yok */}
                 {isOperator && (
                   /* data-label="" -> kartta etiket basilmaz, buton saga yaslanir */
@@ -426,7 +442,7 @@ export default function DeviceDetailPage({ onEdit }) {
                 )}
               </tr>
             )) : (
-              <tr><td colSpan={isOperator ? 6 : 5} style={{ textAlign: 'center', justifyContent: 'center', padding: 30, color: 'var(--text-muted)' }}>
+              <tr><td colSpan={isOperator ? 8 : 7} style={{ textAlign: 'center', justifyContent: 'center', padding: 30, color: 'var(--text-muted)' }}>
                 {!snmpLoaded ? t('loadingSnmpData') : (details.status === 'UP' ? t('noPortsFound') : t('deviceDown'))}
               </td></tr>
             )}
