@@ -14,6 +14,7 @@ const { startPingService, onStatusChange } = require('./services/pingService');
 const { setupWebSocket } = require('./services/sshService');
 const { startBackupScheduler } = require('./services/configBackupService');
 const { startVersionRefresh } = require('./services/versionRefreshService');
+const { startVulnSync } = require('./services/vulnSyncService');
 const { setupHttps } = require('./middleware/httpsRedirect');
 const { setupNotificationWs, addNotification, getNotifications, flushNotifications } = require('./services/notificationService');
 const { authenticate } = require('./middleware/auth');
@@ -300,6 +301,7 @@ initDB().then(() => {
     );
     if (sessionCleanupTimer.unref) sessionCleanupTimer.unref();
     startVersionRefresh();  // SNMP yazılım sürümlerini periyodik yenile (liste sıralaması için)
+    startVulnSync();        // günlük Cisco openVuln/KEV senkronu (ayarlarda açıksa)
     server.listen(config.PORT, () => {
         console.log(`[SERVER] ${protocol.toUpperCase()} Port ${config.PORT}`);
     });

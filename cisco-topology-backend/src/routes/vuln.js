@@ -2,8 +2,27 @@ const express = require('express');
 const { authenticate, requireAdmin } = require('../middleware/auth');
 const { logAction } = require('../services/auditLog');
 const vuln = require('../services/vulnService');
+const vulnSync = require('../services/vulnSyncService');
 
 const router = express.Router();
+
+// Cevrimici senkron durumu (kimlik var mi, son senkron, calisiyor mu)
+router.get('/vuln/sync-status', authenticate, (req, res) => {
+    res.json(vulnSync.getStatus());
+});
+
+// Simdi senkronla: sunucu Cisco openVuln + KEV'i sorgular, feed'i uretir ve yukler.
+// Kac dakika surebilir (surum basina ~1sn); istek tamamlanana kadar bekler.
+router.post('/vuln/sync', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const r = await vulnSync.runSync(req.user, { withKev: !(req.body && req.body.noKev) });
+        await logAction(req.user, 'VULN_SYNC', `${r.stats.advisories} advisories, ${r.stats.versions} versions, ${r.stats.newRelevant} new relevant`);
+        res.json({ ok: true, lastSync: r, feed: vuln.feedMeta() });
+    } catch (e) {
+        await logAction(req.user, 'VULN_SYNC_FAILED', e.message);
+        res.status(500).json({ error: e.message || 'Sync failed' });
+    }
+});
 
 // Feed durumu (hafif) — sayfa basligi/rozet icin
 router.get('/vuln/status', authenticate, (req, res) => {

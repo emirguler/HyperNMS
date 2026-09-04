@@ -5,6 +5,7 @@ import TwoFactorCard from './TwoFactorCard';
 import BackupRestorePanel from './BackupRestorePanel';
 import GeneralSettingsCard from './GeneralSettingsCard';
 import LicenseCard from './LicenseCard';
+import VulnSettingsCard from './VulnSettingsCard';
 import { useViewport } from '../hooks/useViewport';
 import { useAuth } from '../context/AuthContext';
 
@@ -18,6 +19,7 @@ const TILES = [
   { id: 'nps', icon: '📡', title: 'NPS (FreeRADIUS)', desc: 'SSH access for the NPS page' },
   { id: 'security', icon: '🔐', title: 'Two-Factor Auth', desc: 'TOTP codes for sign-in', adminOnly: true },
   { id: 'license', icon: '🔑', title: 'License', desc: 'License status & key', adminOnly: true },
+  { id: 'vuln', icon: '🛡️', title: 'Vulnerability sync', desc: 'Cisco PSIRT API credentials & schedule' },
 ];
 
 // Kart (masaustu) ve satir (dar govde) gorunumleri. Modul seviyesinde:
@@ -128,6 +130,7 @@ export default function SettingsModal({ onClose }) {
               {panel === 'nps' && <NpsSettingsCard />}
               {panel === 'security' && isSuperAdmin && <TwoFactorCard />}
               {panel === 'license' && isSuperAdmin && <LicenseCard />}
+              {panel === 'vuln' && <VulnSettingsCard />}
             </div>
           </div>
         </div>

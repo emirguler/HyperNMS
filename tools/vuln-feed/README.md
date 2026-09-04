@@ -1,6 +1,11 @@
 # NetPulse zafiyet feed aracı (offline)
 
-NetPulse sunucusu internete çıkamadığı için Cisco güvenlik duyuruları **internetli
+> **Sunucu internete çıkabiliyorsa bu araca gerek yok:** Ayarlar → *Vulnerability sync*'e
+> Cisco API kimliğini girip *Sync now* ile (ve günlük zamanlamayla) sunucu kendisi çeker.
+> Bunun için dışa HTTPS izni: `id.cisco.com` (token), `apix.cisco.com` (API), `www.cisa.gov` (KEV).
+> Aşağıdaki akış, interneti **olmayan** sunucular için yedek yoldur.
+
+NetPulse sunucusu internete çıkamıyorsa Cisco güvenlik duyuruları **internetli
 bir PC'de** çekilir ve dosya olarak NetPulse'a yüklenir. Eşleştirme (hangi cihaz
 hangi duyurudan etkileniyor) sunucuda, cihaz kayıtlarıyla yapılır.
 

@@ -376,6 +376,58 @@ router.put('/settings/general', authenticate, requireAdmin, (req, res) => {
     res.json(readGeneral());
 });
 
+// --- Zafiyet senkron ayarlari (Cisco PSIRT openVuln kimligi + zamanlama) ---
+// clientSecret AD bindPassword gibi sifreli saklanir, asla geri gonderilmez.
+const vulnSync = require('../services/vulnSyncService');
+const ciscoVuln = require('../services/ciscoVulnClient');
+const vulnSvc = require('../services/vulnService');
+
+function maskVuln() {
+    const s = vulnSync.readSettings();
+    return { clientId: s.clientId, clientSecretSet: !!s.clientSecret, autoSync: s.autoSync, syncHour: s.syncHour, lastSync: s.lastSync, hosts: ciscoVuln.HOSTS };
+}
+
+router.get('/settings/vuln', authenticate, requireAdmin, (req, res) => {
+    res.json(maskVuln());
+});
+
+router.put('/settings/vuln', authenticate, requireAdmin, async (req, res) => {
+    const b = req.body || {};
+    const cur = (store.getSettings() || {}).vuln || {};
+    const next = {
+        ...cur,
+        clientId: String(b.clientId || '').trim().slice(0, 128),
+        autoSync: b.autoSync === true,
+        syncHour: (Number.isInteger(b.syncHour) && b.syncHour >= 0 && b.syncHour <= 23) ? b.syncHour : (cur.syncHour ?? 4),
+    };
+    if (typeof b.clientSecret === 'string' && b.clientSecret.length > 0) next.clientSecret = encryptPassword(b.clientSecret.trim());
+    if (!next.clientId) next.clientSecret = '';
+    store.updateSettings({ vuln: next });
+    vulnSync.rescheduleVulnSync();
+    await logAction(req.user, 'VULN_SETTINGS_UPDATE', next.autoSync ? `autoSync ${next.syncHour}:00` : 'manual', { clientId: next.clientId });
+    res.json(maskVuln());
+});
+
+// Baglanti testi: formdaki kimlik (yeni secret yoksa kayitli olan) ile her host'u dene.
+router.post('/settings/vuln/test', authenticate, requireAdmin, async (req, res) => {
+    const b = req.body || {};
+    const cur = (store.getSettings() || {}).vuln || {};
+    const clientId = String(b.clientId || cur.clientId || '').trim();
+    const clientSecret = (typeof b.clientSecret === 'string' && b.clientSecret.length > 0)
+        ? b.clientSecret.trim()
+        : (cur.clientSecret ? (() => { try { return decryptPassword(cur.clientSecret); } catch { return ''; } })() : '');
+    if (!clientId || !clientSecret) return res.status(400).json({ error: 'Client ID and secret are required' });
+    // Ornek surum: envanterdeki en yaygin surum (gercek bir sorgu olsun)
+    const inv = vulnSvc.buildInventory();
+    const sample = inv.versions[0] ? { osType: inv.versions[0].osType, query: inv.versions[0].query } : null;
+    try {
+        const results = await ciscoVuln.testConnection({ clientId, clientSecret }, sample);
+        res.json({ ok: results.slice(0, 2).every(r => r.ok), results });
+    } catch (e) {
+        res.status(500).json({ error: e.message || 'Test failed' });
+    }
+});
+
 // --- Arayuz hizli-eylem butonlari ---
 // Cihaz detayindaki Interface Config modalinda, secili arayuz uzerinde tek tikla
 // config komutlari calistiran butonlar. Tanimlar sistem geneli (settings) tutulur:

@@ -329,6 +329,16 @@ const translations = {
     vulnImportOk: 'Feed imported', vulnImportFail: 'Feed import failed', vulnInvalidFile: 'Invalid feed file',
     vulnNoCisco: 'No Cisco IOS / IOS-XE versions found in the inventory.',
     vulnNoneAffecting: 'No advisories affect the devices in this network.',
+    vulnSyncNow: 'Sync now', vulnSyncing: 'Syncing…', vulnSyncOk: 'Sync complete', vulnSyncFail: 'Sync failed',
+    vulnSyncNotConfigured: 'Enter Cisco API credentials in Settings → Vulnerability sync',
+    vulnLastSync: 'Last sync',
+    vulnOnlineTitle: 'Online (recommended)', vulnOnlineStep: 'enter the Cisco PSIRT API credentials in Settings → Vulnerability sync, then press "Sync now". The server queries Cisco openVuln and CISA KEV directly; enable the daily schedule to keep it current.',
+    vulnOfflineTitle: 'Offline alternative (server without internet):',
+    vulnSetIntro: 'The server queries Cisco PSIRT openVuln (official advisories, by IOS / IOS-XE version) and CISA KEV (actively exploited CVEs). The client secret is stored encrypted and never shown again.',
+    vulnSetWhere: 'Get the key: sign in at',
+    vulnSetAuto: 'Daily automatic sync', vulnSetHour: 'at',
+    vulnSetHosts: 'Outbound HTTPS must be allowed to', vulnSetTest: 'Test connection', vulnSetTesting: 'Testing…',
+    vulnSetSave: 'Save', vulnSetSaved: 'Vulnerability sync settings saved',
     close: 'Close',
 
     // Mobile app — server setup / native shell
@@ -680,6 +690,16 @@ const translations = {
     vulnImportOk: 'Feed i\u00e7e aktar\u0131ld\u0131', vulnImportFail: 'Feed i\u00e7e aktar\u0131lamad\u0131', vulnInvalidFile: 'Ge\u00e7ersiz feed dosyas\u0131',
     vulnNoCisco: 'Envanterde Cisco IOS / IOS-XE s\u00fcr\u00fcm\u00fc bulunamad\u0131.',
     vulnNoneAffecting: 'Bu a\u011fdaki cihazlar\u0131 etkileyen duyuru yok.',
+    vulnSyncNow: '\u015eimdi senkronla', vulnSyncing: 'Senkronlan\u0131yor\u2026', vulnSyncOk: 'Senkron tamamland\u0131', vulnSyncFail: 'Senkron ba\u015far\u0131s\u0131z',
+    vulnSyncNotConfigured: 'Cisco API kimli\u011fini Ayarlar \u2192 Vulnerability sync\'e girin',
+    vulnLastSync: 'Son senkron',
+    vulnOnlineTitle: '\u00c7evrimi\u00e7i (\u00f6nerilen)', vulnOnlineStep: 'Cisco PSIRT API kimli\u011fini Ayarlar \u2192 Vulnerability sync\'e girip "\u015eimdi senkronla"ya bas\u0131n. Sunucu Cisco openVuln ve CISA KEV\'i do\u011frudan sorgular; g\u00fcncel kalmas\u0131 i\u00e7in g\u00fcnl\u00fck zamanlamay\u0131 a\u00e7\u0131n.',
+    vulnOfflineTitle: '\u00c7evrimd\u0131\u015f\u0131 alternatif (interneti olmayan sunucu):',
+    vulnSetIntro: 'Sunucu, Cisco PSIRT openVuln (resmi duyurular, IOS / IOS-XE s\u00fcr\u00fcm\u00fcne g\u00f6re) ve CISA KEV (aktif s\u00f6m\u00fcr\u00fclen CVE\'ler) kaynaklar\u0131n\u0131 sorgular. Client secret \u015fifreli saklan\u0131r, bir daha g\u00f6sterilmez.',
+    vulnSetWhere: 'Anahtar i\u00e7in:',
+    vulnSetAuto: 'G\u00fcnl\u00fck otomatik senkron', vulnSetHour: 'saat',
+    vulnSetHosts: 'D\u0131\u015fa HTTPS izni gereken adresler', vulnSetTest: 'Ba\u011flant\u0131y\u0131 test et', vulnSetTesting: 'Test ediliyor\u2026',
+    vulnSetSave: 'Kaydet', vulnSetSaved: 'Zafiyet senkron ayarlar\u0131 kaydedildi',
     close: 'Kapat',
 
     // Mobil uygulama \u2014 sunucu kurulumu / native kabuk

@@ -50,16 +50,31 @@ export default function VulnPage() {
   const [showAcked, setShowAcked] = useState(false);
   const [open, setOpen] = useState(null);      // acik duyuru id'si
   const [importing, setImporting] = useState(false);
+  const [sync, setSync] = useState(null);       // /vuln/sync-status
+  const [syncing, setSyncing] = useState(false);
   const fileRef = useRef(null);
 
   const load = useCallback(async () => {
     try {
-      const res = await authFetch('/vuln/overview');
+      const [res, sres] = await Promise.all([authFetch('/vuln/overview'), authFetch('/vuln/sync-status')]);
       if (res && res.ok) setData(await res.json());
+      if (sres && sres.ok) setSync(await sres.json());
     } catch { /* ignore */ }
     finally { setLoading(false); }
   }, [authFetch]);
   useEffect(() => { load(); }, [load]);
+
+  // Cevrimici senkron: sunucu Cisco'yu sorgular (surum basina ~1 sn). Yanit gelene kadar bekler.
+  const runSync = async () => {
+    setSyncing(true);
+    try {
+      const res = await authFetch('/vuln/sync', { method: 'POST', body: JSON.stringify({}) });
+      const d = res ? await res.json().catch(() => ({})) : {};
+      if (res && res.ok) { showToast(`${t('vulnSyncOk')} — ${d.lastSync.stats.advisories} / ${d.lastSync.stats.versions}`, 'success'); load(); }
+      else showToast(d.error || t('vulnSyncFail'), 'error');
+    } catch { showToast(t('vulnSyncFail'), 'error'); }
+    finally { setSyncing(false); }
+  };
 
   const exportInventory = async () => {
     try {
@@ -133,15 +148,26 @@ export default function VulnPage() {
           </div>
         </div>
         {isAdmin && (
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            {/* Cevrimici mod (kimlik ayarlarda) — birincil. Offline export/import yedek yol. */}
+            <button className="btn btn-primary btn-sm" onClick={runSync} disabled={syncing || !(sync && sync.configured) || (sync && sync.running)}
+              title={sync && sync.configured ? '' : t('vulnSyncNotConfigured')}>
+              🔄 {syncing || (sync && sync.running) ? t('vulnSyncing') : t('vulnSyncNow')}
+            </button>
             <button className="btn btn-ghost btn-sm" onClick={exportInventory}>📤 {t('vulnExportInv')}</button>
-            <button className="btn btn-primary btn-sm" onClick={() => fileRef.current && fileRef.current.click()} disabled={importing}>
+            <button className="btn btn-ghost btn-sm" onClick={() => fileRef.current && fileRef.current.click()} disabled={importing}>
               📥 {importing ? t('loading') : t('vulnImportFeed')}
             </button>
             <input ref={fileRef} type="file" accept=".json,application/json" onChange={onFile} style={{ display: 'none' }} />
           </div>
         )}
       </div>
+      {sync && sync.lastSync && (
+        <div style={{ fontSize: '0.76rem', color: sync.lastSync.ok ? 'var(--text-muted)' : 'var(--danger)', marginTop: -8, marginBottom: 12 }}>
+          {t('vulnLastSync')}: {new Date(sync.lastSync.at).toLocaleString()} · {sync.lastSync.ok ? '✓' : `✕ ${sync.lastSync.error}`}
+          {sync.autoSync ? ` · ${t('vulnSetAuto')} ${String(sync.syncHour).padStart(2, '0')}:00` : ''}
+        </div>
+      )}
 
       {/* Ozet kartlari */}
       <div className="grid-stats" style={{ marginBottom: 16, gridTemplateColumns: compact ? 'repeat(2, 1fr)' : 'repeat(6, 1fr)' }}>
@@ -157,7 +183,11 @@ export default function VulnPage() {
       {!loading && (!feed || !feed.loaded) && (
         <div className="chart-container" style={{ marginBottom: 16 }}>
           <div style={{ fontSize: '1rem', fontWeight: 600, marginBottom: 8 }}>{t('vulnNoFeedTitle')}</div>
-          <ol style={{ margin: 0, paddingLeft: 20, color: 'var(--text-muted)', fontSize: '0.88rem', lineHeight: 1.7 }}>
+          <div style={{ color: 'var(--text-main)', fontSize: '0.88rem', lineHeight: 1.7, marginBottom: 8 }}>
+            <strong>{t('vulnOnlineTitle')}</strong> — {t('vulnOnlineStep')}
+          </div>
+          <div style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginBottom: 4 }}>{t('vulnOfflineTitle')}</div>
+          <ol style={{ margin: 0, paddingLeft: 20, color: 'var(--text-muted)', fontSize: '0.84rem', lineHeight: 1.7 }}>
             <li>{t('vulnStep1')}</li>
             <li>{t('vulnStep2')} <code style={{ fontSize: '0.8rem' }}>tools/vuln-feed/README.md</code></li>
             <li>{t('vulnStep3')}</li>
