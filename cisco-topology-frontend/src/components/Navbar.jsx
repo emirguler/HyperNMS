@@ -150,6 +150,7 @@ export default function Navbar({ onAddDevice }) {
             <Link className={`nav-btn ${path.startsWith('/topology') ? 'active' : ''}`} to="/topology" onClick={closeMenus}>Topology Map</Link>
 
             <Link className={cls('/mac-search')} to="/mac-search" onClick={closeMenus}>MAC Search</Link>
+            <Link className={cls('/vulnerabilities')} to="/vulnerabilities" onClick={closeMenus}>Vulnerabilities</Link>
             {isAdmin && <Link className={cls('/command-line')} to="/command-line" onClick={closeMenus}>Command-line</Link>}
             {isAdmin && npsConfigured && <Link className={cls('/nps')} to="/nps" onClick={closeMenus}>NPS</Link>}
             {isAdmin && (
@@ -216,6 +217,7 @@ export default function Navbar({ onAddDevice }) {
           <Link className={cls('/devices')} to="/devices" onClick={closeMenus}>Devices</Link>
           <Link className={cls('/topology')} to="/topology" onClick={closeMenus}>Topology Map</Link>
           <Link className={cls('/mac-search')} to="/mac-search" onClick={closeMenus}>MAC Search</Link>
+          <Link className={cls('/vulnerabilities')} to="/vulnerabilities" onClick={closeMenus}>Vulnerabilities</Link>
           {isAdmin && <Link className={cls('/command-line')} to="/command-line" onClick={closeMenus}>Command-line</Link>}
           {isAdmin && npsConfigured && <Link className={cls('/nps')} to="/nps" onClick={closeMenus}>NPS</Link>}
           {/* Cekmecede ic ice menu YOK: dropdown'i parmakla acmak fazladan bir dokunus

@@ -19,6 +19,10 @@ license-private*
 cisco-topology-frontend/android/keystore.properties
 *.jks
 *.keystore
+
+# Zafiyet feed aracı: Cisco API kimliği ve üretilen/indirilen dosyalar
+tools/vuln-feed/cisco-api.json
+tools/vuln-feed/netpulse-vuln-*.json
 cisco-topology-backend/*.json
 !cisco-topology-backend/package.json
 !cisco-topology-backend/package-lock.json

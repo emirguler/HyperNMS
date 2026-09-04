@@ -30,6 +30,7 @@ const sessionLog = require('./services/sessionLog');
 const settingsRoutes = require('./routes/settings');
 const webproxyRoutes = require('./routes/webproxy');
 const npsRoutes = require('./routes/nps');
+const vulnRoutes = require('./routes/vuln');
 const licenseRoutes = require('./routes/license');
 const licenseGuard = require('./middleware/licenseGuard');
 
@@ -148,6 +149,7 @@ app.use(apiPrefix, twoFactorRoutes);
 app.use(apiPrefix, settingsRoutes);
 app.use(apiPrefix, webproxyRoutes);
 app.use(apiPrefix, npsRoutes);
+app.use(apiPrefix, vulnRoutes);
 
 app.get(`${apiPrefix}/notifications`, authenticate, (req, res) => {
     res.json(getNotifications(parseInt(req.query.limit) || 50));
