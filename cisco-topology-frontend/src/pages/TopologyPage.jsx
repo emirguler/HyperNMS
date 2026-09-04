@@ -227,6 +227,9 @@ function TopologyInner({ onEdit, onClone }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQ, setSearchQ] = useState('');
   const prevTabId = useRef(activeTabId);
+  // Sekme değişiminde kanvas fade-in: sayaç tek/çift → .topo-enter-a / .topo-enter-b (App.css).
+  // Sınıf her geçişte değiştiği için animasyon yeniden başlar; animationend beklenmez.
+  const [tabEnter, setTabEnter] = useState(0);
 
   // Tüm bağlam menülerini kapat — pan, yön değişimi, dışarı tıklama ve Escape ortak yolu
   const closeAllMenus = useCallback(() => {
@@ -240,6 +243,7 @@ function TopologyInner({ onEdit, onClone }) {
   useEffect(() => {
     if (prevTabId.current !== activeTabId) {
       prevTabId.current = activeTabId;
+      setTabEnter(n => n + 1);
       setTimeout(() => fitView({ duration: 200 }), 50);
     }
   }, [activeTabId, fitView]);
@@ -792,7 +796,7 @@ function TopologyInner({ onEdit, onClone }) {
                   )}
                 </>
               ) : (
-                <span>{tab.name}</span>
+                <span data-label={tab.name}>{tab.name}</span>
               )}
               {/* Silme yalnızca menüden — yanlışlıkla tıklamayla sayfa silinmesin.
                   Dokunmatikte sağ tık yok: kebap düğmesi + uzun basma aynı menüyü açar. */}
@@ -900,7 +904,7 @@ function TopologyInner({ onEdit, onClone }) {
 
       {/* React Flow Canvas */}
       <div
-        className={`topology-canvas ${zoomLevel < 0.45 ? 'zoom-minimal' : zoomLevel < 0.7 ? 'zoom-compact' : ''}`}
+        className={`topology-canvas ${zoomLevel < 0.45 ? 'zoom-minimal' : zoomLevel < 0.7 ? 'zoom-compact' : ''} ${tabEnter ? (tabEnter % 2 ? 'topo-enter-a' : 'topo-enter-b') : ''}`}
         style={isTouch ? { flex: 1, position: 'relative', ...CANVAS_TOUCH } : { flex: 1, position: 'relative' }}
         ref={reactFlowWrapper}
         {...(isTouch ? canvasLongPress : null)}

@@ -815,20 +815,29 @@ body.wireless-off .wireless-edge path { animation: none !important; }
 
 /* ============================================
    TOPOLOGY TABS
+   Sekme seridi: kayan alt cizgi (::after), yumusak hover/aktif arka plani,
+   "+" dugmesinde donus. Gosterge border-bottom degil ::after — boylece
+   scaleX ile ortadan acilarak animasyon yapilabiliyor ve hover'da soluk
+   bir ipucu gosterilebiliyor. Dokunmatik sifirlamalari responsive.css'te.
    ============================================ */
 .topology-tabs {
   display: flex;
   align-items: center;
-  background: var(--bg-panel);
+  background: linear-gradient(180deg, rgba(30, 39, 58, 0.55), var(--bg-panel));
   border-bottom: 1px solid var(--border-color);
   height: 36px;
   overflow-x: auto;
+  overflow-y: hidden;
   flex-shrink: 0;
   padding: 0 8px;
-  gap: 1px;
+  gap: 2px;
+  scrollbar-width: thin;
 }
+.topology-tabs::-webkit-scrollbar { height: 3px; }
+.topology-tabs::-webkit-scrollbar-thumb { background: rgba(100, 116, 139, 0.25); }
 
 .topology-tab {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -836,17 +845,58 @@ body.wireless-off .wireless-edge path { animation: none !important; }
   height: 100%;
   cursor: pointer;
   font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
   color: var(--text-muted);
-  border-bottom: 2px solid transparent;
-  transition: all 0.15s;
+  border-radius: 6px 6px 0 0;
+  background: transparent;
+  user-select: none;
   white-space: nowrap;
+  transition: color 0.18s ease, background-color 0.18s ease;
 }
-
-.topology-tab:hover { color: var(--text-main); background: rgba(255, 255, 255, 0.02); }
-.topology-tab.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
+/* Gosterge: aktifte tam, hover'da soluk; ortadan buyuyerek acilir */
+.topology-tab::after {
+  content: '';
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 0;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--primary);
+  opacity: 0;
+  transform: scaleX(0);
+  transform-origin: center;
+  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.18s ease;
+}
+/* Aktifte 500 -> 600 kalinlik: sekmeler kaymasin diye kalin metnin genisligini
+   gorunmez bir kopyayla (data-label = sekme adi) bastan ayir. */
+.topology-tab > span {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+}
+.topology-tab > span::after {
+  content: attr(data-label);
+  display: block;
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+  font-weight: 600;
+}
+.topology-tab:hover { color: var(--text-main); background: rgba(255, 255, 255, 0.04); }
+.topology-tab:hover::after { opacity: 0.35; transform: scaleX(1); }
+.topology-tab:active { background: rgba(255, 255, 255, 0.07); }
+.topology-tab.active {
+  color: var(--primary);
+  font-weight: 600;
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0) 0%, var(--primary-light) 100%);
+}
+.topology-tab.active::after { opacity: 1; transform: scaleX(1); }
+.topology-tab:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--primary-border); }
 
 .topology-tab-rename {
-  background: transparent;
+  background: rgba(12, 17, 29, 0.6);
   border: 1px solid var(--primary);
   color: var(--text-main);
   font-size: 0.8rem;
@@ -854,6 +904,7 @@ body.wireless-off .wireless-edge path { animation: none !important; }
   border-radius: 4px;
   width: 100px;
   outline: none;
+  box-shadow: 0 0 0 3px var(--primary-light);
 }
 
 .topology-tab-add {
@@ -864,17 +915,42 @@ body.wireless-off .wireless-edge path { animation: none !important; }
   height: 22px;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  font-size: 0.9rem;
+  font-size: 0.95rem;
+  line-height: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-left: 4px;
-  transition: all 0.15s;
+  margin-left: 6px;
+  flex-shrink: 0;
+  transition: color 0.18s ease, border-color 0.18s ease, background-color 0.18s ease,
+              transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .topology-tab-add:hover {
+  border-style: solid;
   border-color: var(--primary);
   color: var(--primary);
   background: var(--primary-light);
+  transform: rotate(90deg);
+}
+.topology-tab-add:active { transform: rotate(90deg) scale(0.92); }
+
+/* Sekme degisince kanvas: kisa fade-in (fitView'in 200ms animasyonuyla birlikte).
+   Iki es keyframe: sinif a/b arasinda degisince animasyon her gecise yeniden
+   baslar; animationend'e guvenilmez (bazi ortamlarda gelmiyor). Fill yok ->
+   bitince transform kalmaz. */
+@keyframes topoTabIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes topoTabInB {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.topology-canvas.topo-enter-a { animation: topoTabIn 0.28s cubic-bezier(0.4, 0, 0.2, 1); }
+.topology-canvas.topo-enter-b { animation: topoTabInB 0.28s cubic-bezier(0.4, 0, 0.2, 1); }
+@media (prefers-reduced-motion: reduce) {
+  .topology-canvas.topo-enter-a, .topology-canvas.topo-enter-b { animation: none; }
+  .topology-tab, .topology-tab::after, .topology-tab-add { transition: none; }
 }
 
 /* ============================================

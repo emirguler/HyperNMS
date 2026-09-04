@@ -419,10 +419,12 @@
   }
 
   .topology-tab:hover { color: var(--text-muted); background: transparent; }
-  .topology-tab.active:hover { color: var(--primary); }
+  .topology-tab:hover::after { opacity: 0; transform: scaleX(0); }
+  .topology-tab.active:hover { color: var(--primary); background: linear-gradient(180deg, rgba(59, 130, 246, 0) 0%, var(--primary-light) 100%); }
+  .topology-tab.active:hover::after { opacity: 1; transform: scaleX(1); }
   .topology-tab:active { background: rgba(255, 255, 255, 0.06); }
-  .topology-tab-add:hover { border-color: var(--border-light); color: var(--text-dim); background: none; }
-  .topology-tab-add:active { border-color: var(--primary); color: var(--primary); background: var(--primary-light); }
+  .topology-tab-add:hover { border-style: dashed; border-color: var(--border-light); color: var(--text-dim); background: none; transform: none; }
+  .topology-tab-add:active { border-color: var(--primary); color: var(--primary); background: var(--primary-light); transform: none; }
 
   .chart-container:hover { border-color: var(--border-color); }
   .topology-node:hover .node-shape { filter: none; }
