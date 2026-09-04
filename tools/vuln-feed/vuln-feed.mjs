@@ -17,10 +17,13 @@
  * Bağımlılık yok; Node 18+ (global fetch).
  */
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, resolve as pathResolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { homedir } from 'node:os';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
+// PowerShell "~"yi acmaz (bash acar); "~/Downloads/x.json" gibi yollari burada acalim.
+const resolve = (p) => pathResolve(String(p).replace(/^~(?=[\\/]|$)/, homedir()));
 const TOKEN_URL = 'https://id.cisco.com/oauth2/default/v1/token';
 const API = 'https://apix.cisco.com/security/advisories/v2';
 const KEV_URL = 'https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json';

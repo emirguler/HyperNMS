@@ -28,8 +28,10 @@ Gereksinim: Node 18+ (bağımlılık yok).
 2. Dosyayı internetli PC'ye taşı ve bu klasörde:
 
 ```bash
-node vuln-feed.mjs --inventory netpulse-vuln-inventory-2026-09-04.json --out netpulse-vuln-feed.json
+node vuln-feed.mjs --inventory "$env:USERPROFILE\Downloads\netpulse-vuln-inventory-2026-09-04.json" --out netpulse-vuln-feed.json
 ```
+
+(PowerShell'de `~` çalışmaz; tam yol ya da `$env:USERPROFILE` kullanın. Araç yine de baştaki `~`'yı kendisi açar.)
 
    Araç her sürüm için openVuln'u sorgular (≈4 istek/sn), CISA KEV'i indirir, tek bir feed dosyası üretir ve özet basar.
 3. `netpulse-vuln-feed.json` dosyasını NetPulse'a taşı → **Vulnerabilities** → **Import feed**.
