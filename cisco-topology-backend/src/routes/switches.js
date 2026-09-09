@@ -192,7 +192,7 @@ router.get('/topology', authenticate, (req, res) => {
     const edges = store.getEdges();
     const isAdmin = req.user.role === 'Administrator';
     const allowed = allowedPageSet(req); // null = kısıtsız
-    const TOPOLOGY_ALLOWLIST = ['id', 'name', 'ip', 'type', 'status', 'latency', 'position', 'tags', 'topologyPage', 'lastLatency', 'healthIntervalSec', 'ipSlaEnabled', 'ipSlaOkLabel', 'ipSlaFailLabel', 'version'];
+    const TOPOLOGY_ALLOWLIST = ['id', 'name', 'ip', 'type', 'status', 'latency', 'position', 'tags', 'topologyPage', 'lastLatency', 'healthIntervalSec', 'ipSlaEnabled', 'ipSlaOkLabel', 'ipSlaFailLabel', 'version', 'serial'];
     let safeSwitches = switches.map(({ sshPassword, ...s }) => {
         if (!isAdmin) {
             const filtered = {};

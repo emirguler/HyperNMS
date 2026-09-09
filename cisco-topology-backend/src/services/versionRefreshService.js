@@ -1,10 +1,11 @@
 const store = require('../utils/memoryStore');
-const { probeVersion } = require('./snmpService');
+const { probeInventory } = require('./snmpService');
 const { isBlockedIP } = require('../utils/validation');
 
-// Cihaz yazılım sürümlerini (entPhysicalSoftwareRev / sysDescr) SNMP ile periyodik okur ve
-// cihaz kaydına `version` olarak yazar. Böylece Devices listesi sürüme göre sıralanabilir.
-// Sürüm nadiren değiştiği için aralık geniş tutulur; yük ping/backup ile aynı havuz desenidir.
+// Cihaz envanterini (yazılım sürümü + seri numarası + SNMP modeli) periyodik okur ve
+// cihaz kaydına yazar. Sürüm: Devices listesinin sıralaması. Seri/model: Devices
+// aramasının seri no ile çalışması ve detay kartı — cihaz detayı hiç açılmasa da dolar.
+// Bu alanlar nadiren değiştiği için aralık geniş tutulur; yük ping/backup ile aynı havuz desenidir.
 const REFRESH_INTERVAL = 60 * 60 * 1000; // 1 saat
 const CONCURRENCY = 8;                    // aynı anda en fazla SNMP oturumu
 const FIRST_RUN_DELAY = 90 * 1000;        // ilk ping turu status'ü belirlesin diye 90sn bekle
@@ -32,14 +33,21 @@ async function refreshVersions() {
 
         let updated = 0;
         await runPool(devices, async (d) => {
-            const ver = await probeVersion(d);
-            if (ver && ver !== d.version) {
-                store.updateSwitch(d.id, { version: ver });
+            const inv = await probeInventory(d);
+            const patch = {};
+            if (inv.version && inv.version !== d.version) patch.version = inv.version;
+            if (inv.serial && inv.serial !== d.serial) patch.serial = inv.serial;
+            // SNMP modeli AYRI alanda tutulur: elle girilen `model` her zaman öncelikli,
+            // arka plan onu asla ezmez (cihaz detayı da aynı sırayı uygular).
+            if (inv.model && inv.model !== d.snmpModel) patch.snmpModel = inv.model;
+            // Boş dönen alan yazılmaz → SNMP sonradan düşse de son bilinen değer kalır.
+            if (Object.keys(patch).length) {
+                store.updateSwitch(d.id, patch);
                 updated++;
             }
         }, CONCURRENCY);
 
-        if (updated) console.log(`[VERSION] ${updated}/${devices.length} cihaz sürümü güncellendi`);
+        if (updated) console.log(`[VERSION] ${updated}/${devices.length} cihaz envanteri güncellendi (sürüm/seri/model)`);
         return { total: devices.length, updated };
     } catch (e) {
         console.error('[VERSION] Yenileme hatası:', e.message);

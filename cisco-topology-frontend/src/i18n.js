@@ -99,7 +99,7 @@ const translations = {
     pingFailed: 'Failed',
 
     // Device list
-    searchPlaceholder: 'Search by name, IP or type...',
+    searchPlaceholder: 'Search by name, IP, type or serial...',
     all: 'All',
     deviceCount: 'devices',
     edit: 'Edit',
@@ -460,7 +460,7 @@ const translations = {
     pingFailed: 'Ba\u015far\u0131s\u0131z',
 
     // Device list
-    searchPlaceholder: 'Cihaz ad\u0131, IP veya tip ara...',
+    searchPlaceholder: 'Cihaz ad\u0131, IP, tip veya seri no ara...',
     all: 'T\u00fcm\u00fc',
     deviceCount: 'cihaz',
     edit: 'D\u00fczenle',

@@ -1221,10 +1221,14 @@ function pickModel(entClassVbs, entModelVbs) {
     return pick ? ent[pick].model : '';
 }
 
-// Arka plan sürüm yenileme için hafif SNMP sorgusu (sysDescr + entPhysicalSoftwareRev).
+// Arka plan yenileme için hafif SNMP envanter sorgusu: sürüm + seri + model.
+// Seri/model aynı turda okunur ki Devices sayfasındaki "seri no ile arama" tüm
+// filoyu bulsun — kimsenin tek tek cihaz detayını açmasına gerek kalmadan.
+// Dört subtree tek oturumda gider; ek maliyet bir SNMP oturumu değil, iki walk.
 // ASLA throw etmez (havuz güvenliği), oturumu her durumda kapatır.
-async function probeVersion(device) {
-    if (!device || !device.snmpCommunity) return '';
+async function probeInventory(device) {
+    const empty = { version: '', serial: '', model: '' };
+    if (!device || !device.snmpCommunity) return empty;
     let session;
     try {
         session = createSnmpSession(device.ip, device.snmpCommunity, device.snmpPort, device.snmpVersion);
@@ -1234,15 +1238,26 @@ async function probeVersion(device) {
             session.subtree(oid, 20, (vbs) => { for (const vb of vbs) o.push(vb); }, () => r(o));
         });
         const base = await getScalar([SYS_DESCR]);
-        if (!base) return ''; // SNMP yanıt vermiyor → subtree'lerde boşuna timeout bekleme
+        if (!base) return empty; // SNMP yanıt vermiyor → subtree'lerde boşuna timeout bekleme
         const sysDescr = !snmp.isVarbindError(base[0]) ? base[0].value.toString() : '';
-        const [cVbs, wVbs] = await Promise.all([getSubtree(ENT_CLASS), getSubtree(ENT_SW_REV)]);
-        return pickVersion(cVbs, wVbs, sysDescr);
+        const [cVbs, wVbs, sVbs, mVbs] = await Promise.all([
+            getSubtree(ENT_CLASS), getSubtree(ENT_SW_REV), getSubtree(ENT_SERIAL), getSubtree(ENT_MODEL)
+        ]);
+        return {
+            version: pickVersion(cVbs, wVbs, sysDescr),
+            serial: pickSerial(cVbs, sVbs),
+            model: pickModel(cVbs, mVbs),
+        };
     } catch (e) {
-        return '';
+        return empty;
     } finally {
         if (session) { try { session.close(); } catch (_) { /* ignore */ } }
     }
+}
+
+// Yalnızca sürüm isteyen çağrılar için ince sarmalayıcı (eski imza korunur).
+async function probeVersion(device) {
+    return (await probeInventory(device)).version;
 }
 
 // --- IP SLA (CISCO-RTTMON-MIB) ---
@@ -1323,5 +1338,5 @@ async function ipSlaStatus(device) {
 module.exports = {
     getDeviceDetails, getVendorConfig, discoverNeighbors, searchMAC,
     manufacturerFromSysDescr, imageVersionFromSysDescr, inventoryDevice, inventoryAll,
-    ipSlaStatus, probeVersion,
+    ipSlaStatus, probeVersion, probeInventory,
 };

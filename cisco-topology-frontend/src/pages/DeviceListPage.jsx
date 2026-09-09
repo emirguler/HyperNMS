@@ -68,7 +68,7 @@ export default function DeviceListPage({ onEdit }) {
   // Topology page id → okunabilir sayfa adı
   const pageName = (id) => topoTabs.find(tab => tab.id === (id || 'main'))?.name || (id || 'main');
 
-  const filteredDevices = useMemo(() => {
+  const [filteredDevices, serialOnlyHits] = useMemo(() => {
     let list = [...rawDevices];
     if (statusFilter !== 'all') list = list.filter(d => d.status === statusFilter);
     if (topoFilter !== 'all') {
@@ -79,9 +79,20 @@ export default function DeviceListPage({ onEdit }) {
     // filtre artik 'switch' oldugu icin bu sart: aksi halde tipsiz cihazlar
     // listeden sessizce dusecekti.
     if (typeFilter !== 'all') list = list.filter(d => (d.type || 'switch') === typeFilter);
+    // Yalnızca seri numarasından eşleşen satırların id'si: seri hiçbir kolonda
+    // görünmediği için satırın neden listede olduğunu ad altında gösteriyoruz.
+    const serialOnly = new Set();
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      list = list.filter(d => d.name?.toLowerCase().includes(q) || d.ip?.toLowerCase().includes(q) || d.type?.toLowerCase().includes(q));
+      // Seri no etiketten okunurken araya boşluk/tire girebiliyor → iki tarafı da
+      // sadeleştirip karşılaştır ("FOC2246 X8YZ" ile "foc2246x8yz" aynı sayılır).
+      const qs = q.replace(/[\s-]/g, '');
+      list = list.filter(d => {
+        const plain = d.name?.toLowerCase().includes(q) || d.ip?.toLowerCase().includes(q) || d.type?.toLowerCase().includes(q);
+        const bySerial = !!qs && !!d.serial && d.serial.toLowerCase().replace(/[\s-]/g, '').includes(qs);
+        if (bySerial && !plain) serialOnly.add(d.id);
+        return plain || bySerial;
+      });
     }
     list.sort((a, b) => {
       let valA, valB;
@@ -101,7 +112,7 @@ export default function DeviceListPage({ onEdit }) {
       if (valA > valB) return sortConfig.dir === 'asc' ? 1 : -1;
       return 0;
     });
-    return list;
+    return [list, serialOnly];
   }, [rawDevices, searchQuery, sortConfig, statusFilter, topoFilter, typeFilter, topoTabs]);
 
   // Cihaz tipleri elde yazilmaz, kayitlardan turetilir: yeni bir tip eklenirse
@@ -381,7 +392,14 @@ export default function DeviceListPage({ onEdit }) {
                   </td>
                 )}
                 <td data-label="Status"><span className={`status-badge ${d.status === 'UP' ? 'status-up' : 'status-down'}`}>{d.status}</span></td>
-                <td data-label="Name" style={{ fontWeight: 600 }}>{d.name}</td>
+                <td data-label="Name" style={{ fontWeight: 600 }}>
+                  {d.name}
+                  {serialOnlyHits.has(d.id) && (
+                    <span style={{ display: 'block', fontWeight: 400, fontFamily: 'monospace', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                      S/N: {d.serial}
+                    </span>
+                  )}
+                </td>
                 <td data-label="IP" style={{ fontFamily: 'monospace', color: 'var(--text-muted)' }}>{d.ip}</td>
                 <td data-label="Type" className="rw-hide-sm" style={{ textTransform: 'capitalize' }}>{d.type}</td>
                 <td data-label="Page" className="rw-hide-md" style={{ color: 'var(--text-muted)' }}>{pageName(d.topologyPage)}</td>
