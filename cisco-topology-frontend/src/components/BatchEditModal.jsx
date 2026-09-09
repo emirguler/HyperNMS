@@ -5,11 +5,13 @@ import { useViewport } from '../hooks/useViewport';
 
 // Çoklu cihaz toplu düzenleme — yalnızca doldurulan alanlar güncellenir (PUT /switches/batch)
 export default function BatchEditModal({ deviceIds, topoTabs = [], authFetch, onClose, onDone }) {
-  const [form, setForm] = useState({ model: '', sshUsername: '', sshPassword: '', snmpCommunity: '', tags: '', topologyPage: '', ipSlaEnabled: '', ipSlaOkLabel: '', ipSlaFailLabel: '' });
+  const [form, setForm] = useState({ model: '', clearModel: false, sshUsername: '', sshPassword: '', snmpCommunity: '', tags: '', topologyPage: '', ipSlaEnabled: '', ipSlaOkLabel: '', ipSlaFailLabel: '' });
   const { isPhone, isShort, isTablet, isTouch } = useViewport();
 
   // responsive.css'teki .rw-sheet sorgusunun birebir esi: telefon VEYA kisa ekran.
   const sheet = isPhone || isShort;
+  // Dokunmatikte kucuk rem yazilar okunmuyor; onay kutusu etiketi px ile buyur.
+  const compactText = isPhone || isTouch;
   // Tablet ama alt sayfa degil (or. 1024x768 iPad yatay): 8 alanlik form ekrandan tasabilir.
   const midTablet = isTablet && !sheet;
 
@@ -25,10 +27,12 @@ export default function BatchEditModal({ deviceIds, topoTabs = [], authFetch, on
 
   const submit = async () => {
     const updates = {};
-    // Model: yalnizca bosluklardan olusan bir giris "dolu" sayilmamali — aksi halde
-    // sunucu trim'ledikten sonra secili tum cihazlarin modelini sessizce silerdi.
+    // Model'in bosaltilmasi AYRI bir onay kutusuyla istenir: bu modalda bos alan
+    // "degistirme" demek, yoksa kazara silme cok kolay olurdu. Sadece bosluk
+    // yazmak da "dolu" sayilmaz (sunucu trim'ledikten sonra sessizce silerdi).
     const model = form.model.trim();
-    if (model) updates.model = model;
+    if (form.clearModel) updates.model = '';
+    else if (model) updates.model = model;
     if (form.sshUsername) updates.sshUsername = form.sshUsername;
     if (form.sshPassword) updates.sshPassword = form.sshPassword;
     if (form.snmpCommunity) updates.snmpCommunity = form.snmpCommunity;
@@ -96,7 +100,29 @@ export default function BatchEditModal({ deviceIds, topoTabs = [], authFetch, on
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {/* Model once: tek cihaz formundaki sira (ad/IP/model/tip -> kimlik bilgileri).
                 Buyuk harf ipucu ve 200 karakter siniri tek cihaz formuyla ayni. */}
-            {field(t('model'), 'model', 'text', { placeholder: t('modelPlaceholder'), maxLength: 200, autoComplete: 'off', ...badgeLike, enterKeyHint: 'next' })}
+            <div>
+              {field(t('model'), 'model', 'text', {
+                placeholder: t('modelPlaceholder'), maxLength: 200, autoComplete: 'off',
+                disabled: form.clearModel, ...badgeLike, enterKeyHint: 'next',
+              })}
+              {/* Modeli BOSALTMA: bos alan "degistirme" anlamina geldigi icin silme
+                  ayri bir onayla istenir. Isaretlenince yazili deger de temizlenir —
+                  gizli durum kalmasin, ne gonderilecegi ekranda gorunsun. */}
+              <label style={{
+                display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, cursor: 'pointer',
+                fontSize: compactText ? '13px' : '0.82rem', color: 'var(--text-main)',
+                minHeight: isTouch ? 44 : undefined,
+              }}>
+                <input type="checkbox" checked={form.clearModel}
+                  onChange={e => setForm(p => ({ ...p, clearModel: e.target.checked, model: e.target.checked ? '' : p.model }))} />
+                {t('batchClearModel')}
+              </label>
+              {form.clearModel && (
+                <p style={{ margin: '6px 0 0', fontSize: compactText ? '12px' : '0.72rem', color: 'var(--text-dim)', lineHeight: 1.5 }}>
+                  {t('batchClearModelHint')}
+                </p>
+              )}
+            </div>
             {field('SSH Username', 'sshUsername', 'text', { autoComplete: 'off', ...nameLike })}
             {field('SSH Password', 'sshPassword', 'password', { autoComplete: 'new-password', ...nameLike })}
             {field('SNMP Community', 'snmpCommunity', 'text', { autoComplete: 'off', ...nameLike })}

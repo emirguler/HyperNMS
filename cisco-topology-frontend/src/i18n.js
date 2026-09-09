@@ -100,6 +100,8 @@ const translations = {
 
     // Device list
     searchPlaceholder: 'Search by name, IP, type or serial...',
+    batchClearModel: 'Clear the model on the selected devices',
+    batchClearModelHint: 'The model field is emptied; the device detail then shows the model read over SNMP.',
     all: 'All',
     deviceCount: 'devices',
     edit: 'Edit',
@@ -461,6 +463,8 @@ const translations = {
 
     // Device list
     searchPlaceholder: 'Cihaz ad\u0131, IP, tip veya seri no ara...',
+    batchClearModel: 'Se\u00e7ili cihazlarda modeli temizle',
+    batchClearModelHint: 'Model alan\u0131 bo\u015falt\u0131l\u0131r; cihaz detay\u0131nda SNMP ile okunan model g\u00f6r\u00fcn\u00fcr.',
     all: 'T\u00fcm\u00fc',
     deviceCount: 'cihaz',
     edit: 'D\u00fczenle',

@@ -232,6 +232,15 @@ body {
   color: var(--text-dim);
 }
 
+/* Kapali alan: tiklanamadigini gostersin. Hicbir yerde tanimli degildi, bu yuzden
+   kapali bir input/select acik olanindan ayirt edilemiyordu (or. toplu duzenlemede
+   "modeli temizle" isaretliyken Model kutusu, autoSync kapaliyken senkron saati). */
+.modern-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: rgba(15, 23, 42, 0.25);
+}
+
 /* Form etiketi. 5 dosyada 35 yerde kullaniliyordu ama hicbir yerde tanimli degildi.
    Burasi artik tek elden yeniden bicimlendirme noktasi.
    DIKKAT: Sadece TUM cagri yerlerinin zaten inline verdigi ozellikler yazildi
