@@ -708,7 +708,7 @@ router.put('/switches/batch', authenticate, requireAdmin, async (req, res) => {
         return res.status(400).json({ error: 'ids array and updates object required' });
     }
 
-    const allowed = ['sshUsername', 'sshPassword', 'snmpCommunity', 'tags', 'topologyPage', 'type', 'healthIntervalSec', 'ipSlaEnabled', 'ipSlaOkLabel', 'ipSlaFailLabel'];
+    const allowed = ['model', 'sshUsername', 'sshPassword', 'snmpCommunity', 'tags', 'topologyPage', 'type', 'healthIntervalSec', 'ipSlaEnabled', 'ipSlaOkLabel', 'ipSlaFailLabel'];
     const safeUpdates = {};
     for (const key of Object.keys(updates)) {
         if (allowed.includes(key)) safeUpdates[key] = updates[key];
@@ -721,6 +721,10 @@ router.put('/switches/batch', authenticate, requireAdmin, async (req, res) => {
     for (const k of ['ipSlaOkLabel', 'ipSlaFailLabel']) {
         if (safeUpdates[k] !== undefined) safeUpdates[k] = String(safeUpdates[k]).trim().slice(0, 12);
     }
+    // Model: validateSwitch'in tek cihaz icin uyguladigi 200 karakter siniri (burada
+    // reddetmek yerine kirpilir — bu ucun ipSla etiketlerindeki davranisiyla ayni).
+    // Elle girilen model SNMP'den okunan snmpModel'den her zaman onceliklidir.
+    if (safeUpdates.model !== undefined) safeUpdates.model = String(safeUpdates.model).trim().slice(0, 200);
 
     if (safeUpdates.sshPassword) {
         safeUpdates.sshPassword = encryptPassword(safeUpdates.sshPassword);

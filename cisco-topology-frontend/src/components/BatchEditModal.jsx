@@ -5,7 +5,7 @@ import { useViewport } from '../hooks/useViewport';
 
 // Çoklu cihaz toplu düzenleme — yalnızca doldurulan alanlar güncellenir (PUT /switches/batch)
 export default function BatchEditModal({ deviceIds, topoTabs = [], authFetch, onClose, onDone }) {
-  const [form, setForm] = useState({ sshUsername: '', sshPassword: '', snmpCommunity: '', tags: '', topologyPage: '', ipSlaEnabled: '', ipSlaOkLabel: '', ipSlaFailLabel: '' });
+  const [form, setForm] = useState({ model: '', sshUsername: '', sshPassword: '', snmpCommunity: '', tags: '', topologyPage: '', ipSlaEnabled: '', ipSlaOkLabel: '', ipSlaFailLabel: '' });
   const { isPhone, isShort, isTablet, isTouch } = useViewport();
 
   // responsive.css'teki .rw-sheet sorgusunun birebir esi: telefon VEYA kisa ekran.
@@ -25,6 +25,10 @@ export default function BatchEditModal({ deviceIds, topoTabs = [], authFetch, on
 
   const submit = async () => {
     const updates = {};
+    // Model: yalnizca bosluklardan olusan bir giris "dolu" sayilmamali — aksi halde
+    // sunucu trim'ledikten sonra secili tum cihazlarin modelini sessizce silerdi.
+    const model = form.model.trim();
+    if (model) updates.model = model;
     if (form.sshUsername) updates.sshUsername = form.sshUsername;
     if (form.sshPassword) updates.sshPassword = form.sshPassword;
     if (form.snmpCommunity) updates.snmpCommunity = form.snmpCommunity;
@@ -90,6 +94,9 @@ export default function BatchEditModal({ deviceIds, topoTabs = [], authFetch, on
         <div className="rw-sheet-body">
           <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: 0, marginBottom: 16 }}>Only filled fields will be updated. Leave blank to skip.</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {/* Model once: tek cihaz formundaki sira (ad/IP/model/tip -> kimlik bilgileri).
+                Buyuk harf ipucu ve 200 karakter siniri tek cihaz formuyla ayni. */}
+            {field(t('model'), 'model', 'text', { placeholder: t('modelPlaceholder'), maxLength: 200, autoComplete: 'off', ...badgeLike, enterKeyHint: 'next' })}
             {field('SSH Username', 'sshUsername', 'text', { autoComplete: 'off', ...nameLike })}
             {field('SSH Password', 'sshPassword', 'password', { autoComplete: 'new-password', ...nameLike })}
             {field('SNMP Community', 'snmpCommunity', 'text', { autoComplete: 'off', ...nameLike })}
