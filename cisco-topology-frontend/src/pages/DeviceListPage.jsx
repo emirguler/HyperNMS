@@ -6,6 +6,7 @@ import { useViewport } from '../hooks/useViewport';
 import BulkImportModal from '../components/BulkImportModal';
 import FindDeviceModal from '../components/FindDeviceModal';
 import ConfirmModal from '../components/ConfirmModal';
+import BatchEditModal from '../components/BatchEditModal';
 import { showToast } from '../Toast';
 import { t } from '../i18n';
 import { API_BASE } from '../config';
@@ -63,7 +64,6 @@ export default function DeviceListPage({ onEdit }) {
   const [detailedLoading, setDetailedLoading] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [showBatchEdit, setShowBatchEdit] = useState(false);
-  const [batchForm, setBatchForm] = useState({ sshUsername: '', sshPassword: '', snmpCommunity: '', tags: '', topologyPage: '', ipSlaEnabled: '', ipSlaOkLabel: '', ipSlaFailLabel: '' });
 
   // Topology page id → okunabilir sayfa adı
   const pageName = (id) => topoTabs.find(tab => tab.id === (id || 'main'))?.name || (id || 'main');
@@ -203,43 +203,6 @@ export default function DeviceListPage({ onEdit }) {
       setSelectedIds(new Set());
     } else {
       setSelectedIds(new Set(filteredDevices.map(d => d.id)));
-    }
-  };
-
-  const handleBatchSubmit = async () => {
-    const updates = {};
-    if (batchForm.sshUsername) updates.sshUsername = batchForm.sshUsername;
-    if (batchForm.sshPassword) updates.sshPassword = batchForm.sshPassword;
-    if (batchForm.snmpCommunity) updates.snmpCommunity = batchForm.snmpCommunity;
-    if (batchForm.tags) updates.tags = batchForm.tags.split(',').map(t => t.trim()).filter(Boolean);
-    if (batchForm.topologyPage) updates.topologyPage = batchForm.topologyPage;
-    if (batchForm.ipSlaEnabled) updates.ipSlaEnabled = batchForm.ipSlaEnabled === 'on';
-    if (batchForm.ipSlaOkLabel) updates.ipSlaOkLabel = batchForm.ipSlaOkLabel;
-    if (batchForm.ipSlaFailLabel) updates.ipSlaFailLabel = batchForm.ipSlaFailLabel;
-
-    if (Object.keys(updates).length === 0) {
-      showToast('No fields filled in', 'error');
-      return;
-    }
-
-    try {
-      const res = await authFetch('/switches/batch', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: selectedVisible.map(d => d.id), updates })
-      });
-      if (res && res.ok) {
-        showToast(`${selectedVisible.length} device(s) updated`, 'success');
-        setSelectedIds(new Set());
-        setShowBatchEdit(false);
-        setBatchForm({ sshUsername: '', sshPassword: '', snmpCommunity: '', tags: '', topologyPage: '', ipSlaEnabled: '', ipSlaOkLabel: '', ipSlaFailLabel: '' });
-        fetchData();
-      } else {
-        const d = res ? await res.json().catch(() => ({})) : {};
-        showToast(d.error || 'Batch update failed', 'error');
-      }
-    } catch {
-      showToast('Batch update failed', 'error');
     }
   };
 
@@ -441,69 +404,17 @@ export default function DeviceListPage({ onEdit }) {
         </div>
       )}
 
+      {/* Toplu duzenleme — Topology sayfasiyla AYNI bilesen. Bu sayfa eskiden ayni
+          modalin kendi KOPYASINI tasiyordu; kopyalar birbirinden ayrildigi icin
+          bilesene eklenen bir alan (or. Model) bu sayfada gorunmuyordu. */}
       {showBatchEdit && (
-        <div className="modal-overlay" onClick={() => setShowBatchEdit(false)} onKeyDown={e => { if (e.key === 'Escape') setShowBatchEdit(false); }}>
-          <div className="modal-content rw-sheet" style={{ width: 460 }} onClick={e => e.stopPropagation()}>
-            <div className="rw-sheet-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: compact ? 0 : 20 }}>
-              <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 600, color: 'var(--text-main)' }}>Batch Edit ({selectedVisible.length} devices)</h2>
-              <button className="rw-tap rw-sheet-close" onClick={() => setShowBatchEdit(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '1.5rem', cursor: 'pointer' }}>&times;</button>
-            </div>
-            <div className="rw-sheet-body">
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginBottom: 16 }}>Only filled fields will be updated. Leave blank to skip.</p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div>
-                <label className="input-label" style={{ display: 'block', marginBottom: 6, color: 'var(--text-muted)' }}>SSH Username</label>
-                <input className="modern-input" value={batchForm.sshUsername} onChange={e => setBatchForm(p => ({ ...p, sshUsername: e.target.value }))} autoComplete="off" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
-              </div>
-              <div>
-                <label className="input-label" style={{ display: 'block', marginBottom: 6, color: 'var(--text-muted)' }}>SSH Password</label>
-                <input className="modern-input" type="password" value={batchForm.sshPassword} onChange={e => setBatchForm(p => ({ ...p, sshPassword: e.target.value }))} autoComplete="new-password" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
-              </div>
-              <div>
-                <label className="input-label" style={{ display: 'block', marginBottom: 6, color: 'var(--text-muted)' }}>SNMP Community</label>
-                <input className="modern-input" value={batchForm.snmpCommunity} onChange={e => setBatchForm(p => ({ ...p, snmpCommunity: e.target.value }))} autoCapitalize="none" autoCorrect="off" spellCheck={false} />
-              </div>
-              <div>
-                <label className="input-label" style={{ display: 'block', marginBottom: 6, color: 'var(--text-muted)' }}>Tags (comma-separated)</label>
-                <input className="modern-input" value={batchForm.tags} onChange={e => setBatchForm(p => ({ ...p, tags: e.target.value }))} placeholder="core, datacenter" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
-              </div>
-              <div>
-                <label className="input-label" style={{ display: 'block', marginBottom: 6, color: 'var(--text-muted)' }}>Topology Page</label>
-                <select className="modern-input" value={batchForm.topologyPage} onChange={e => setBatchForm(p => ({ ...p, topologyPage: e.target.value }))}>
-                  <option value="">-- No change --</option>
-                  {topoTabs.map(tab => (
-                    <option key={tab.id} value={tab.id}>{tab.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: 14, marginTop: 2 }}>
-                <label className="input-label" style={{ display: 'block', marginBottom: 6, color: 'var(--text-muted)' }}>{t('ipSlaMonitoring')}</label>
-                <select className="modern-input" value={batchForm.ipSlaEnabled} onChange={e => setBatchForm(p => ({ ...p, ipSlaEnabled: e.target.value }))}>
-                  <option value="">-- No change --</option>
-                  <option value="on">Enabled</option>
-                  <option value="off">Disabled</option>
-                </select>
-              </div>
-              {batchForm.ipSlaEnabled !== 'off' && (
-                <div className="grid-2col rw-stack">
-                  <div>
-                    <label className="input-label" style={{ display: 'block', marginBottom: 6, color: 'var(--text-muted)' }}>{t('ipSlaOkLabel')}</label>
-                    <input className="modern-input" value={batchForm.ipSlaOkLabel} onChange={e => setBatchForm(p => ({ ...p, ipSlaOkLabel: e.target.value }))} placeholder="MD" maxLength={12} autoComplete="off" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
-                  </div>
-                  <div>
-                    <label className="input-label" style={{ display: 'block', marginBottom: 6, color: 'var(--text-muted)' }}>{t('ipSlaFailLabel')}</label>
-                    <input className="modern-input" value={batchForm.ipSlaFailLabel} onChange={e => setBatchForm(p => ({ ...p, ipSlaFailLabel: e.target.value }))} placeholder="GSM" maxLength={12} autoComplete="off" autoCapitalize="none" autoCorrect="off" spellCheck={false} enterKeyHint="done" />
-                  </div>
-                </div>
-              )}
-            </div>
-            </div>
-            <div className="rw-sheet-foot" style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: compact ? 0 : 24 }}>
-              <button className="btn btn-ghost" onClick={() => setShowBatchEdit(false)}>{t('cancel')}</button>
-              <button className="btn btn-primary" onClick={handleBatchSubmit}>Apply Changes</button>
-            </div>
-          </div>
-        </div>
+        <BatchEditModal
+          deviceIds={selectedVisible.map(d => d.id)}
+          topoTabs={topoTabs}
+          authFetch={authFetch}
+          onClose={() => setShowBatchEdit(false)}
+          onDone={() => { setSelectedIds(new Set()); fetchData(); }}
+        />
       )}
 
       {showBulkImport && <BulkImportModal onClose={() => setShowBulkImport(false)} />}
