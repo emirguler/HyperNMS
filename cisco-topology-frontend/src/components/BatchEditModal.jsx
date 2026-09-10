@@ -84,14 +84,14 @@ export default function BatchEditModal({ deviceIds, topoTabs = [], authFetch, on
   const badgeLike = { autoCapitalize: 'characters', autoCorrect: 'off', spellCheck: false };
 
   const labelStyle = { display: 'block', marginBottom: 6, color: 'var(--text-muted)' };
-  // "clear" kutusu etiket satirinin sagina sigar: bes alanin her birine ayri bir
-  // satir eklemek modali iki katina cikariyordu. Negatif margin + padding, gorunumu
-  // buyutmeden dokunmatikte 44px hedef verir (DeviceListPage'deki TAP_BOX deseni).
+  // "clear" kutusu metin kutusunun SAGINDA, ayni satirda durur: alanin ustunde
+  // ayri bir satir olarak durdugunda hangi alana ait oldugu okunmuyordu. Satir
+  // yuksekligini input belirledigi icin dolgu, satiri buyutmeden dokunma alanini
+  // genisletir (input dokunmatikte 44px, kutu dolgusuyla ~41px).
   const clearToggle = {
     display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0, cursor: 'pointer',
     fontSize: compactText ? '12px' : '0.72rem', color: 'var(--text-dim)',
-    textTransform: 'uppercase', letterSpacing: 0.4,
-    ...(isTouch ? { padding: 11, margin: -11 } : null),
+    textTransform: 'uppercase', letterSpacing: 0.4, padding: isTouch ? '11px 4px' : '8px 2px',
   };
   const hintStyle = {
     margin: '6px 0 0', fontSize: compactText ? '12px' : '0.72rem',
@@ -110,16 +110,19 @@ export default function BatchEditModal({ deviceIds, topoTabs = [], authFetch, on
           : clearKey === 'clearSnmpCommunity' ? 'batchClearSnmp' : 'batchClearTags');
     return (
       <div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 6 }}>
-          <label className="input-label" htmlFor={id} style={{ color: 'var(--text-muted)', minWidth: 0 }}>{label}</label>
+        <label className="input-label" htmlFor={id} style={labelStyle}>{label}</label>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {/* minWidth:0 sart: .modern-input width:100% tasiyor, flex kutusunda
+              kucululmesine izin verilmezse "clear" kutusunu satirdan tasirir. */}
+          <input id={id} className="modern-input" style={{ flex: 1, minWidth: 0 }}
+            value={form[key]} disabled={cleared}
+            onChange={e => setForm(p => ({ ...p, [key]: e.target.value }))} {...extra} />
           <label style={clearToggle} title={aria}>
             <input type="checkbox" checked={cleared} aria-label={aria}
               onChange={e => setForm(p => ({ ...p, [clearKey]: e.target.checked, [key]: e.target.checked ? '' : p[key] }))} />
             {t('batchClear')}
           </label>
         </div>
-        <input id={id} className="modern-input" value={form[key]} disabled={cleared}
-          onChange={e => setForm(p => ({ ...p, [key]: e.target.value }))} {...extra} />
         {cleared && hint && <p style={hintStyle}>{hint}</p>}
       </div>
     );
