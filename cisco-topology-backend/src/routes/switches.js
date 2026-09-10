@@ -721,6 +721,13 @@ router.put('/switches/batch', authenticate, requireAdmin, async (req, res) => {
     for (const k of ['ipSlaOkLabel', 'ipSlaFailLabel']) {
         if (safeUpdates[k] !== undefined) safeUpdates[k] = String(safeUpdates[k]).trim().slice(0, 12);
     }
+    // Etiketler: tek cihaz yolundaki sanitizeSwitch ile ayni sinirlar (dizi, en fazla
+    // 20 etiket, her biri 50 karakter). Toplu duzenlemede etiketleri BOSALTMAK da
+    // mumkun oldugu icin bos dizi gecerli bir deger sayilir.
+    if (safeUpdates.tags !== undefined) {
+        if (!Array.isArray(safeUpdates.tags)) return res.status(400).json({ error: 'tags must be an array' });
+        safeUpdates.tags = safeUpdates.tags.filter(x => typeof x === 'string').slice(0, 20).map(x => x.trim().slice(0, 50)).filter(Boolean);
+    }
     // Model: validateSwitch'in tek cihaz icin uyguladigi 200 karakter siniri (burada
     // reddetmek yerine kirpilir — bu ucun ipSla etiketlerindeki davranisiyla ayni).
     // Elle girilen model SNMP'den okunan snmpModel'den her zaman onceliklidir.
