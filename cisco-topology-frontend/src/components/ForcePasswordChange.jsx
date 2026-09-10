@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useViewport } from '../hooks/useViewport';
 import { showToast } from '../Toast';
+import { t } from '../i18n';
 
 // Etiketler masaustunde 0.75rem (12px) kaliyor; telefonda 13px'e cikiyor.
 // Iki ayri sabit, cunku inline stil bir media query tasiyamaz.
@@ -42,14 +43,14 @@ export default function ForcePasswordChange({ onComplete }) {
         body: JSON.stringify({ newPassword })
       });
       if (res.ok) {
-        showToast('Password changed successfully', 'success');
+        showToast('New password saved', 'success');
         onComplete();
       } else {
         const data = await res.json().catch(() => ({}));
-        setError(data.error || 'Operation failed');
+        setError(data.error || t('operationFailed'));
       }
     } catch {
-      setError('Unable to connect to server');
+      setError(t('netError'));
     }
   };
 

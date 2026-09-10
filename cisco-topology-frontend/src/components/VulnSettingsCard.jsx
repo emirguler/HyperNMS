@@ -43,7 +43,7 @@ export default function VulnSettingsCard() {
       const d = await res.json().catch(() => ({}));
       if (res && res.ok) { showToast(t('vulnSetSaved'), 'success'); setSecretSet(!!d.clientSecretSet); set('clientSecret', ''); }
       else showToast(d.error || t('operationFailed'), 'error');
-    } catch { showToast(t('operationFailed'), 'error'); } finally { setSaving(false); }
+    } catch { showToast(t('netError'), 'error'); } finally { setSaving(false); }
   };
 
   const test = async () => {
@@ -53,7 +53,7 @@ export default function VulnSettingsCard() {
       const d = await res.json().catch(() => ({}));
       if (res && res.ok) setResults(d.results || []);
       else setResults([{ host: '—', ok: false, message: d.error || t('operationFailed') }]);
-    } catch { setResults([{ host: '—', ok: false, message: t('operationFailed') }]); } finally { setTesting(false); }
+    } catch { setResults([{ host: '—', ok: false, message: t('netError') }]); } finally { setTesting(false); }
   };
 
   const lbl = compact

@@ -129,7 +129,7 @@ export default function BulkImportModal({ onClose }) {
         fetchData();
       }
     } catch {
-      showToast('Import failed', 'error');
+      showToast('Could not import the list', 'error');
     } finally {
       setLoading(false);
     }
@@ -242,7 +242,7 @@ export default function BulkImportModal({ onClose }) {
         <div className={compact ? 'rw-sheet-foot' : undefined} style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
           <button className="btn btn-ghost" onClick={onClose}>Close</button>
           <button className="btn btn-primary" onClick={handleImport} disabled={devices.length === 0 || loading}>
-            {loading ? 'Importing...' : `Import ${devices.length} Device(s)`}
+            {loading ? 'Importing…' : `Import ${devices.length} Device(s)`}
           </button>
         </div>
       </div>

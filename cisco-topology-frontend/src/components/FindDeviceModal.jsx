@@ -133,7 +133,7 @@ export default function FindDeviceModal({ onClose }) {
       if (!text || !text.trim()) { showToast('Clipboard is empty', 'error'); return; }
       setIpText(prev => (prev.trim() ? prev.replace(/\s+$/, '') + '\n' + text : text));
     } catch {
-      showToast('Clipboard is not available — paste into the box manually', 'error');
+      showToast('The clipboard is blocked here. Paste into the box by hand.', 'error');
     }
   };
 

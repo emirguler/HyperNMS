@@ -591,10 +591,10 @@ function TopologyInner({ onEdit, onClone }) {
         setDiscoveryResult(data);
         showToast(`Discovered ${data.totalNeighbors} neighbors, created ${data.newEdges} connections`, 'success');
       } else {
-        showToast('Discovery failed', 'error');
+        showToast('No neighbours came back. Check SNMP on the devices.', 'error');
       }
     } catch (e) {
-      showToast('Discovery error: ' + e.message, 'error');
+      showToast(`${t('netError')} (${e.message})`, 'error');
     }
     setDiscovering(false);
   };

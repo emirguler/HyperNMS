@@ -58,7 +58,7 @@ export default function LoginPage() {
         if (/expired|Invalid session/i.test(r.error || '')) setPendingToken('');
       }
     } catch {
-      setError('Server unavailable. Please try again later.');
+      setError(t('netError'));
     } finally {
       setLoading(false);
     }
@@ -81,7 +81,7 @@ export default function LoginPage() {
         setError(result.error);
       }
     } catch {
-      setError('Server unavailable. Please try again later.');
+      setError(t('netError'));
     } finally {
       setLoading(false);
     }
@@ -220,7 +220,7 @@ export default function LoginPage() {
             style={{ width: '100%', padding: '12px', fontSize: '0.9rem' }}
             disabled={loading}
           >
-            {loading ? 'Signing in...' : 'Sign In'}
+            {loading ? t('loggingIn') : 'Sign In'}
           </button>
         </form>
         )}

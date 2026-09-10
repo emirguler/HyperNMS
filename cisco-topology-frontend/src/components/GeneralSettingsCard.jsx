@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useViewport } from '../hooks/useViewport';
 import { showToast } from '../Toast';
+import { t } from '../i18n';
 
 // Genel (cihaz geneli) ayarlar — sistem geneli, admin ayarlar. Ayarlar hub'indaki
 // "General" kartinin popup icerigi. Simdilik: kablolu baglanti comet animasyonu toggle'i.
@@ -50,7 +51,7 @@ export default function GeneralSettingsCard({ embedded }) {
       }
     } catch (e) {
       setGeneral(prev);
-      showToast('Connection error', 'error');
+      showToast(t('netError'), 'error');
     }
   };
 

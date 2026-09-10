@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useViewport } from '../hooks/useViewport';
+import { t } from '../i18n';
 
 // Önbellekte MAC'ler 12 hane ham tutulur → aa:bb:cc:dd:ee:ff olarak göster
 const fmtMac = (m) => String(m || '').replace(/(.{2})(?=.)/g, '$1:');
@@ -45,7 +46,7 @@ export default function MacSearchPage() {
         setError(d?.error || 'Search failed');
       }
     } catch (err) {
-      setError('Network error: ' + err.message);
+      setError(`${t('netError')} (${err.message})`);
     }
     setLoading(false);
     setLoadingType('');
@@ -94,14 +95,14 @@ export default function MacSearchPage() {
           disabled={loading || query.trim().length < 4}
           style={{ padding: '12px 24px', fontSize: '0.9rem', whiteSpace: 'nowrap' }}
         >
-          {loading && loadingType === 'search' ? 'Searching...' : 'Search'}
+          {loading && loadingType === 'search' ? 'Searching…' : 'Search'}
         </button>
       </form>
 
       {loading && (
         <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
           <div style={{ fontSize: '2rem', marginBottom: 12 }}>⏳</div>
-          <p>{loadingType === 'live' ? 'Live scanning switch MAC tables...' : 'Scanning switch MAC tables via SNMP...'}</p>
+          <p>{loadingType === 'live' ? 'Live scanning switch MAC tables…' : 'Scanning switch MAC tables via SNMP…'}</p>
           <p style={{ fontSize: '0.8rem' }}>This may take 10-30 seconds depending on the number of devices and VLANs</p>
         </div>
       )}

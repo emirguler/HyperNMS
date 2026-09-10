@@ -148,7 +148,7 @@ function importFeed(obj, user) {
         });
     }
     if (fresh.length > shown.length) {
-        addNotification({ type: 'info', severity: 'warning', title: `${fresh.length - shown.length} more new security advisories`, message: 'See Vulnerabilities page' });
+        addNotification({ type: 'info', severity: 'warning', title: `${fresh.length - shown.length} more new security advisories`, message: 'Open the Vulnerabilities page for the rest' });
     }
     return { advisories: Object.keys(feed.advisories).length, versions: Object.keys(feed.versions).length, newRelevant: fresh.length };
 }

@@ -328,7 +328,7 @@ function CurrentConfig({ compact, touch, outLoading, outErr, output, onReload })
         padding: 12, fontSize: '0.78rem', fontFamily: 'monospace',
         minHeight: compact ? 0 : 220, maxHeight: compact ? '38dvh' : 340, overflow: 'auto', whiteSpace: 'pre-wrap'
       }}>
-        {outLoading ? `⏳ ${t('loading')}...` : (outErr ? `✕ ${outErr}` : (output || '—'))}
+        {outLoading ? `⏳ ${t('loading')}…` : (outErr ? `✕ ${outErr}` : (output || '—'))}
       </pre>
     </>
   );

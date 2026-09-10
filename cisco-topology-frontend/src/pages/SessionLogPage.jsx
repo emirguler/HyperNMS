@@ -462,7 +462,7 @@ export default function SessionLogPage() {
             <p className="confirm-desc">
               {confirmDelete === 'all'
                 ? 'Permanently delete every recorded session (live ones are kept). Transcripts cannot be recovered.'
-                : <>Permanently delete the recorded session for <strong>{confirmDelete.deviceName}</strong> ({confirmDelete.username})? This cannot be undone.</>}
+                : <>Permanently delete the recorded session for <strong>{confirmDelete.deviceName}</strong> ({confirmDelete.username})? Everything typed and printed in that session goes with it.</>}
             </p>
             <div className="confirm-actions">
               <button className="btn btn-ghost" onClick={() => setConfirmDelete(null)}>Cancel</button>

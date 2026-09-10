@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useViewport } from '../hooks/useViewport';
 import { showToast } from '../Toast';
+import { t } from '../i18n';
 
 // Active Directory / LDAP oturum acma ayarlari (Settings modali icinde).
 // bindPassword asla geri gonderilmez; "kayitli" ise placeholder gosterilir.
@@ -47,7 +48,7 @@ export default function AdSettingsCard({ cardStyle, embedded }) {
       const d = await res.json().catch(() => ({}));
       if (res && res.ok) { showToast('AD settings saved', 'success'); setBindPasswordSet(!!d.bindPasswordSet); set('bindPassword', ''); }
       else showToast(d.error || 'Save failed', 'error');
-    } catch (e) { showToast('Connection error', 'error'); } finally { setSaving(false); }
+    } catch (e) { showToast(t('netError'), 'error'); } finally { setSaving(false); }
   };
 
   const test = async () => {
@@ -59,7 +60,7 @@ export default function AdSettingsCard({ cardStyle, embedded }) {
       });
       const d = await res.json().catch(() => ({}));
       setTestResult((res && res.ok && d.ok) ? { ok: true, message: d.message || 'Success' } : { ok: false, message: d.error || 'Test failed' });
-    } catch (e) { setTestResult({ ok: false, message: 'Connection error' }); } finally { setTesting(false); }
+    } catch (e) { setTestResult({ ok: false, message: t('netError') }); } finally { setTesting(false); }
   };
 
   // Dar govdede 11.5px buyuk-harf + harf araligi hem okunmaz hem genislik yiyor:

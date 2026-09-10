@@ -43,7 +43,7 @@ export default function BatchEditModal({ deviceIds, topoTabs = [], authFetch, on
     if (form.ipSlaFailLabel) updates.ipSlaFailLabel = form.ipSlaFailLabel;
 
     if (Object.keys(updates).length === 0) {
-      showToast('No fields filled in', 'error');
+      showToast('Nothing to apply yet. Fill in a field first.', 'error');
       return;
     }
     try {
@@ -53,15 +53,15 @@ export default function BatchEditModal({ deviceIds, topoTabs = [], authFetch, on
         body: JSON.stringify({ ids: deviceIds, updates })
       });
       if (res && res.ok) {
-        showToast(`${deviceIds.length} device(s) updated`, 'success');
+        showToast(`${deviceIds.length} ${deviceIds.length === 1 ? 'device' : 'devices'} updated`, 'success');
         onDone && onDone();
         onClose();
       } else {
         const d = await res.json().catch(() => ({}));
-        showToast(d.error || 'Batch update failed', 'error');
+        showToast(d.error || t('operationFailed'), 'error');
       }
     } catch {
-      showToast('Batch update failed', 'error');
+      showToast(t('netError'), 'error');
     }
   };
 
@@ -96,7 +96,7 @@ export default function BatchEditModal({ deviceIds, topoTabs = [], authFetch, on
         </div>
 
         <div className="rw-sheet-body">
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: 0, marginBottom: 16 }}>Only filled fields will be updated. Leave blank to skip.</p>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: 0, marginBottom: 16 }}>Whatever you leave blank stays as it is.</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {/* Model once: tek cihaz formundaki sira (ad/IP/model/tip -> kimlik bilgileri).
                 Buyuk harf ipucu ve 200 karakter siniri tek cihaz formuyla ayni. */}

@@ -150,10 +150,10 @@ export default function DeviceListPage({ onEdit }) {
         a.download = 'devices.csv';
         a.click();
         URL.revokeObjectURL(url);
-        showToast('CSV exported', 'success');
+        showToast('Device list downloaded', 'success');
         setShowDownloadMenu(false);
       }
-    } catch { showToast('Export failed', 'error'); }
+    } catch { showToast(t('netError'), 'error'); }
   };
 
   // Detaylı liste: her cihazdan SNMP ile serial/model/version toplanır (yavaş)
@@ -169,13 +169,13 @@ export default function DeviceListPage({ onEdit }) {
         a.download = 'devices-detailed.csv';
         a.click();
         URL.revokeObjectURL(url);
-        showToast('Detailed CSV exported', 'success');
+        showToast('Detailed list downloaded', 'success');
         setShowDownloadMenu(false);
       } else {
         const d = await res.json().catch(() => ({}));
-        showToast(d.error || 'Export failed', 'error');
+        showToast(d.error || 'Could not build the detailed list', 'error');
       }
-    } catch { showToast('Export failed', 'error'); }
+    } catch { showToast(t('netError'), 'error'); }
     finally { setDetailedLoading(false); }
   };
 
@@ -284,7 +284,7 @@ export default function DeviceListPage({ onEdit }) {
           {/* Filtre disinda kalan secimler islenmeyecek - sessizce yutmak yerine soyle */}
           {hiddenSelectedCount > 0 && (
             <span style={{ fontSize: '0.78rem', color: 'var(--warning)' }}>
-              {hiddenSelectedCount} more hidden by filters (not affected)
+              {hiddenSelectedCount} more are hidden by the filter, so they stay untouched
             </span>
           )}
           <button className="btn btn-primary btn-sm" onClick={() => setShowBatchEdit(true)}>Batch Edit</button>
@@ -395,7 +395,7 @@ export default function DeviceListPage({ onEdit }) {
         <div className="modal-overlay" onKeyDown={e => { if (e.key === 'Enter') confirmDelete(); if (e.key === 'Escape') setDeleteTarget(null); }}>
           <div className="confirm-modal-content">
             <h3 className="confirm-title">{t('deleteDevice')}</h3>
-            <p className="confirm-desc">{t('deleteDeviceConfirm')} <strong>{deleteTarget.name}</strong> ({deleteTarget.ip})? {t('deleteDeviceWarn')}</p>
+            <p className="confirm-desc">{t('deleteDeviceConfirm').replace('{name}', deleteTarget.name).replace('{ip}', deleteTarget.ip)}</p>
             <div className="confirm-actions">
               <button className="btn btn-ghost" onClick={() => setDeleteTarget(null)}>{t('cancel')}</button>
               <button className="btn btn-danger" onClick={confirmDelete} autoFocus>{t('yesDelete')}</button>
@@ -457,7 +457,7 @@ export default function DeviceListPage({ onEdit }) {
               const res = await authFetch(`/switches/${id}`, { method: 'DELETE' });
               if (res && res.ok) deleted++;
             }
-            showToast(`${deleted} device(s) deleted`, 'success');
+            showToast(`${deleted} ${deleted === 1 ? 'device' : 'devices'} deleted`, 'success');
             setSelectedIds(new Set());
             fetchData();
           }}

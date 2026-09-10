@@ -3,6 +3,7 @@ import qrcode from 'qrcode-generator';
 import { useAuth } from '../context/AuthContext';
 import { useViewport } from '../hooks/useViewport';
 import { showToast } from '../Toast';
+import { t } from '../i18n';
 
 /* ============================================================================
    IKI ASAMALI DOGRULAMA (TOTP) — Settings > Security
@@ -62,7 +63,7 @@ export default function TwoFactorCard() {
     try {
       const r = await authFetch(path, { method: 'POST', body: JSON.stringify(body || {}) });
       const d = r ? await r.json().catch(() => ({})) : {};
-      if (!r || !r.ok) { showToast(d.error || 'Operation failed', 'error'); return null; }
+      if (!r || !r.ok) { showToast(d.error || t('operationFailed'), 'error'); return null; }
       return d;
     } finally { setBusy(false); }
   };

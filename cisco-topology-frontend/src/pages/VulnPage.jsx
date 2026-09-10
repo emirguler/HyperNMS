@@ -86,7 +86,7 @@ export default function VulnPage() {
       a.href = url; a.download = `netpulse-vuln-inventory-${new Date().toISOString().slice(0, 10)}.json`;
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } catch { showToast(t('operationFailed'), 'error'); }
+    } catch { showToast(t('netError'), 'error'); }
   };
 
   const onFile = (e) => {

@@ -156,7 +156,7 @@ export default function DeviceDetailPage({ onEdit }) {
   // Deger kopyalama (dokunmatikte title tooltip'i yok). Basari DOGRULANIR, yoksa hata toast'i.
   const copyValue = async (label, val) => {
     const ok = await copyToClipboard(val);
-    showToast(ok ? `${label} copied` : 'Copy not supported here — use Download', ok ? 'success' : 'error');
+    showToast(ok ? `${label} copied` : 'Copying is blocked here. Use Download instead.', ok ? 'success' : 'error');
   };
 
   // Cihaz kaydi (form icin): /topology'den gelen ham nesne — SwitchFormModal'in
@@ -666,7 +666,7 @@ function ImportableBackupCard({ deviceId, hostname }) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1600);
     } else {
-      showToast('Copy not supported here — use Download', 'error');
+      showToast('Copying is blocked here. Use Download instead.', 'error');
     }
   };
 

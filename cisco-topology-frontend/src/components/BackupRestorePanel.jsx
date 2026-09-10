@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext';
 import { useViewport } from '../hooks/useViewport';
 import { API_BASE } from '../config';
 import { showToast } from '../Toast';
+import { t } from '../i18n';
 
 // Yedek al / geri yukle — Ayarlar hub'indaki "Backup & Restore" kartinin popup icerigi.
 export default function BackupRestorePanel() {
@@ -43,10 +44,10 @@ export default function BackupRestorePanel() {
         URL.revokeObjectURL(url);
         showToast('Backup downloaded', 'success');
       } else {
-        showToast('Backup failed', 'error');
+        showToast('Could not build the backup file', 'error');
       }
     } catch {
-      showToast('Connection error', 'error');
+      showToast(t('netError'), 'error');
     } finally {
       setDownloading(false);
     }
@@ -60,7 +61,7 @@ export default function BackupRestorePanel() {
       try {
         const backup = JSON.parse(ev.target.result);
         if (!backup.version || !backup.data) {
-          showToast('Invalid backup file', 'error');
+          showToast('This file is not a NetPulse backup', 'error');
           return;
         }
         setRestorePreview({
@@ -73,7 +74,7 @@ export default function BackupRestorePanel() {
           tabs: backup.data.topoTabs?.length || 0,
         });
       } catch {
-        showToast('Could not parse backup file', 'error');
+        showToast('This file is not readable JSON', 'error');
       }
     };
     reader.readAsText(file);
@@ -100,7 +101,7 @@ export default function BackupRestorePanel() {
         showToast(err.error || 'Restore failed', 'error');
       }
     } catch {
-      showToast('Connection error', 'error');
+      showToast(t('netError'), 'error');
     } finally {
       setRestoring(false);
     }
@@ -130,7 +131,7 @@ export default function BackupRestorePanel() {
           </div>
         </div>
         <button className="btn btn-primary" onClick={handleBackup} disabled={downloading} style={{ width: '100%', minHeight: compact ? 44 : undefined }}>
-          {downloading ? 'Downloading...' : 'Download Full Backup'}
+          {downloading ? 'Downloading…' : 'Download Full Backup'}
         </button>
       </div>
 
@@ -179,7 +180,7 @@ export default function BackupRestorePanel() {
                 Cancel
               </button>
               <button className="btn btn-primary" onClick={handleRestore} disabled={restoring} style={compact ? { width: '100%', minHeight: 48 } : { flex: 2 }}>
-                {restoring ? 'Restoring...' : 'Restore Backup'}
+                {restoring ? 'Restoring…' : 'Restore Backup'}
               </button>
             </div>
           </div>

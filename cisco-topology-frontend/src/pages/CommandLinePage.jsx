@@ -146,7 +146,7 @@ export default function CommandLinePage() {
         } catch (e) { /* gecici hata — polling devam eder */ }
       }, 1200);
     } catch (e) {
-      showToast('Network error: ' + e.message, 'error');
+      showToast(`${t('netError')} (${e.message})`, 'error');
       setRunning(false);
     }
   };

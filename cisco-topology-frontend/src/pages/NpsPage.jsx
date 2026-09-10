@@ -3,6 +3,7 @@ import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useViewport } from '../hooks/useViewport';
 import { showToast } from '../Toast';
+import { t } from '../i18n';
 
 // NPS (Linux FreeRADIUS) yonetim sayfasi — YALNIZCA ADMIN.
 // /etc/freeradius/3.0/users kayitlarini listeler, ek/duzenle/sil yaptirir ve
@@ -72,7 +73,7 @@ export default function NpsPage() {
         setError({ message: msg, notConfigured: /not configured/i.test(msg) });
       }
     } catch (e) {
-      setError({ message: 'Connection error', notConfigured: false });
+      setError({ message: t('netError'), notConfigured: false });
     } finally { setLoading(false); }
   }, [authFetch]);
 
@@ -125,9 +126,9 @@ export default function NpsPage() {
     try {
       const res = await authFetch('/nps/restart', { method: 'POST' });
       const d = res ? await res.json().catch(() => ({})) : {};
-      if (res && res.ok && d.ok) showToast('FreeRADIUS restarted successfully', 'success');
+      if (res && res.ok && d.ok) showToast('FreeRADIUS restarted', 'success');
       else showToast(d.error || (d.output ? `Restart failed: ${d.output}` : 'Restart failed'), 'error', 7000);
-    } catch (e) { showToast('Connection error', 'error'); }
+    } catch (e) { showToast(t('netError'), 'error'); }
     finally { setRestarting(false); setConfirmRestart(false); }
   };
 
@@ -139,7 +140,7 @@ export default function NpsPage() {
       const d = res ? await res.json().catch(() => ({})) : {};
       if (res && res.ok) { showToast('Entry deleted', 'success'); setEntries(d.entries || []); setDeleting(null); }
       else showToast(d.error || 'Delete failed', 'error', 6000);
-    } catch (e) { showToast('Connection error', 'error'); }
+    } catch (e) { showToast(t('netError'), 'error'); }
     finally { setDeleteBusy(false); }
   };
 
@@ -260,7 +261,7 @@ export default function NpsPage() {
           <div className="confirm-modal-content">
             <h3 className="confirm-title">Delete entry?</h3>
             <p className="confirm-desc">
-              Remove the RADIUS entry for GSM <strong>{deleting.gsm}</strong>{deleting.ip ? <> (<code>{deleting.ip}</code>)</> : null}? This rewrites the users file and cannot be undone.
+              Remove the RADIUS entry for GSM <strong>{deleting.gsm}</strong>{deleting.ip ? <> (<code>{deleting.ip}</code>)</> : null}? The users file is rewritten as soon as you confirm.
             </p>
             <div className="confirm-actions">
               <button className="btn btn-ghost" onClick={() => setDeleting(null)} disabled={deleteBusy}>Cancel</button>
@@ -334,7 +335,7 @@ function EntryFormModal({ mode, entry, compact, onClose, onSaved, onLocationSave
           else showToast(d.error || 'Save failed', 'error', 6000);
         }
       }
-    } catch (e) { showToast('Connection error', 'error'); } finally { setSaving(false); }
+    } catch (e) { showToast(t('netError'), 'error'); } finally { setSaving(false); }
   };
 
   const lbl = { display: 'block', fontSize: compact ? '13px' : '0.72rem', color: 'var(--text-muted)', marginBottom: 4, textTransform: compact ? 'none' : 'uppercase', letterSpacing: compact ? 0 : 0.4 };
