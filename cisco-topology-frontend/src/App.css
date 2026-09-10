@@ -660,6 +660,24 @@ input[type="checkbox"]:disabled { opacity: 0.5; cursor: not-allowed; }
   justify-content: center;
   z-index: 2000;
   backdrop-filter: blur(4px);
+  /* Navbar (48px) modalin USTUNDE cizilir (.nav-header z-index:10000 > 2000).
+     Dikeyde ortalanan uzun bir modalin ust kismi (baslik + kapat dugmesi) barin
+     altina giriyor ve erisilemez hale geliyordu. Ust dolgu bar kadar yer ayirir;
+     asagida margin:auto hem ortalamayi hem tasma davranisini halleder.
+     Telefon/kisa ekran katmanlari overlay'i barin USTUNE alir (z-index 10001) ve
+     bu dolguyu kendi kurallariyla ezer. */
+  padding: calc(var(--nav-h, 48px) + 16px) 16px 16px;
+  box-sizing: border-box;
+  overflow-y: auto;
+}
+
+/* margin:auto, align-items:center yerine ortalamayi devralir. Farki: modal
+   ayrilan alandan UZUNSA auto marjlar 0 a duser, yani ust kenar dolgunun
+   altinda kalir (barin altina girmez) ve overlay kaydirilir. Inline maxHeight
+   veren modallar da bu davranisi bozamaz. */
+.modal-overlay > .modal-content,
+.modal-overlay > .confirm-modal-content {
+  margin: auto;
 }
 
 /* Ayarlar hub'i — ikonlu tiklanabilir kartlar */

@@ -615,6 +615,16 @@
     padding-right: max(16px, env(safe-area-inset-right));
   }
 
+  /* Alta yapisma. App.css masaustu icin ".modal-overlay > .modal-content" uzerinde
+     margin:auto veriyor (ozgulluk 0-2-0); asagidaki tek-sinif kural onu yenemedigi
+     icin alt sayfa dibe yapismayi birakiyordu. Ayni seciciyle yaziyoruz: ust marj
+     bosluğu yer, ALT marj sifir kalir. */
+  .modal-overlay > .modal-content,
+  .modal-overlay > .confirm-modal-content {
+    margin-top: auto;
+    margin-bottom: 0;
+  }
+
   /* Onay modali: butonlar sigmazsa alt satira gecsin. */
   .confirm-actions { flex-wrap: wrap; gap: 10px; }
   .confirm-actions .btn { flex: 1 1 140px; min-height: 48px; }
