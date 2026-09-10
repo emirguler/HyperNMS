@@ -173,8 +173,12 @@ export default function Navbar({ onAddDevice }) {
           </nav>
         </div>
 
-        {/* Right — quick actions; details on desktop only */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+        {/* Right — uc AYRI grup: araclar (Ping/Trace) | durum+yonetim (zil, Users,
+            Ayarlar) | kimlik (kullanici, Sign Out). Once hepsi 6px araliklа yan
+            yanaydi ve tek ince ayrac vardi: alti kontrol tek bir kalabalik gibi
+            okunuyordu. Ayraclar gruplarin ICINDE duruyor ki grup dar govdede
+            gizlendiginde ayrac ortada asili kalmasin. */}
+        <div className="nav-right">
           <button
             className="btn btn-primary btn-sm nav-quick"
             onClick={() => setShowPing(true)}
@@ -192,16 +196,20 @@ export default function Navbar({ onAddDevice }) {
           {/* Zil yalnizca masaustunde: dar govdede bildirimler zaten Dashboard'daki
               NOTIFICATIONS kartinda tam listeyle duruyor, ustteki rozet yalnizca
               dar navbar'i kalabaliklastiriyordu. */}
-          <span className="nav-bell" style={{ display: 'flex', alignItems: 'center' }}>
+          <span className="nav-bell" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span className="nav-divider" aria-hidden="true" />
             <NotificationBell />
           </span>
 
-          <span className="nav-desktop-right" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span className="nav-desktop-right">
+            {isAdmin && <span className="nav-divider" aria-hidden="true" />}
             {isAdmin && <Link className={cls('/users')} to="/users" onClick={closeMenus} title="User Management">Users</Link>}
-            {isAdmin && <button className="nav-btn" onClick={() => setShowSettings(true)} title="Settings" style={{ display: 'flex', alignItems: 'center', padding: '6px 10px' }}><SettingsIcon size={18} /></button>}
-            <div style={{ width: 1, height: 20, background: 'var(--border-color)', margin: '0 4px' }} />
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginRight: 4 }}>{username}</span>
-            <button className="btn btn-ghost btn-sm" onClick={() => { logout(); navigate('/login'); }} style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>Sign Out</button>
+            {isAdmin && <button className="nav-btn" onClick={() => setShowSettings(true)} title="Settings" aria-label="Settings" style={{ display: 'flex', alignItems: 'center', padding: '6px 10px' }}><SettingsIcon size={18} /></button>}
+            <span className="nav-divider" aria-hidden="true" />
+            {/* Kullanici adi: ciplak metin degil, kendi rozeti — yanindaki Sign Out
+                dugmesiyle karismaz. */}
+            <span className="nav-user" title={username}>{username}</span>
+            <button className="btn btn-ghost btn-sm" onClick={() => { logout(); navigate('/login'); }} style={{ fontSize: '0.8rem' }}>Sign Out</button>
           </span>
         </div>
 

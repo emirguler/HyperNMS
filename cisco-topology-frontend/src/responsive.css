@@ -901,6 +901,15 @@
     padding-right: max(var(--rw-gutter), env(safe-area-inset-right));
   }
 
+  /* Secim cubugu dar govdede: satirlar sarar, bosluk anlamsizlasir; dugmeler
+     tam genislige yayilir ki parmakla rahat basilsin.
+     YAPISIKLIK KAPALI: sarilmis halde ~200px yer tutuyor ve telefon ekraninin
+     dortte birini kaydirma boyunca kaplardi. Masaustunde tek satir oldugu icin
+     orada yapisik kalir. */
+  .selection-bar { gap: 8px; padding: 10px 12px; position: static; }
+  .selection-spacer { display: none; }
+  .selection-bar .btn { flex: 1 1 auto; }
+
   .list-container {
     padding-left: max(var(--rw-gutter), env(safe-area-inset-left));
     padding-right: max(var(--rw-gutter), env(safe-area-inset-right));

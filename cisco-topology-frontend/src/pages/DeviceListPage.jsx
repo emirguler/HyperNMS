@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
@@ -7,6 +7,8 @@ import BulkImportModal from '../components/BulkImportModal';
 import FindDeviceModal from '../components/FindDeviceModal';
 import ConfirmModal from '../components/ConfirmModal';
 import BatchEditModal from '../components/BatchEditModal';
+import { ActionMenu } from '../components/ActionMenu';
+import { clampMenu } from '../utils/menuPosition';
 import { showToast } from '../Toast';
 import { t } from '../i18n';
 import { API_BASE } from '../config';
@@ -64,6 +66,10 @@ export default function DeviceListPage({ onEdit }) {
   const [detailedLoading, setDetailedLoading] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [showBatchEdit, setShowBatchEdit] = useState(false);
+  // Satir menusu (⋮): her satirda tekrar eden Edit/Delete dugmeleri gorsel gurultu
+  // yaratiyordu. Topoloji sayfasiyla AYNI menu bileseni: farede yuzen popup,
+  // dokunmatikte alt sayfa.  {device, top, left}
+  const [rowMenu, setRowMenu] = useState(null);
 
   // Topology page id → okunabilir sayfa adı
   const pageName = (id) => topoTabs.find(tab => tab.id === (id || 'main'))?.name || (id || 'main');
@@ -124,6 +130,23 @@ export default function DeviceListPage({ onEdit }) {
     if (typeFilter !== 'all') set.add(typeFilter);
     return [...set].sort();
   }, [rawDevices, typeFilter]);
+
+  // Menu acikken sayfada baska bir yere tiklamak ya da Escape onu kapatir.
+  useEffect(() => {
+    if (!rowMenu) return;
+    const onDown = (e) => { if (!e.target.closest('.context-menu')) setRowMenu(null); };
+    const onKey = (e) => { if (e.key === 'Escape') setRowMenu(null); };
+    document.addEventListener('pointerdown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('pointerdown', onDown); document.removeEventListener('keydown', onKey); };
+  }, [rowMenu]);
+
+  const openRowMenu = (device, e) => {
+    e.stopPropagation();
+    const r = e.currentTarget.getBoundingClientRect();
+    // Dugmenin sag alt kosesinden acilir; clampMenu ekran disina tasmayi onler.
+    setRowMenu({ device, ...clampMenu(r.right - 170, r.bottom + 4, 180, 110) });
+  };
 
   const handleSort = (key) => setSortConfig(prev => ({ key, dir: prev.key === key && prev.dir === 'asc' ? 'desc' : 'asc' }));
   const sortIcon = (key) => sortConfig.key === key ? (sortConfig.dir === 'asc' ? ' ▲' : ' ▼') : '';
@@ -276,17 +299,22 @@ export default function DeviceListPage({ onEdit }) {
         }}>{filteredDevices.length} / {rawDevices.length} {t('deviceCount')}</span>
       </div>
 
-      {/* Toplu islem cubugu. Satir kaydirma .rw-actions'tan gelir (<=1024px);
-          inline flexWrap masaustune de sizacagi icin bilerek yazilmadi. */}
+      {/* Secim cubugu. Once arama satirinin hemen altina sikismis, arac cubugundan
+          ayirt edilemeyen soluk bir seritti. Artik kendi cubugu: mavi sol vurgu,
+          sayi bir rozet, tablonun ustune YAPISIK (sticky) — 600 satirda asagi
+          kaydirirken eylemler ekranda kalir. Satir kaydirma .rw-actions'tan
+          gelir (<=1024px); inline flexWrap masaustune de sizacagi icin yazilmadi. */}
       {isAdmin && selectedVisible.length > 0 && (
-        <div className="rw-actions" style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, padding: '10px 16px', background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.3)', borderRadius: 8 }}>
-          <span style={{ fontWeight: 600, color: 'var(--primary)', fontSize: '0.85rem' }}>{selectedVisible.length} selected</span>
+        <div className="rw-actions selection-bar">
+          <span className="selection-count">{selectedVisible.length}</span>
+          <span style={{ fontWeight: 600, color: 'var(--text-main)', fontSize: '0.9rem' }}>selected</span>
           {/* Filtre disinda kalan secimler islenmeyecek - sessizce yutmak yerine soyle */}
           {hiddenSelectedCount > 0 && (
             <span style={{ fontSize: '0.78rem', color: 'var(--warning)' }}>
               {hiddenSelectedCount} more are hidden by the filter, so they stay untouched
             </span>
           )}
+          <span className="selection-spacer" />
           <button className="btn btn-primary btn-sm" onClick={() => setShowBatchEdit(true)}>Batch Edit</button>
           <button className="btn btn-danger btn-sm" onClick={() => setConfirmBatchDelete(true)}>Delete Selected</button>
           <button className="btn btn-ghost btn-sm" onClick={() => setSelectedIds(new Set())}>Deselect All</button>
@@ -339,7 +367,7 @@ export default function DeviceListPage({ onEdit }) {
               {/* Actions HIC gizlenmez: cihaz detay sayfasinda Edit/Delete yok, tek erisim
                   yolu bu kolon. <=600px'te kart modunda kendi satirini alir (data-label=""),
                   601-768px'te tablo yatay kaydigi icin bugunku gibi kaydirarak erisilir. */}
-              {isAdmin && <th style={{ textAlign: 'right', paddingRight: isPhone ? undefined : 32 }}>Actions</th>}
+              {isAdmin && <th style={{ textAlign: 'right', width: 60, paddingRight: isPhone ? undefined : 20 }} aria-label="Actions" />}
             </tr>
           </thead>
           <tbody>
@@ -374,9 +402,9 @@ export default function DeviceListPage({ onEdit }) {
                   ))}
                 </td>
                 {isAdmin && (
-                  <td data-label="" style={{ textAlign: 'right' }}>
-                    <button className="btn btn-primary btn-sm" style={{ marginRight: 8 }} onClick={(e) => { e.stopPropagation(); onEdit(d); }}>{t('edit')}</button>
-                    <button className="btn btn-danger btn-sm" onClick={(e) => { e.stopPropagation(); setDeleteTarget(d); }}>{t('delete')}</button>
+                  <td data-label="" style={{ textAlign: 'right' }} onClick={e => e.stopPropagation()}>
+                    <button type="button" className="row-menu-btn" aria-label={`${d.name} actions`}
+                      title={t('actions')} onClick={(e) => openRowMenu(d, e)}>⋮</button>
                   </td>
                 )}
               </tr>
@@ -414,6 +442,23 @@ export default function DeviceListPage({ onEdit }) {
           authFetch={authFetch}
           onClose={() => setShowBatchEdit(false)}
           onDone={() => { setSelectedIds(new Set()); fetchData(); }}
+        />
+      )}
+
+      {/* Satir menusu — Topoloji sayfasiyla ayni bilesen */}
+      {rowMenu && (
+        <ActionMenu
+          sheet={isTouch || compact}
+          short={isShort}
+          top={rowMenu.top}
+          left={rowMenu.left}
+          zIndex={9999}
+          title={rowMenu.device.name}
+          items={[
+            { key: 'edit', label: <>✏️ {t('edit')}</>, onClick: () => { const d = rowMenu.device; setRowMenu(null); onEdit(d); } },
+            { key: 'delete', danger: true, label: <>🗑️ {t('delete')}</>, onClick: () => { const d = rowMenu.device; setRowMenu(null); setDeleteTarget(d); } },
+          ]}
+          onClose={() => setRowMenu(null)}
         />
       )}
 
