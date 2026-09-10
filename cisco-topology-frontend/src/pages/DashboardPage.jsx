@@ -24,6 +24,14 @@ function timeAgo(ts) {
   return `${Math.round(hr / 24)}d ago`;
 }
 
+// Siralama icin ms. Bilinmeyen (bu ozellikten onceki DOWN kayitlari) 0 doner →
+// azalan siralamada en sona duser; iki bilinmeyen arasinda karsilastirma da
+// kararli kalir (NaN dondurup siralamayi bozmaz).
+function seenMs(v) {
+  const n = new Date(v).getTime();
+  return Number.isFinite(n) ? n : 0;
+}
+
 // Sabit-px ic kaydirma kutulari (190/190/340) parmakla yonetilemiyor: kaydirma
 // zincirlenir, sayfanin kendisi kimildamaz.
 //   telefon    -> kutu tamamen kalkar, tek surekli sayfa kaydirmasi
@@ -98,10 +106,12 @@ export default function DashboardPage() {
     if (downType !== 'all') set.add(downType);
     return [...set].sort();
   }, [downDevices, downType]);
+  // En son dusen cihaz en ustte: son gorulme zamanina gore azalan. filter() yeni
+  // dizi dondurdugu icin sort() rawDevices'i bozmaz.
   const filteredDown = useMemo(() => downDevices.filter(d =>
     (downPage === 'all' || (d.topologyPage || 'main') === downPage) &&
     (downType === 'all' || (d.type || 'switch') === downType)
-  ), [downDevices, downPage, downType]);
+  ).sort((a, b) => seenMs(b.lastSeenAt) - seenMs(a.lastSeenAt)), [downDevices, downPage, downType]);
   const pageName = (id) => topoTabs.find(tab => tab.id === (id || 'main'))?.name || (id || 'main');
 
   const stats = useMemo(() => {
@@ -347,6 +357,8 @@ export default function DashboardPage() {
                 <th className="rw-hide-sm" style={{ paddingLeft: tdPadL }}>Status</th>
                 <th>Name</th>
                 <th>IP</th>
+                {/* Kartin sirasi bu kolona gore: en son dusen en ustte. */}
+                <th>Last seen</th>
                 <th className="rw-hide-sm">Type</th>
                 <th className="rw-hide-sm" style={{ paddingRight: tdPadR }}>Page</th>
               </tr>
@@ -357,11 +369,17 @@ export default function DashboardPage() {
                   <td className="rw-hide-sm" data-label="Status" style={{ paddingLeft: tdPadL }}><span className="status-badge status-down" style={{ fontSize: isTouch ? '0.75rem' : '0.7rem', padding: '3px 8px' }}>DOWN</span></td>
                   <td data-label="Name" style={{ fontWeight: 500, fontSize: '0.85rem' }}>{d.name}</td>
                   <td data-label="IP" style={{ fontFamily: 'monospace', fontSize: '0.8rem', color: 'var(--text-muted)' }}>{d.ip}</td>
+                  {/* Goreli zaman okunur, tam zaman title'da. Bilinmiyorsa "-":
+                      cihaz bu ozellik gelmeden once dusmus olabilir. */}
+                  <td data-label="Last seen" style={{ fontSize: '0.8rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}
+                    title={d.lastSeenAt ? new Date(d.lastSeenAt).toLocaleString() : undefined}>
+                    {d.lastSeenAt ? timeAgo(d.lastSeenAt) : '-'}
+                  </td>
                   <td className="rw-hide-sm" data-label="Type" style={{ fontSize: '0.8rem', textTransform: 'capitalize' }}>{d.type || 'switch'}</td>
                   <td className="rw-hide-sm" data-label="Page" style={{ fontSize: '0.8rem', color: 'var(--text-muted)', paddingRight: tdPadR }}>{pageName(d.topologyPage)}</td>
                 </tr>
               )) : (
-                <tr><td colSpan={5} data-label="" style={{ textAlign: 'center', padding: 30, color: 'var(--text-muted)' }}>
+                <tr><td colSpan={6} data-label="" style={{ textAlign: 'center', padding: 30, color: 'var(--text-muted)' }}>
                   <div style={{ flex: 1, textAlign: 'center' }}>{t('noDownDevices')}</div>
                 </td></tr>
               )}

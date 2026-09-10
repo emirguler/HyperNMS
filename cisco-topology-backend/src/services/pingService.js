@@ -101,9 +101,35 @@ async function pingCycle() {
     }
 }
 
+// Son görülme damgası yeni bir alan: bu özellik gelmeden ÖNCE düşmüş cihazlarda yok
+// ve Dashboard'daki DOWN kartı onu boş gösterir. 5 dakikalık rollup ~31 gün tutuluyor
+// ve her kovada "up" sayacı var → son UP kovasından tek seferlik doldur. Kova başlangıcı
+// yazılır (gerçek an kovanın içinde bir yerdedir; göreli gösterimde 5 dk fark etmez).
+// Ek bellek maliyeti yok: rollup her ping turunda appendRollup ile zaten yükleniyor.
+function backfillLastSeen() {
+    let filled = 0, unknown = 0;
+    for (const s of store.getSwitches()) {
+        if (s.status === 'UP' || s.lastSeenAt || s.type === 'cloud') continue;
+        const buckets = store.getRollup(s.id);
+        let ts = null;
+        for (let i = buckets.length - 1; i >= 0; i--) {
+            if ((buckets[i].up || 0) > 0) { ts = buckets[i].t; break; }
+        }
+        if (ts) { store.updateSwitch(s.id, { lastSeenAt: ts }); filled++; }
+        else unknown++;
+    }
+    if (filled || unknown) {
+        console.log(`[PING] Son görülme dolduruldu: ${filled} DOWN cihaz (${unknown} cihazda 31 günlük özette UP yok)`);
+    }
+    return { filled, unknown };
+}
+
 function startPingService() {
     if (pingTimer || running) return;
     stopped = false;
+
+    // Eksik son görülme damgalarını geçmişten doldur (yalnızca açılışta, bir kez)
+    try { backfillLastSeen(); } catch (e) { console.error('[PING] Son görülme doldurulamadı:', e.message); }
 
     // Kendini-zamanlayan döngü: bir tur TAMAMEN bitmeden sonraki başlamaz
     // (setInterval'in yavaş turda üst üste binme/yığılma sorununu önler).
@@ -125,4 +151,4 @@ function stopPingService() {
     if (pingTimer) { clearTimeout(pingTimer); pingTimer = null; }
 }
 
-module.exports = { startPingService, stopPingService, onStatusChange };
+module.exports = { startPingService, stopPingService, onStatusChange, backfillLastSeen };

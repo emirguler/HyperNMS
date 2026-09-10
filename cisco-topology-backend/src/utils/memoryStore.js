@@ -158,6 +158,7 @@ class MemoryStore {
     // Ping sonuçları — sadece status/latency güncelle (sık çağrılır, debounce ile yazılır)
     updatePingResults(results) {
         let changed = false;
+        const now = Date.now();
         for (const [id, result] of Object.entries(results)) {
             const sw = this.data.switches.find(s => s.id === id);
             if (sw) {
@@ -167,6 +168,13 @@ class MemoryStore {
                 sw.status = result.status;
                 sw.latency = result.latency;
                 sw.lastLatency = result.latency;
+                // Son başarılı temas: Dashboard'daki DOWN kartı "Last seen" kolonunu
+                // ve sıralamasını (en son düşen en üstte) bundan üretir.
+                // Diske YAZDIRMAZ (dirty işaretlemez) — UP cihazda her turda disk
+                // yazmak istemiyoruz. Cihaz DOWN'a düştüğü an status değişimi zaten
+                // yazımı tetikler ve o anda buradaki değer son UP ping'in zamanıdır;
+                // yani DOWN kayıtları için diskteki değer tam olarak doğru olur.
+                if (result.status === 'UP') sw.lastSeenAt = now;
             }
         }
         if (changed) this._markDirty('switches');
