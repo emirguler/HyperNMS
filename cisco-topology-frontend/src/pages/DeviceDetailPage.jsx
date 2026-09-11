@@ -16,6 +16,75 @@ import ConfigBackupCard from '../components/ConfigBackupCard';
 import { useViewport } from '../hooks/useViewport';
 import { t } from '../i18n';
 
+/* Arayuz tablosunun ORTAK stil dili.
+   - IF_CHIP : kimlik benzeri kisa degerler (VLAN, VLAN adi, hiz). Once yalnizca
+     VLAN numarasi kutu icindeydi, VLAN adi ve hiz duz yaziydi; ayni satirda uc
+     farkli dil okunuyordu.
+   - IF_DASH : deger yoksa cip cizmeyiz, soluk bir tire kalir.
+   - IF_ST_* : DURUM rozetleri (yuvarlak pill). Cipler kare, rozetler yuvarlak:
+     "bu bir deger" ile "bu bir durum" ayrimi bakisla anlasilir. */
+const IF_CHIP = {
+  display: 'inline-block', padding: '4px 8px', borderRadius: 4,
+  background: 'rgba(255,255,255,0.05)', color: 'var(--text-main)',
+  fontSize: '0.82rem', maxWidth: '100%', overflowWrap: 'anywhere',
+};
+const IF_DASH = { color: 'var(--text-muted)', fontSize: '0.82rem' };
+const IF_ST_BASE = {
+  display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px',
+  borderRadius: 20, fontSize: '0.75rem', fontWeight: 700, whiteSpace: 'nowrap',
+};
+const IF_ST_UP = { ...IF_ST_BASE, background: 'rgba(52,211,153,0.1)', color: 'var(--success)', border: '1px solid rgba(52,211,153,0.2)' };
+// Fiziksel baglanti yok: hata degil, DIKKAT durumu -> sari.
+const IF_ST_NOLINK = { ...IF_ST_BASE, background: 'rgba(245,158,11,0.12)', color: 'var(--warning)', border: '1px solid rgba(245,158,11,0.35)' };
+const IF_ST_DOWN = { ...IF_ST_BASE, background: 'rgba(248,113,113,0.1)', color: 'var(--text-muted)', border: '1px solid rgba(248,113,113,0.2)' };
+
+// Arayuzun GORUNEN durumu. 'down' tek basina yetmiyordu: admin up ama link yok
+// (kablo cikmis / karsi uc kapali) ile admin tarafindan kapatilmis port ayni gri
+// DOWN rozetini paylasiyordu. Ayrimi burada yapiyoruz:
+//   up       -> protokol up
+//   shutdown -> idari olarak kapali (Admin kolonu da bunu soyler)
+//   nolink   -> admin UP ama protokol down  => fiziksel baglanti yok (sari)
+//   down     -> admin durumu BILINMIYOR (SSH yedegi okuyamadi) -> iddia etmeyiz
+function linkState(i) {
+  if (i.status === 'up') return 'up';
+  if (i.shutdown) return 'shutdown';
+  if (i.adminKnown === false) return 'down';
+  return 'nolink';
+}
+
+// Bir arayuzun tasidigi VLAN kimlikleri: access VLAN'i ("10", "10(T)" gibi
+// isaretler ayiklanir) + trunk izin listesi. VLAN suzgeci bunlara bakar.
+function vlanIds(i) {
+  const out = new Set();
+  String(i.vlan || '').split(',').forEach(v => {
+    const id = v.trim().replace(/\s*\([TDB]\)/, '');
+    if (/^\d+$/.test(id)) out.add(id);
+  });
+  (i.trunkVlans || []).forEach(v => out.add(String(v)));
+  return out;
+}
+
+// Arama + durum + VLAN suzgeci. 24/48 portlu switch'te aranan portu bulmak,
+// yalnizca sorunlu portlari listelemek ya da bir VLAN'i suzmek icin.
+// Hook DEGIL (bilerek): bu bilesende erken return var, kosullu hook sirasi bozar.
+// 48 satir icin her render'da yeniden suzmek zaten olculemez bir maliyet.
+function filterInterfaces(list, q, state, vlan) {
+  const needle = q.trim().toLowerCase();
+  const wantVlan = vlan.trim();
+  return list.filter(i => {
+    if (state !== 'all') {
+      const st = linkState(i);
+      if (state === 'down' ? st === 'up' : st !== state) return false;
+    }
+    if (wantVlan && !vlanIds(i).has(wantVlan)) return false;
+    if (needle) {
+      const hay = [i.name, i.description, i.vlanName].map(x => String(x || '').toLowerCase());
+      if (!hay.some(h => h.includes(needle))) return false;
+    }
+    return true;
+  });
+}
+
 export default function DeviceDetailPage({ onEdit }) {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -48,6 +117,10 @@ export default function DeviceDetailPage({ onEdit }) {
   // SNMP community bir kimlik bilgisidir: varsayilan MASKELI. Ekran paylasimi,
   // omuz ustunden bakma ve ekran goruntusu hepsi bu alani sizdiriyordu.
   const [showCommunity, setShowCommunity] = useState(false);
+  // Arayuz tablosu suzgecleri
+  const [ifQuery, setIfQuery] = useState('');
+  const [ifState, setIfState] = useState('all');
+  const [ifVlan, setIfVlan] = useState('');
 
   // Bağlamdan (Devices/topoloji zaten yüklü) anında tohumla: SNMP verisi gelene kadar
   // KAYIT-tabanlı tüm alanlar (ad/ip/durum/sürüm/etiket + snmpCommunity/sshUsername/
@@ -133,6 +206,9 @@ export default function DeviceDetailPage({ onEdit }) {
       <span className={`status-badge ${details.status === 'UP' ? 'status-up' : 'status-down'}`}>{details.status}</span>
     </span>
   );
+  // Arayuz tablosu: tum portlar + suzgecten gecenler
+  const allIfaces = details.interfaces || [];
+  const shownIfaces = filterInterfaces(allIfaces, ifQuery, ifState, ifVlan);
   const formatTraffic = (bps) => {
     if (!bps || bps === 0) return '0 Mbps';
     const mbps = bps / 1000000;
@@ -395,7 +471,40 @@ export default function DeviceDetailPage({ onEdit }) {
 
       <div className="chart-container" style={{ padding: 0, overflow: 'hidden', marginTop: compact ? 12 : 24 }}>
         <div style={{ padding: compact ? '12px 14px' : '16px 24px', borderBottom: '1px solid var(--border-color)' }}>
-          <h3 style={{ margin: 0, fontSize: compact ? '1rem' : '1.1rem', color: 'var(--primary)' }}>Physical Interfaces</h3>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+            <h3 style={{ margin: 0, fontSize: compact ? '1rem' : '1.1rem', color: 'var(--primary)' }}>Physical Interfaces</h3>
+            {allIfaces.length > 0 && (
+              <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                {shownIfaces.length} / {allIfaces.length} {t('ifPorts')}
+              </span>
+            )}
+          </div>
+          {/* Arama + suzgec cubugu. 48 portlu bir switch'te aranan portu bulmak,
+              yalnizca link dusmus portlari gormek ya da bir VLAN'i suzmek icin. */}
+          {allIfaces.length > 0 && (
+            <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+              <input className="modern-input" value={ifQuery} onChange={e => setIfQuery(e.target.value)}
+                type={isTouch ? 'search' : undefined} enterKeyHint="search" autoCapitalize="none"
+                autoCorrect="off" spellCheck={false} placeholder={t('ifSearch')}
+                style={{ flex: '1 1 180px', minWidth: 0 }} />
+              <select className="modern-input" value={ifState} onChange={e => setIfState(e.target.value)}
+                aria-label={t('ifStateFilter')} style={{ flex: compact ? '1 1 140px' : '0 0 auto', width: compact ? undefined : 160 }}>
+                <option value="all">{t('ifAllPorts')}</option>
+                <option value="up">UP</option>
+                <option value="down">{t('ifAnyDown')}</option>
+                <option value="nolink">{t('ifNoLink')}</option>
+                <option value="shutdown">shutdown</option>
+              </select>
+              <input className="modern-input" value={ifVlan} onChange={e => setIfVlan(e.target.value.replace(/[^0-9]/g, ''))}
+                inputMode="numeric" placeholder={t('ifVlanFilter')} aria-label={t('ifVlanFilter')}
+                style={{ flex: compact ? '1 1 90px' : '0 0 auto', width: compact ? undefined : 96 }} />
+              {(ifQuery || ifVlan || ifState !== 'all') && (
+                <button className="btn btn-ghost btn-sm" onClick={() => { setIfQuery(''); setIfVlan(''); setIfState('all'); }}>
+                  {t('ifClearFilters')}
+                </button>
+              )}
+            </div>
+          )}
         </div>
         {/* .rw-cards: <=600px'te thead gizlenir, her satir yigilmis bir karta doner.
             Kart modunun sarti her <td>'nin data-label tasimasidir.
@@ -414,16 +523,18 @@ export default function DeviceDetailPage({ onEdit }) {
             </tr>
           </thead>
           <tbody>
-            {(details.interfaces || []).length > 0 ? details.interfaces.map(i => (
+            {shownIfaces.length > 0 ? shownIfaces.map(i => (
               <tr key={i.index}>
                 <td data-label="Port" style={{ paddingLeft: ifacePadL }}><span style={{ fontWeight: 600 }}>{i.name}</span></td>
                 <td data-label="VLAN">
                   {/* Tek sarmalayici: kart modunda <td> flex satiri oluyor, sarmalayici olmadan
                       rozet ile trunk listesi YAN YANA diziliyordu. Blok akisi masaustunde ayni. */}
                   <div>
-                    <span style={{ background: 'rgba(255,255,255,0.05)', padding: '4px 8px', borderRadius: 4, fontSize: '0.85rem', fontFamily: 'monospace', color: i.vlan && i.vlan !== '-' ? 'var(--text-main)' : 'var(--text-muted)', minWidth: '30px', display: 'inline-block', textAlign: 'center' }}>
-                      {i.vlan || '-'}
-                    </span>
+                    {/* Cip dili: kimlik benzeri degerler (VLAN, VLAN adi, hiz) ayni
+                        kutu icinde; bos deger cip DEGIL, soluk bir tire. */}
+                    {i.vlan && i.vlan !== '-'
+                      ? <span style={{ ...IF_CHIP, fontFamily: 'monospace', minWidth: 30, textAlign: 'center' }}>{i.vlan}</span>
+                      : <span style={IF_DASH}>-</span>}
                     {/* clamp esigi <=1024px: 820x1180 tablette de VLAN kolonu ~95px ve
                         sabit maxWidth:200 komsu hucrenin uzerine tasiyor (audit: tablet). */}
                     {i.trunkVlans && i.trunkVlans.length > 0 && (
@@ -431,13 +542,21 @@ export default function DeviceDetailPage({ onEdit }) {
                     )}
                   </div>
                 </td>
-                <td className="rw-hide-sm" data-label="VLAN Name" style={{ fontSize: '0.8rem', color: i.vlanName && i.vlanName !== '-' ? 'var(--text-main)' : 'var(--text-muted)' }}>
-                  {i.vlanName || '-'}
+                <td className="rw-hide-sm" data-label="VLAN Name">
+                  {i.vlanName && i.vlanName !== '-'
+                    ? <span style={IF_CHIP}>{i.vlanName}</span>
+                    : <span style={IF_DASH}>-</span>}
                 </td>
                 <td data-label="Status">
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 20, fontSize: '0.75rem', fontWeight: 700, background: i.status === 'up' ? 'rgba(52,211,153,0.1)' : 'rgba(248,113,113,0.1)', color: i.status === 'up' ? 'var(--success)' : 'var(--text-muted)', border: `1px solid ${i.status === 'up' ? 'rgba(52,211,153,0.2)' : 'rgba(248,113,113,0.2)'}` }}>
-                    {i.status === 'up' ? '● UP' : '○ DOWN'}
-                  </span>
+                  {/* Admin up + link yok, idari kapali portla ayni gri rozeti
+                      paylasiyordu; artik sari "NO LINK" olarak ayriliyor. */}
+                  {(() => {
+                    const st = linkState(i);
+                    const look = st === 'up' ? IF_ST_UP : st === 'nolink' ? IF_ST_NOLINK : IF_ST_DOWN;
+                    const label = st === 'up' ? '● UP' : st === 'nolink' ? '▲ NO LINK' : '○ DOWN';
+                    const why = st === 'nolink' ? t('ifNoLinkWhy') : st === 'shutdown' ? t('ifShutdownWhy') : undefined;
+                    return <span style={look} title={why}>{label}</span>;
+                  })()}
                 </td>
                 {/* Admin (idari) durum: elle shutdown mı? Oper Status'tan bağımsız. */}
                 <td data-label="Admin">
@@ -449,7 +568,11 @@ export default function DeviceDetailPage({ onEdit }) {
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 20, fontSize: '0.75rem', fontWeight: 600, background: 'rgba(255,255,255,0.05)', color: 'var(--text-muted)' }}>up</span>
                   )}
                 </td>
-                <td className="rw-hide-sm" data-label="Capacity" style={{ fontFamily: 'monospace', fontSize: '0.9rem', color: 'var(--text-muted)' }}>{formatSpeed(i.speed)}</td>
+                <td className="rw-hide-sm" data-label="Capacity">
+                  {formatSpeed(i.speed) === '-'
+                    ? <span style={IF_DASH}>-</span>
+                    : <span style={{ ...IF_CHIP, fontFamily: 'monospace' }}>{formatSpeed(i.speed)}</span>}
+                </td>
                 {/* Port description (SNMP ifAlias / CLI "Name" kolonu). Yoksa "-". */}
                 <td data-label="Description" style={{ fontSize: '0.82rem', color: i.description ? 'var(--text-main)' : 'var(--text-muted)', overflowWrap: 'anywhere' }}>
                   {i.description || '-'}
@@ -471,7 +594,10 @@ export default function DeviceDetailPage({ onEdit }) {
               </tr>
             )) : (
               <tr><td colSpan={isOperator ? 8 : 7} style={{ textAlign: 'center', justifyContent: 'center', padding: 30, color: 'var(--text-muted)' }}>
-                {!snmpLoaded ? t('loadingSnmpData') : (details.status === 'UP' ? t('noPortsFound') : t('deviceDown'))}
+                {/* Port var ama suzgece uymuyorsa bunu soyle: "port bulunamadi" yanlis olurdu. */}
+                {allIfaces.length > 0 ? t('noFilterResult')
+                  : !snmpLoaded ? t('loadingSnmpData')
+                    : (details.status === 'UP' ? t('noPortsFound') : t('deviceDown'))}
               </td></tr>
             )}
           </tbody>

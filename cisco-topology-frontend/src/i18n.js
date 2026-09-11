@@ -122,6 +122,16 @@ const translations = {
     noData: 'No data came back. Is the server running?',
     goBack: '← Go Back',
     noPortsFound: 'No physical ports found or SNMP error.',
+    ifShutdownWhy: 'Closed on purpose with shutdown.',
+    ifNoLinkWhy: 'Admin is up but there is no link: check the cable and the far end.',
+    ifClearFilters: 'Clear',
+    ifVlanFilter: 'VLAN',
+    ifNoLink: 'No link',
+    ifAnyDown: 'Down (any)',
+    ifAllPorts: 'All ports',
+    ifStateFilter: 'Port state',
+    ifSearch: 'Port, description or VLAN name…',
+    ifPorts: 'ports',
     deviceDown: 'Device is DOWN.',
 
     // Delete confirm
@@ -499,6 +509,16 @@ const translations = {
     noData: 'Veri gelmedi. Sunucu \u00e7al\u0131\u015f\u0131yor mu?',
     goBack: '\u2190 Geri D\u00f6n',
     noPortsFound: 'Fiziksel port bulunamad\u0131 veya SNMP hatas\u0131.',
+    ifShutdownWhy: 'shutdown ile bilerek kapat\u0131lm\u0131\u015f.',
+    ifNoLinkWhy: 'Admin up ama link yok: kabloyu ve kar\u015f\u0131 ucu kontrol edin.',
+    ifClearFilters: 'Temizle',
+    ifVlanFilter: 'VLAN',
+    ifNoLink: 'Ba\u011flant\u0131 yok',
+    ifAnyDown: 'Down (t\u00fcm\u00fc)',
+    ifAllPorts: 'T\u00fcm portlar',
+    ifStateFilter: 'Port durumu',
+    ifSearch: 'Port, a\u00e7\u0131klama ya da VLAN ad\u0131 ara…',
+    ifPorts: 'port',
     deviceDown: 'Cihaz DOWN.',
 
     // Delete confirm
