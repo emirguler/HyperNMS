@@ -592,6 +592,12 @@ input[type="checkbox"]:disabled { opacity: 0.5; cursor: not-allowed; }
   overflow-y: auto;
   height: 100%;
   box-sizing: border-box;
+  /* Kaydirma cubugu payi HER ZAMAN ayrilir. Yoksa icerik yuksekligi esigi
+     gecince (or. DOWN kartinda sayfa degistirip 0 -> 15 satira cikmak) cubuk
+     gelip kabin ic genisligini 6px daraltiyor; tum kart izgarasi yeniden
+     olculuyor ve kartlarin tonu/kenari degismis gibi gorunuyor. Mobilde
+     cubuk zaten icerigin uzerinde durdugu icin bu kural etkisizdir. */
+  scrollbar-gutter: stable;
 }
 
 .modern-table {
