@@ -194,17 +194,19 @@ export default function DeviceDetailPage({ onEdit }) {
     : slas.every(s => s.status === 'ok')
       ? { label: details.ipSlaOkLabel || 'MD', color: 'var(--success)', bg: 'rgba(34,197,94,0.15)', border: 'rgba(34,197,94,0.4)' }
       : { label: details.ipSlaFailLabel || 'GSM', color: 'var(--warning)', bg: 'rgba(245,158,11,0.15)', border: 'rgba(245,158,11,0.4)' };
-  // Basliktaki rozetler: IP SLA (MD/GSM) + cihazin UP/DOWN durumu. Ikisi de cihazin
-  // GENEL durumu; bilgi kartinin kosesinde dururken o karta ait bir ozellik gibi
-  // okunuyordu. Ad ile ayni satirda, kirpilmadan (flexShrink:0) durur.
-  const headerBadges = (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+  // Cihazin GENEL durumu, bilgi kartinin sag kenarinda tek bir sutun: USTTE UP/DOWN,
+  // ALTTA IP SLA (MD/GSM), aralarinda ayrac. Baslik satirindayken 0.7rem kaliyor ve
+  // uzun cihaz adiyla ayni yer icin yarisiyordu; burada tek isi durumu soylemek, o
+  // yuzden punto da buyuk (.device-status-col, App.css).
+  const cardBadges = (
+    <div className="device-status-col">
+      <span className={`status-badge ${details.status === 'UP' ? 'status-up' : 'status-down'}`}>{details.status}</span>
+      {slaBadge && <span className="status-col-sep" aria-hidden="true" />}
       {slaBadge && (
         <span className="status-badge" title="IP SLA"
-          style={{ background: slaBadge.bg, color: slaBadge.color, border: `1px solid ${slaBadge.border}` }}>{slaBadge.label}</span>
+          style={{ background: slaBadge.bg, color: slaBadge.color }}>{slaBadge.label}</span>
       )}
-      <span className={`status-badge ${details.status === 'UP' ? 'status-up' : 'status-down'}`}>{details.status}</span>
-    </span>
+    </div>
   );
   // Arayuz tablosu: tum portlar + suzgecten gecenler
   const allIfaces = details.interfaces || [];
@@ -240,9 +242,16 @@ export default function DeviceDetailPage({ onEdit }) {
   // Arayuz tablosu kolon genislikleri. <=768'de App.css tabloyu 560px'e zorluyor;
   // orada Port %20 = 112px ve "GigabitEthernet1/0/24" komsu kolona tasiyor -> Port'u genislet.
   // (<=600px'te tablo zaten .rw-cards ile karta donuyor, genislikler devre disi kaliyor.)
+  //
+  // DURUM kolonu tek PX kolon: "Notconnected" rozeti 116px ve yuzde ile verildiginde
+  // dar masaustunde (769-1200px) hucreyi 20-44px asip Admin rozetinin uzerine
+  // biniyordu (olculdu). Sabit duzende (table-layout:fixed) px kolon oldugu kadar
+  // yer alir; yuzdeler de toplami 100'un altinda kalacak sekilde kucultuldu ki
+  // tarayici hepsini birlikte kuculmek zorunda kalmasin. Genis ekranda artan yer
+  // yuzdelere dagilir -> masaustu kolon genislikleri neredeyse aynen kalir.
   const ifaceW = isPhone
-    ? { port: '26%', vlan: '13%', vlanName: '16%', status: '15%', admin: '13%', cap: '10%', descr: '18%', cfg: '13%' }
-    : { port: '15%', vlan: '10%', vlanName: '14%', status: '11%', admin: '9%', cap: '10%', descr: '15%', cfg: '16%' };
+    ? { port: '18%', vlan: '9%', vlanName: '11%', status: 124, admin: '9%', cap: '7%', descr: '13%', cfg: '9%' }
+    : { port: '13%', vlan: '9%', vlanName: '12%', status: 132, admin: '8%', cap: '9%', descr: '13%', cfg: '15%' };
   const ifacePadL = isPhone ? 12 : 24;
 
   // Deger kopyalama (dokunmatikte title tooltip'i yok). Basari DOGRULANIR, yoksa hata toast'i.
@@ -280,25 +289,19 @@ export default function DeviceDetailPage({ onEdit }) {
   return (
     <div className="list-container">
       {compact ? (
-        /* 7 ogeli masaustu satiri ~840px min-content ister; burada geri + ad + tek "...",
-           rozetler ise ALT satirda: ayni satira sigdirmak 375px'te ada 139px birakiyordu. */
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+        /* 7 ogeli masaustu satiri ~840px min-content ister; burada geri + ad + tek "...".
+           Rozetler basliga DEGIL bilgi kartinin sag kenarina gidiyor (bkz. cardBadges). */
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, minWidth: 0 }}>
           <button onClick={() => navigate(backTo)} className="btn btn-ghost" aria-label={t('goBack')} title={t('goBack')}
             style={{ flexShrink: 0, minWidth: 44, minHeight: 44, padding: '0 10px', fontSize: '1.2rem', lineHeight: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>←</button>
           <h2 className="rw-truncate" style={{ margin: 0, fontSize: '1.15rem', flex: '1 1 auto', minWidth: 0 }}>{displayHostname}</h2>
           <button className="btn btn-primary" onClick={() => setShowActions(true)} aria-label="Device actions" title="Device actions"
             style={{ flexShrink: 0, minWidth: 44, minHeight: 44, padding: '0 10px', fontSize: '1.35rem', fontWeight: 700, lineHeight: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>⋯</button>
         </div>
-        {/* Cihazin genel durumu: IP SLA (MD/GSM) + UP/DOWN. Once bilgi kartinin sag
-            ust kosesindeydi ve o karta ait bir ozellik gibi okunuyordu. */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>{headerBadges}</div>
-        </div>
       ) : (
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
           <button onClick={() => navigate(backTo)} className="btn btn-ghost">{t('goBack')}</button>
           <h2 style={{ margin: 0, fontSize: '1.8rem' }}>{displayHostname}</h2>
-          {headerBadges}
           {isOperator && (isAdmin || fullSsh || allowedCommands.length > 0) && (
             <button className="btn btn-primary btn-sm" onClick={() => openSshSession(id, displayHostname || details.name || id)}>
               💻 SSH Terminal
@@ -336,97 +339,100 @@ export default function DeviceDetailPage({ onEdit }) {
 
       {/* SATIR 1: Bilgi kartı (daraltıldı, 2 sütun) + CPU + RAM (küçültülmüş) */}
       <div className="grid-detail-main" style={{ marginBottom: compact ? 16 : 24 }}>
-        {/* minWidth:0 BURADA VERILMEZ: responsive.css <=1024px'te .chart-container'a zaten
-            veriyor. Inline verilirse masaustunde de (>1024) etkili olur ve uzun bir uptime
-            degeri kolonu genisletmek yerine kirpilmaya baslar -> masaustu degisir. */}
-        <div className="chart-container" style={{ padding: compact ? '14px' : '20px 24px' }}>
-          {/* 375px'te 2 kolon = 140px'lik hucre; IP ve uptime oraya sigmiyor -> telefon dikeyde tek kolon. */}
-          <div className="grid-stats" style={{ gridTemplateColumns: phonePortrait ? '1fr' : 'repeat(2, 1fr)', gap: '14px 20px', marginBottom: details.sshPasswordSet !== undefined ? 16 : 0 }}>
-            {[
-              { label: 'Real Hostname', value: displayHostname, color: 'var(--primary)', copy: true },
-              { label: 'IP Address', value: details.ip, mono: true, copy: true },
-              { label: 'Vendor', value: details.detectedVendor || '-' },
-              { label: 'Version', value: details.version || '-' },
-              { label: 'System Uptime', value: details.uptime || '-' },
-              // Version'ın altındaki boş hücreye: seri numarası (SNMP ENTITY-MIB'den).
-              { label: 'Serial Number', value: details.serial || '-', mono: true, copy: true }
-            ].map((item, i) => {
-              const raw = String(item.value ?? '');
-              // Dokunmatikte title tooltip'i YOK: kirpilan deger geri getirilemiyordu.
-              // Cozum: dar govdede kirpma yerine sarma + kopyalanabilir alanlarda dokun-kopyala.
-              const tappable = isTouch && item.copy && raw && raw !== '-';
-              // Kirpma yerine SARMA: dar govdede VE her dokunmatik cihazda (tablet yatay
-              // dahil - orada da title tooltip'i yok, kirpilan Vendor/Version/Uptime
-              // geri getirilemiyor). Fare + genis ekranda eski nowrap/ellipsis aynen kalir.
-              const wrapValue = compact || isTouch;
-              return (
-                // minWidth:0 SADECE <=1024px'te: masaustunde izgara hucresi eskisi gibi
-                // icerigi kadar genisler (kirpma yerine kolon buyumesi) - davranis degismesin.
-                <div key={i} style={isTablet ? { minWidth: 0 } : undefined}>
-                  <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>{item.label}</div>
-                  <div
-                    title={raw}
-                    onClick={tappable ? () => copyValue(item.label, raw) : undefined}
-                    style={{
-                      fontSize: '1.05rem', fontWeight: 600, color: item.color,
-                      fontFamily: item.mono ? 'monospace' : undefined,
-                      ...(wrapValue
-                        ? { whiteSpace: 'normal', overflowWrap: 'anywhere', wordBreak: 'break-word' }
-                        : { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }),
-                      ...(tappable ? { cursor: 'pointer', WebkitTapHighlightColor: 'rgba(59,130,246,0.18)' } : null),
-                    }}>
-                    {item.value}
-                    {tappable && <span aria-hidden="true" style={{ marginLeft: 6, fontSize: '0.72rem', color: 'var(--text-muted)' }}>⧉</span>}
+        {/* Kart iki kolon: SOLDA bilgi alanlari, SAGDA cihazin durum sutunu.
+            minWidth:0 masaustunde VERILMEZ (uzun uptime kirpilmasin); <=1024px'te
+            responsive.css '.chart-container > *' zaten veriyor. */}
+        <div className="chart-container" style={{ padding: compact ? '14px' : '20px 24px', display: 'flex', alignItems: 'flex-start', gap: compact ? 10 : 18 }}>
+          <div style={{ flex: '1 1 auto', ...(isTablet ? { minWidth: 0 } : null) }}>
+            {/* 375px'te 2 kolon = 140px'lik hucre; IP ve uptime oraya sigmiyor -> telefon dikeyde tek kolon. */}
+            <div className="grid-stats" style={{ gridTemplateColumns: phonePortrait ? '1fr' : 'repeat(2, 1fr)', gap: '14px 20px', marginBottom: details.sshPasswordSet !== undefined ? 16 : 0 }}>
+              {[
+                { label: 'Real Hostname', value: displayHostname, color: 'var(--primary)', copy: true },
+                { label: 'IP Address', value: details.ip, mono: true, copy: true },
+                { label: 'Vendor', value: details.detectedVendor || '-' },
+                { label: 'Version', value: details.version || '-' },
+                { label: 'System Uptime', value: details.uptime || '-' },
+                // Version'ın altındaki boş hücreye: seri numarası (SNMP ENTITY-MIB'den).
+                { label: 'Serial Number', value: details.serial || '-', mono: true, copy: true }
+              ].map((item, i) => {
+                const raw = String(item.value ?? '');
+                // Dokunmatikte title tooltip'i YOK: kirpilan deger geri getirilemiyordu.
+                // Cozum: dar govdede kirpma yerine sarma + kopyalanabilir alanlarda dokun-kopyala.
+                const tappable = isTouch && item.copy && raw && raw !== '-';
+                // Kirpma yerine SARMA: dar govdede VE her dokunmatik cihazda (tablet yatay
+                // dahil - orada da title tooltip'i yok, kirpilan Vendor/Version/Uptime
+                // geri getirilemiyor). Fare + genis ekranda eski nowrap/ellipsis aynen kalir.
+                const wrapValue = compact || isTouch;
+                return (
+                  // minWidth:0 SADECE <=1024px'te: masaustunde izgara hucresi eskisi gibi
+                  // icerigi kadar genisler (kirpma yerine kolon buyumesi) - davranis degismesin.
+                  <div key={i} style={isTablet ? { minWidth: 0 } : undefined}>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>{item.label}</div>
+                    <div
+                      title={raw}
+                      onClick={tappable ? () => copyValue(item.label, raw) : undefined}
+                      style={{
+                        fontSize: '1.05rem', fontWeight: 600, color: item.color,
+                        fontFamily: item.mono ? 'monospace' : undefined,
+                        ...(wrapValue
+                          ? { whiteSpace: 'normal', overflowWrap: 'anywhere', wordBreak: 'break-word' }
+                          : { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }),
+                        ...(tappable ? { cursor: 'pointer', WebkitTapHighlightColor: 'rgba(59,130,246,0.18)' } : null),
+                      }}>
+                      {item.value}
+                      {tappable && <span aria-hidden="true" style={{ marginLeft: 6, fontSize: '0.72rem', color: 'var(--text-muted)' }}>⧉</span>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {details.sshPasswordSet !== undefined && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px 24px', borderTop: '1px solid var(--border-color)', paddingTop: 14 }}>
+                <div>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>Topology Page</span>
+                  <div style={{ fontSize: '0.85rem', marginTop: 4, color: 'var(--text-main)' }}>
+                    🗺️ {topoTabs.find(t => t.id === details.topologyPage)?.name || details.topologyPage || 'Main Topology'}
                   </div>
                 </div>
-              );
-            })}
-          </div>
-          {details.sshPasswordSet !== undefined && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px 24px', borderTop: '1px solid var(--border-color)', paddingTop: 14 }}>
-              <div>
-                <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>Topology Page</span>
-                <div style={{ fontSize: '0.85rem', marginTop: 4, color: 'var(--text-main)' }}>
-                  🗺️ {topoTabs.find(t => t.id === details.topologyPage)?.name || details.topologyPage || 'Main Topology'}
-                </div>
-              </div>
-              <div>
-                <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>SNMP Community</span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
-                  <span style={{ fontFamily: 'monospace', fontSize: '0.85rem', color: details.snmpCommunity ? 'var(--text-main)' : 'var(--danger)' }}>
-                    {details.snmpCommunity
-                      ? (showCommunity ? details.snmpCommunity : '••••••••')
-                      : 'Not set  ✕'}
-                  </span>
-                  {details.snmpCommunity && (
-                    <button type="button" className="reveal-btn" onClick={() => setShowCommunity(v => !v)}
-                      aria-label={showCommunity ? t('snmpHide') : t('snmpReveal')}
-                      aria-pressed={showCommunity} title={showCommunity ? t('snmpHide') : t('snmpReveal')}>
-                      <EyeIcon off={showCommunity} size={16} />
-                    </button>
-                  )}
-                </div>
-              </div>
-              <div>
-                <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>SSH Username</span>
-                <div style={{ fontFamily: 'monospace', fontSize: '0.85rem', marginTop: 4, color: details.sshUsername ? 'var(--text-main)' : 'var(--danger)' }}>
-                  {details.sshUsername || 'Not set  ✕'}
-                </div>
-              </div>
-              <div>
-                <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>SSH Password</span>
-                <div style={{ fontSize: '0.85rem', marginTop: 4, color: details.sshPasswordSet ? 'var(--success)' : 'var(--danger)' }}>
-                  {details.sshPasswordSet ? '••••••••  ✓' : 'Not set  ✕'}
-                </div>
-              </div>
-              {details.model && (
                 <div>
-                  <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>Model</span>
-                  <div style={{ fontSize: '0.85rem', marginTop: 4 }}>{details.model}</div>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>SNMP Community</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                    <span style={{ fontFamily: 'monospace', fontSize: '0.85rem', color: details.snmpCommunity ? 'var(--text-main)' : 'var(--danger)' }}>
+                      {details.snmpCommunity
+                        ? (showCommunity ? details.snmpCommunity : '••••••••')
+                        : 'Not set  ✕'}
+                    </span>
+                    {details.snmpCommunity && (
+                      <button type="button" className="reveal-btn" onClick={() => setShowCommunity(v => !v)}
+                        aria-label={showCommunity ? t('snmpHide') : t('snmpReveal')}
+                        aria-pressed={showCommunity} title={showCommunity ? t('snmpHide') : t('snmpReveal')}>
+                        <EyeIcon off={showCommunity} size={16} />
+                      </button>
+                    )}
+                  </div>
                 </div>
-              )}
-            </div>
-          )}
+                <div>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>SSH Username</span>
+                  <div style={{ fontFamily: 'monospace', fontSize: '0.85rem', marginTop: 4, color: details.sshUsername ? 'var(--text-main)' : 'var(--danger)' }}>
+                    {details.sshUsername || 'Not set  ✕'}
+                  </div>
+                </div>
+                <div>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>SSH Password</span>
+                  <div style={{ fontSize: '0.85rem', marginTop: 4, color: details.sshPasswordSet ? 'var(--success)' : 'var(--danger)' }}>
+                    {details.sshPasswordSet ? '••••••••  ✓' : 'Not set  ✕'}
+                  </div>
+                </div>
+                {details.model && (
+                  <div>
+                    <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>Model</span>
+                    <div style={{ fontSize: '0.85rem', marginTop: 4 }}>{details.model}</div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          {cardBadges}
         </div>
         {/* Izgara tek kolona dustugunde iki gosterge alt alta ~280px yiyor; yan yana koy. */}
         {gaugesSideBySide ? (
@@ -553,7 +559,9 @@ export default function DeviceDetailPage({ onEdit }) {
                   {(() => {
                     const st = linkState(i);
                     const look = st === 'up' ? IF_ST_UP : st === 'nolink' ? IF_ST_NOLINK : IF_ST_DOWN;
-                    const label = st === 'up' ? '● UP' : st === 'nolink' ? '▲ NO LINK' : '○ DOWN';
+                    // Cisco'nun "show interfaces status" ciktisindaki kelimeler:
+                    // connected / notconnect. Renkler ve rozet bicimi aynen kalir.
+                    const label = st === 'up' ? '● Connected' : st === 'nolink' ? '▲ Notconnected' : '○ DOWN';
                     const why = st === 'nolink' ? t('ifNoLinkWhy') : st === 'shutdown' ? t('ifShutdownWhy') : undefined;
                     return <span style={look} title={why}>{label}</span>;
                   })()}

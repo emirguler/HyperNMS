@@ -1113,6 +1113,44 @@ body.wireless-off .wireless-edge path { animation: none !important; }
 }
 
 /* ============================================
+   CIHAZ DURUM SUTUNU (bilgi kartinin sag kenari)
+   UP/DOWN ustte, IP SLA (MD/GSM) altta, aralarinda ayrac. Baslik satirinda
+   iki kucuk rozet olarak dururken cihaz adiyla yer icin yarisiyor ve o kadar
+   kucukten okunmuyordu. Kartin kenarinda tek isi durumu soylemek olan bir
+   sutun: cerceve + zemin kutuyu, buyuk punto de okunurlugu verir.
+   ============================================ */
+.device-status-col {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  align-self: flex-start;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--surface-2);
+}
+/* 0-2-0: .status-up / .status-down kendi cercevesini ve kose yaricapini
+   getiriyor; sutunun icinde cerceveyi kap cizer, hucreler duz kalir.
+   min-width hucrede (kapta degil): responsive.css .chart-container > * {
+   min-width: 0 } dogrudan cocugu eziyor, torunu ezmiyor. */
+.device-status-col .status-badge {
+  justify-content: center;
+  min-width: 58px;
+  padding: 11px 14px;
+  border: none;
+  border-radius: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+}
+.device-status-col .status-col-sep {
+  flex-shrink: 0;
+  height: 1px;
+  /* Kap cercevesinden KOYU: iki hucre de yesilken 0.08 ayrac gorunmuyordu. */
+  background: rgba(148, 163, 184, 0.28);
+}
+
+/* ============================================
    MESGUL KATMANI (cihazda komut calisirken)
    Apply ya da hizli eylem cihaza yazarken formun geri kalani tiklanabilir
    kaliyordu: ikinci bir komut gonderilebiliyor ya da yari yolda baska bir
