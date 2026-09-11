@@ -1362,7 +1362,8 @@ router.post('/switches/:id/interface-config', authenticate, requireOperator, asy
     // Mod'dan bağımsız: admin durumu (shutdown/no shutdown) ve PoE (power inline auto/never).
     // Frontend bunları yalnızca değiştiyse gönderir → PoE olmayan portta gereksiz hata olmaz.
     if (typeof req.body.shutdown === 'boolean') cmds.push(req.body.shutdown ? 'shutdown' : 'no shutdown');
-    if (req.body.powerInline === 'auto' || req.body.powerInline === 'never') cmds.push(`power inline ${req.body.powerInline}`);
+    // PoE uc mod: auto (istege gore ver), never (kapat), static (basta ayir).
+    if (['auto', 'never', 'static'].includes(req.body.powerInline)) cmds.push(`power inline ${req.body.powerInline}`);
 
     try {
         const output = await runCommands(device, cmds, { config: true, save: !!req.body.save });

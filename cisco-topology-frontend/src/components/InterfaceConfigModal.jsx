@@ -35,11 +35,17 @@ export default function InterfaceConfigModal({ deviceId, iface, onClose }) {
   const [nativeVlan, setNativeVlan] = useState('');
   const [allowedVlans, setAllowedVlans] = useState([]); // string id'ler (açık liste)
   const [allowedAll, setAllowedAll] = useState(false);  // true = allowed satırı yok → tüm VLAN'lar izinli
-  const [powerAuto, setPowerAuto] = useState(true); // Power inline: true=auto, false=never
+  // PoE UC modludur (auto / never / static); iki konumlu anahtar static'i hic
+  // sunamiyordu. Deger CLI'daki mod adiyla tutulur, arayuzde okunur etiketle gosterilir.
+  const [power, setPower] = useState('auto');
   const [shut, setShut] = useState(false);          // true=shutdown, false=no shutdown
-  const initPowerRef = useRef(true);                // ilk (mevcut) PoE değeri — yalnızca değişince gönderilir
-  const [save, setSave] = useState(false);
+  const initPowerRef = useRef('auto');              // ilk (mevcut) PoE modu — yalnızca değişince gönderilir
+  // Startup'a kaydet VARSAYILAN ACIK: isaretsiz bir apply, cihaz yeniden
+  // baslayinca sessizce kayboluyordu. Kapatmak bilincli bir secim olsun.
+  const [save, setSave] = useState(true);
   const [applying, setApplying] = useState(false);
+  // Hizli eylem calisirken de form kilitlenir (asagidaki mesgul katmani).
+  const [actionBusy, setActionBusy] = useState(false);
   const [applyMsg, setApplyMsg] = useState(null); // { ok, text }
 
   // Arka plana dokunarak kapatma: basma VE birakma ikisi de arka plana denk gelmeli,
@@ -66,8 +72,7 @@ export default function InterfaceConfigModal({ deviceId, iface, onClose }) {
           setNativeVlan(p.nativeVlan || '');
           setAllowedVlans(p.allowedVlans || []);
           setAllowedAll(!p.allowedExplicit); // allowed satırı yoksa → tüm VLAN'lar seçili gelsin
-          const auto = p.power !== 'never';
-          setPowerAuto(auto); initPowerRef.current = auto;
+          setPower(p.power); initPowerRef.current = p.power;
           setShut(!!p.shutdown);
         }
       })
@@ -93,7 +98,7 @@ export default function InterfaceConfigModal({ deviceId, iface, onClose }) {
       if (!allowedAll) body.allowedVlans = allowedVlans.map(Number); // allowedAll = mevcut "hepsi izinli"ye dokunma
     }
     body.shutdown = shut; // admin durumu her zaman gönderilir (zararsız)
-    if (powerAuto !== initPowerRef.current) body.powerInline = powerAuto ? 'auto' : 'never'; // yalnızca değiştiyse
+    if (power !== initPowerRef.current) body.powerInline = power; // yalnızca değiştiyse
     authFetch(`/switches/${deviceId}/interface-config`, { method: 'POST', body: JSON.stringify(body) })
       .then(r => r.json().then(d => ({ ok: r.ok, d })))
       .then(({ ok, d }) => {
@@ -103,6 +108,9 @@ export default function InterfaceConfigModal({ deviceId, iface, onClose }) {
       .catch(() => setApplyMsg({ ok: false, text: t('ifaceApplyFail') }))
       .finally(() => setApplying(false));
   };
+
+  // Apply ya da hizli eylem cihaza yaziyorken form kilitli
+  const busy = applying || actionBusy;
 
   const label = { fontSize: sheet ? '0.85rem' : '0.78rem', color: 'var(--text-muted)', display: 'block', marginBottom: 6, marginTop: 14 };
 
@@ -144,7 +152,20 @@ export default function InterfaceConfigModal({ deviceId, iface, onClose }) {
         maxWidth: '95vw',
         maxHeight: midTablet ? 'calc(100dvh - 32px)' : undefined,
         overflowY: midTablet ? 'auto' : undefined,
+        // Kapatma dugmesinin mesgul katmanindan yukari cikabilmesi icin
+        position: 'relative',
       }}>
+        {/* Cihazda komut calisirken formun geri kalani kilitlenir: ikinci bir
+            Apply ya da yari yolda baska bir ayar degisikligi engellenir. Kapatma
+            (x / Escape) calismaya devam eder, kimse kilitli kalmasin. */}
+        {busy && (
+          <div className="busy-overlay" role="status" aria-live="polite"
+            onClick={e => e.stopPropagation()} onPointerDown={e => e.stopPropagation()}>
+            <div className="busy-spinner" aria-hidden="true" />
+            <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)' }}>{t('ifaceBusy')}</div>
+            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{name} · {t('ifaceBusyNote')}</div>
+          </div>
+        )}
         <div className="rw-sheet-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: sheet ? 0 : 18 }}>
           {/* Alt sayfada baslik tek satira kirpiliyor (.rw-sheet-head > :first-child).
               O yuzden orada ONCE arayuz adi geliyor: kirpilan yari genel etiket olsun. */}
@@ -155,9 +176,11 @@ export default function InterfaceConfigModal({ deviceId, iface, onClose }) {
               <>{t('ifaceConfigTitle')} — <span style={{ fontFamily: 'monospace', color: 'var(--primary)' }}>{name}</span></>
             )}
           </h2>
-          {/* rw-sheet-close/rw-tap: 44x44 dokunma hedefi (masaustunde etkisiz). */}
+          {/* rw-sheet-close/rw-tap: 44x44 dokunma hedefi (masaustunde etkisiz).
+              zIndex 21: cihazda komut calisirken mesgul katmani (z-index 20) her seyi
+              yutuyor; KAPATMA bilerek ustte kalir ki SSH takilirsa kimse kilitlenmesin. */}
           <button type="button" onClick={onClose} aria-label={t('cancel')} className="rw-sheet-close rw-tap"
-            style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '1.5rem', cursor: 'pointer', flexShrink: 0 }}>&times;</button>
+            style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '1.5rem', cursor: 'pointer', flexShrink: 0, position: 'relative', zIndex: 21 }}>&times;</button>
         </div>
 
         <div className="rw-sheet-body">
@@ -177,7 +200,8 @@ export default function InterfaceConfigModal({ deviceId, iface, onClose }) {
 
               {/* Mevcut ayarların ALTINDA: hızlı-eylem butonları + sabit Clear Config */}
               <InterfaceActions deviceId={deviceId} ifaceName={name} isAdmin={isAdmin}
-                isTouch={isTouch} compact={sheet} save={save} onChanged={() => loadOutput()} />
+                isTouch={isTouch} compact={sheet} save={save} onChanged={() => loadOutput()}
+                onBusy={setActionBusy} />
             </div>
 
             {/* SAĞ: yeni ayar */}
@@ -247,34 +271,52 @@ export default function InterfaceConfigModal({ deviceId, iface, onClose }) {
                 </>
               )}
 
-              {/* Power inline (auto/never) ve Shutdown — mod'dan bağımsız, toggle */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 18, paddingTop: 14, borderTop: '1px solid var(--border-color)' }}>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: '0.82rem', color: 'var(--text-main)' }}>{t('ifacePowerInline')}</div>
-                  <div style={{ fontSize: '0.7rem', fontFamily: 'monospace', color: 'var(--text-muted)' }}>{powerAuto ? 'auto' : 'never'}</div>
+              {/* PoE ve port durumu — mod'dan bağımsız */}
+              <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid var(--border-color)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                  <div style={{ fontSize: '0.82rem', color: 'var(--text-main)', minWidth: 0 }}>{t('ifacePowerInline')}</div>
+                  <select className="modern-input" value={power} onChange={e => setPower(e.target.value)}
+                    aria-label={t('ifacePowerInline')} style={{ width: 130, flexShrink: 0 }}>
+                    <option value="auto">{t('ifacePowerAuto')}</option>
+                    <option value="never">{t('ifacePowerOff')}</option>
+                    <option value="static">{t('ifacePowerStatic')}</option>
+                  </select>
                 </div>
-                <label className="toggle-switch" style={{ flexShrink: 0 }}>
-                  <input type="checkbox" checked={powerAuto} onChange={e => setPowerAuto(e.target.checked)} />
-                  <span className="toggle-slider" />
-                </label>
+                <div style={{ fontSize: '0.68rem', color: 'var(--text-dim)', marginTop: 6, lineHeight: 1.5 }}>{t('ifacePowerHint')}</div>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 12 }}>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: '0.82rem', color: 'var(--text-main)' }}>{t('ifaceShutdown')}</div>
-                  <div style={{ fontSize: '0.7rem', fontFamily: 'monospace', color: shut ? 'var(--danger)' : '#facc15' }}>{shut ? 'shutdown' : 'no shutdown'}</div>
+              {/* Alt satirda CLI komutu (shutdown / no shutdown) yaziyordu. Arayuzde
+                  kullanici dili durur (Acik / Kapali); hangi komuta karsilik geldigi
+                  ipucu satirinda ve title'da kalir. */}
+              <div style={{ marginTop: 12 }} title={t('ifacePortStateHint')}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: '0.82rem', color: 'var(--text-main)' }}>{t('ifaceShutdown')}</div>
+                    <div style={{ fontSize: '0.75rem', fontWeight: 600, color: shut ? 'var(--danger)' : 'var(--success)' }}>
+                      {shut ? t('ifacePortDisabled') : t('ifacePortActive')}
+                    </div>
+                  </div>
+                  {/* Anahtar ACIK = port acik: checked = !shut */}
+                  <label className="toggle-switch toggle-shutdown" style={{ flexShrink: 0 }}>
+                    <input type="checkbox" checked={!shut} onChange={e => setShut(!e.target.checked)}
+                      aria-label={t('ifaceShutdown')} />
+                    <span className="toggle-slider" />
+                  </label>
                 </div>
-                {/* Sağ/açık = no shutdown (sarı), sol/kapalı = shutdown (kırmızı) → checked = !shut */}
-                <label className="toggle-switch toggle-shutdown" style={{ flexShrink: 0 }}>
-                  <input type="checkbox" checked={!shut} onChange={e => setShut(!e.target.checked)} />
-                  <span className="toggle-slider" />
-                </label>
+                <div style={{ fontSize: '0.68rem', color: 'var(--text-dim)', marginTop: 6, lineHeight: 1.5 }}>{t('ifacePortStateHint')}</div>
               </div>
 
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16, cursor: 'pointer', fontSize: '0.8rem', color: 'var(--text-muted)', minHeight: isTouch ? 44 : undefined }}>
+              {/* Startup'a kaydet: varsayilan ACIK. Kapatilirsa ne kaybedilecegi
+                  yaziyor — sessiz bir kutucuk olarak kalmasi operasyonel risk. */}
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16, cursor: 'pointer', fontSize: '0.8rem', color: save ? 'var(--text-main)' : 'var(--warning)', minHeight: isTouch ? 44 : undefined }}>
                 <input type="checkbox" checked={save} onChange={e => setSave(e.target.checked)} />
                 {t('ifaceSaveStartup')}
               </label>
+              {!save && (
+                <div style={{ marginTop: 6, padding: '7px 10px', borderRadius: 8, fontSize: '0.72rem', lineHeight: 1.5, background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.35)', color: 'var(--warning)' }}>
+                  ⚠️ {t('ifaceSaveWarn')}
+                </div>
+              )}
 
               {!sheet && applyBtn}
               {!sheet && applyMsgBox}
@@ -339,7 +381,7 @@ function CurrentConfig({ compact, touch, outLoading, outErr, output, onReload })
 // zaman vardır ve DÜZENLENEMEZ; iki adımlı onayla çalışır. Diğer butonlar sistem geneli
 // (settings) saklanır: yalnızca admin düzenler (+ ile ekler/siler), herkes çalıştırır.
 // Komut tanımları sunucuda id ile tutulduğundan istemci keyfi komut enjekte edemez.
-function InterfaceActions({ deviceId, ifaceName, isAdmin, isTouch, compact, save, onChanged }) {
+function InterfaceActions({ deviceId, ifaceName, isAdmin, isTouch, compact, save, onChanged, onBusy }) {
   const { authFetch } = useAuth();
   const [buttons, setButtons] = useState([]);
   const [editing, setEditing] = useState(false);
@@ -361,6 +403,7 @@ function InterfaceActions({ deviceId, ifaceName, isAdmin, isTouch, compact, save
 
   const run = async (payload, id) => {
     setRunId(id); setMsg(null); setConfirmClear(false);
+    if (onBusy) onBusy(true); // form kilitlenir: cihazda komut calisirken baska ayara dokunulmasin
     try {
       const res = await authFetch(`/switches/${deviceId}/interface-command`,
         { method: 'POST', body: JSON.stringify({ name: ifaceName, save, ...payload }) });
@@ -373,7 +416,7 @@ function InterfaceActions({ deviceId, ifaceName, isAdmin, isTouch, compact, save
         setMsg({ ok: false, text: d.error || t('ifaceActionFail') });
       }
     } catch { setMsg({ ok: false, text: t('ifaceActionFail') }); }
-    finally { setRunId(null); }
+    finally { setRunId(null); if (onBusy) onBusy(false); }
   };
 
   const startEdit = () => {
@@ -570,6 +613,8 @@ function parseInterfaceConfig(text) {
     else if ((m = l.match(/^switchport trunk allowed vlan\s+(?:add\s+)?([\d,\-]+)/i))) { out.allowedExplicit = true; allowedSpec += (allowedSpec ? ',' : '') + m[1]; }
     else if (/^power inline never\b/i.test(l)) out.power = 'never';
     else if (/^power inline auto\b/i.test(l)) out.power = 'auto';
+    // "power inline static" (opsiyonel "max <mW>" ile) -> static modu
+    else if (/^power inline static\b/i.test(l)) out.power = 'static';
     else if (/^shutdown$/i.test(l)) out.shutdown = true; // "no shutdown" varsayılan → run'da görünmez
   }
   out.allowedVlans = expandVlanSpec(allowedSpec).map(String);
