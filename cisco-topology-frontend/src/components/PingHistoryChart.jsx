@@ -423,11 +423,9 @@ export default function PingHistoryChart({ deviceId }) {
         : { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
           <h3 className="rw-truncate" style={{ margin: 0, fontSize: narrow ? '1rem' : '1.1rem', color: 'var(--primary)' }}>{t('pingHistory')}</h3>
-          {/* Alt seritteki yesil/kirmizi zaten ayni bilgiyi tasiyor -> telefonda gizle. */}
-          <span className="rw-hide-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontSize: '0.68rem', color: 'var(--text-muted)' }}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><i style={{ width: 9, height: 9, borderRadius: 2, background: C_UP }} />UP</span>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><i style={{ width: 9, height: 9, borderRadius: 2, background: C_DOWN }} />DOWN</span>
-          </span>
+          {/* Gosterge basliktan ALINDI: seridin ta ustunde durdugu icin neyi
+              anlattigi belli olmuyordu ve telefonda hic gorunmuyordu. Artik
+              seridin hemen altinda, uc durumla birlikte (asagiya bak). */}
         </div>
         {/* Telefonda tam genislik, 44px yuksekliginde segment kontrolu. */}
         <div style={narrow
@@ -488,6 +486,23 @@ export default function PingHistoryChart({ deviceId }) {
             )}
           </div>
         )}
+      </div>
+
+      {/* Uygunluk seridi gostergesi. Serit kanvasin en alt 12px'i oldugu icin
+          hemen altinda duruyor: hangi rengin ne demek oldugu bakisla eslesiyor.
+          Gri durum da burada — kesintide bosluk mu kirmizi mi olacagi soru
+          isaretiydi: kesinti KIRMIZI, veri olmayan aralik GRI. */}
+      <div style={{
+        display: 'flex', alignItems: 'center', flexWrap: 'wrap',
+        gap: narrow ? '4px 10px' : '4px 14px', marginTop: 6,
+        fontSize: compact ? '12px' : '0.68rem', color: 'var(--text-muted)',
+      }}>
+        <span style={{ textTransform: 'uppercase', letterSpacing: 0.4 }}>{t('chartStrip')}</span>
+        {[[C_UP, t('chartStripUp')], [C_DOWN, t('chartStripLoss')], [C_EMPTY, t('chartStripNoData')]].map(([c, label]) => (
+          <span key={label} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+            <i style={{ width: 14, height: 9, borderRadius: 2, background: c, flexShrink: 0 }} />{label}
+          </span>
+        ))}
       </div>
     </div>
   );

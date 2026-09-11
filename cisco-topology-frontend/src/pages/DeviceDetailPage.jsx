@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
 import PingModal from '../components/PingModal';
 import PingIcon from '../components/PingIcon';
+import EyeIcon from '../components/EyeIcon';
 import TraceModal from '../components/TraceModal';
 import TraceIcon from '../components/TraceIcon';
 import InterfaceConfigModal from '../components/InterfaceConfigModal';
@@ -44,6 +45,9 @@ export default function DeviceDetailPage({ onEdit }) {
   const [snmpLoaded, setSnmpLoaded] = useState(false);  // /details en az bir kez döndü mü
   const [reveal, setReveal] = useState(false);          // 4sn güvenlik: veri gelmese de sayfayı aç
   const [slas, setSlas] = useState(null); // IP SLA durumu (MD/GSM rozeti + IP SLA kartı)
+  // SNMP community bir kimlik bilgisidir: varsayilan MASKELI. Ekran paylasimi,
+  // omuz ustunden bakma ve ekran goruntusu hepsi bu alani sizdiriyordu.
+  const [showCommunity, setShowCommunity] = useState(false);
 
   // Bağlamdan (Devices/topoloji zaten yüklü) anında tohumla: SNMP verisi gelene kadar
   // KAYIT-tabanlı tüm alanlar (ad/ip/durum/sürüm/etiket + snmpCommunity/sshUsername/
@@ -117,6 +121,18 @@ export default function DeviceDetailPage({ onEdit }) {
     : slas.every(s => s.status === 'ok')
       ? { label: details.ipSlaOkLabel || 'MD', color: 'var(--success)', bg: 'rgba(34,197,94,0.15)', border: 'rgba(34,197,94,0.4)' }
       : { label: details.ipSlaFailLabel || 'GSM', color: 'var(--warning)', bg: 'rgba(245,158,11,0.15)', border: 'rgba(245,158,11,0.4)' };
+  // Basliktaki rozetler: IP SLA (MD/GSM) + cihazin UP/DOWN durumu. Ikisi de cihazin
+  // GENEL durumu; bilgi kartinin kosesinde dururken o karta ait bir ozellik gibi
+  // okunuyordu. Ad ile ayni satirda, kirpilmadan (flexShrink:0) durur.
+  const headerBadges = (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+      {slaBadge && (
+        <span className="status-badge" title="IP SLA"
+          style={{ background: slaBadge.bg, color: slaBadge.color, border: `1px solid ${slaBadge.border}` }}>{slaBadge.label}</span>
+      )}
+      <span className={`status-badge ${details.status === 'UP' ? 'status-up' : 'status-down'}`}>{details.status}</span>
+    </span>
+  );
   const formatTraffic = (bps) => {
     if (!bps || bps === 0) return '0 Mbps';
     const mbps = bps / 1000000;
@@ -188,18 +204,25 @@ export default function DeviceDetailPage({ onEdit }) {
   return (
     <div className="list-container">
       {compact ? (
-        /* 7 ogeli masaustu satiri ~840px min-content ister; burada geri + ad + tek "..." */
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, minWidth: 0 }}>
+        /* 7 ogeli masaustu satiri ~840px min-content ister; burada geri + ad + tek "...",
+           rozetler ise ALT satirda: ayni satira sigdirmak 375px'te ada 139px birakiyordu. */
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
           <button onClick={() => navigate(backTo)} className="btn btn-ghost" aria-label={t('goBack')} title={t('goBack')}
             style={{ flexShrink: 0, minWidth: 44, minHeight: 44, padding: '0 10px', fontSize: '1.2rem', lineHeight: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>←</button>
           <h2 className="rw-truncate" style={{ margin: 0, fontSize: '1.15rem', flex: '1 1 auto', minWidth: 0 }}>{displayHostname}</h2>
           <button className="btn btn-primary" onClick={() => setShowActions(true)} aria-label="Device actions" title="Device actions"
             style={{ flexShrink: 0, minWidth: 44, minHeight: 44, padding: '0 10px', fontSize: '1.35rem', fontWeight: 700, lineHeight: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>⋯</button>
         </div>
+        {/* Cihazin genel durumu: IP SLA (MD/GSM) + UP/DOWN. Once bilgi kartinin sag
+            ust kosesindeydi ve o karta ait bir ozellik gibi okunuyordu. */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>{headerBadges}</div>
+        </div>
       ) : (
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
           <button onClick={() => navigate(backTo)} className="btn btn-ghost">{t('goBack')}</button>
           <h2 style={{ margin: 0, fontSize: '1.8rem' }}>{displayHostname}</h2>
+          {headerBadges}
           {isOperator && (isAdmin || fullSsh || allowedCommands.length > 0) && (
             <button className="btn btn-primary btn-sm" onClick={() => openSshSession(id, displayHostname || details.name || id)}>
               💻 SSH Terminal
@@ -241,12 +264,6 @@ export default function DeviceDetailPage({ onEdit }) {
             veriyor. Inline verilirse masaustunde de (>1024) etkili olur ve uzun bir uptime
             degeri kolonu genisletmek yerine kirpilmaya baslar -> masaustu degisir. */}
         <div className="chart-container" style={{ padding: compact ? '14px' : '20px 24px' }}>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-            {slaBadge && (
-              <span className="status-badge" title="IP SLA" style={{ background: slaBadge.bg, color: slaBadge.color, border: `1px solid ${slaBadge.border}` }}>{slaBadge.label}</span>
-            )}
-            <span className={`status-badge ${details.status === 'UP' ? 'status-up' : 'status-down'}`}>{details.status}</span>
-          </div>
           {/* 375px'te 2 kolon = 140px'lik hucre; IP ve uptime oraya sigmiyor -> telefon dikeyde tek kolon. */}
           <div className="grid-stats" style={{ gridTemplateColumns: phonePortrait ? '1fr' : 'repeat(2, 1fr)', gap: '14px 20px', marginBottom: details.sshPasswordSet !== undefined ? 16 : 0 }}>
             {[
@@ -299,8 +316,19 @@ export default function DeviceDetailPage({ onEdit }) {
               </div>
               <div>
                 <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>SNMP Community</span>
-                <div style={{ fontFamily: 'monospace', fontSize: '0.85rem', marginTop: 4, color: details.snmpCommunity ? 'var(--text-main)' : 'var(--danger)' }}>
-                  {details.snmpCommunity || 'Not set  ✕'}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                  <span style={{ fontFamily: 'monospace', fontSize: '0.85rem', color: details.snmpCommunity ? 'var(--text-main)' : 'var(--danger)' }}>
+                    {details.snmpCommunity
+                      ? (showCommunity ? details.snmpCommunity : '••••••••')
+                      : 'Not set  ✕'}
+                  </span>
+                  {details.snmpCommunity && (
+                    <button type="button" className="reveal-btn" onClick={() => setShowCommunity(v => !v)}
+                      aria-label={showCommunity ? t('snmpHide') : t('snmpReveal')}
+                      aria-pressed={showCommunity} title={showCommunity ? t('snmpHide') : t('snmpReveal')}>
+                      <EyeIcon off={showCommunity} size={16} />
+                    </button>
+                  )}
                 </div>
               </div>
               <div>

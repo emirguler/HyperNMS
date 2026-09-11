@@ -1084,6 +1084,32 @@ body.wireless-off .wireless-edge path { animation: none !important; }
   .topology-tab, .topology-tab::after, .topology-tab-add { transition: none; }
 }
 
+/* Goster/gizle dugmesi (SNMP community gibi maskeli degerlerin yaninda).
+   Sessiz durur, uzerine gelince/odakta belirir; dokunmatikte 44px hedef. */
+.reveal-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  flex-shrink: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: color 0.12s ease, background-color 0.12s ease, border-color 0.12s ease;
+}
+.reveal-btn:hover,
+.reveal-btn:focus-visible {
+  outline: none;
+  color: var(--text-main);
+  background: var(--surface-2);
+  border-color: var(--input-border);
+}
+
 /* ============================================
    NAVBAR SAG TARAFI
    Alti kontrol (Ping, Trace, zil, Users, Ayarlar, kullanici) 6px araliklarla

@@ -269,6 +269,10 @@
     min-height: var(--tap);
   }
 
+  /* Goster/gizle dugmesi: gorunum 26px kalir, hedef 44px olur (negatif margin
+     sayesinde satir yuksekligi buyumez). */
+  .reveal-btn { width: var(--tap); height: var(--tap); margin: -9px; }
+
   .btn { padding: 12px 18px; }
   /* .btn-sm bazi yerlerde inline padding aliyor (or. SettingsModal Back) */
   .btn-sm { padding: 10px 14px !important; font-size: 0.85rem; }
